@@ -169,6 +169,10 @@ class AmberfaderApp:
 
     def _on_activation(self, sock: FramedSocket) -> None:
         sock.send({"kind": "activate-response", "ok": True})
+        # The activating peer blocks in waitForReadyRead; push the ack out
+        # now instead of relying on a later event-loop turn to flush it.
+        sock.socket.flush()
+        sock.socket.waitForBytesWritten(1000)
         if self.window is not None:
             self.window.raise_requested()
         sock.socket.disconnectFromServer()

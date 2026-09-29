@@ -72,7 +72,19 @@ def test_second_instance_handshake_activates_first(app, qapp):
     assert pump(qapp, lambda: bool(activated), timeout_s=5), (
         "first instance never raised its window"
     )
-    resp = _frame_from(conn)
+    # Keep pumping while waiting for the ack — a plain blocking recv would
+    # starve the event loop that writes the server's side of the socket.
+    resp_box: list[dict] = []
+
+    def got_response() -> bool:
+        try:
+            resp_box.append(_frame_from(conn, timeout=0.05))
+            return True
+        except (TimeoutError, OSError):
+            return False
+
+    assert pump(qapp, got_response, timeout_s=5), "no activate-response frame"
+    resp = resp_box[0]
     assert resp["kind"] == "activate-response"
     conn.close()
 
