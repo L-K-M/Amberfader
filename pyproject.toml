@@ -23,7 +23,7 @@ amberfader-helper = "amberfader.helper:main"
 [dependency-groups]
 dev = [
     "pytest>=8.3,<9",
-    "ruff>=0.11,<0.13",
+    "ruff>=0.11,<0.17",
 ]
 
 [build-system]
