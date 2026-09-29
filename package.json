@@ -1,0 +1,35 @@
+{
+  "name": "amberfader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Compact classic-style remote for YouTube Music running in Firefox",
+  "license": "Unlicense",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/build-extension.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run lint && npm test",
+    "ext:run": "npm run build && web-ext run --source-dir dist/extension --firefox-profile build/firefox-dev-profile --keep-profile-changes --profile-create-if-missing",
+    "ext:lint": "npm run build && web-ext lint --source-dir dist/extension",
+    "ext:package": "npm run build && web-ext build --source-dir dist/extension --artifacts-dir dist/web-ext-artifacts --overwrite-dest",
+    "version:check": "node scripts/sync-versions.mjs --check",
+    "gen:validators": "node scripts/gen-validators.mjs",
+    "gen:validators:check": "node scripts/gen-validators.mjs --check"
+  },
+  "devDependencies": {
+    "@types/firefox-webext-browser": "120.0.5",
+    "ajv": "^8.17.1",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.30.0",
+    "jsdom": "^26.1.0",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.34.0",
+    "vitest": "^3.2.4",
+    "web-ext": "^8.10.0"
+  }
+}

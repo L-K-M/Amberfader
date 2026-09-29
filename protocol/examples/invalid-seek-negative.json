@@ -1,0 +1,12 @@
+{
+  "protocolVersion": 1,
+  "kind": "request",
+  "id": "req-00042",
+  "sessionId": "runtime-session-example",
+  "bindingToken": "selected-document-example",
+  "method": "player.seek",
+  "params": {
+    "occurrenceId": "track-occurrence-example",
+    "positionSeconds": -4
+  }
+}

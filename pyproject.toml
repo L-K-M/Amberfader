@@ -1,0 +1,51 @@
+[project]
+name = "amberfader"
+version = "0.1.0"
+description = "Classic-style remote for YouTube Music in Firefox: native-messaging helper + PySide6 desktop app"
+readme = "README.md"
+license = { text = "Unlicense" }
+requires-python = ">=3.11"
+# Keep the helper lightweight: core deps only. The GUI lives behind the
+# `gui` extra so a helper-only install never pulls Qt.
+dependencies = [
+    "jsonschema>=4.23,<5",
+]
+
+[project.optional-dependencies]
+gui = [
+    "PySide6-Essentials>=6.8,<7",
+]
+
+[project.scripts]
+amberfader = "amberfader.app:main"
+amberfader-helper = "amberfader.helper:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<9",
+    "ruff>=0.11,<0.13",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["native/amberfader"]
+
+[tool.pytest.ini_options]
+testpaths = ["native/tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["native"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "SIM", "RUF"]
+ignore = [
+    # Qt APIs use camelCase by design.
+    "N802", "N803",
+]
+# UI copy intentionally uses an en dash as a separator.
+allowed-confusables = ["–"]

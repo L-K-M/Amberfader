@@ -1,0 +1,29 @@
+# build outputs
+/build/
+/dist/
+*.pyi
+
+# node
+node_modules/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.uv-cache/
+*.egg-info/
+
+# test/tool state
+.vitest/
+.pytest_cache/
+.ruff_cache/
+web-ext-artifacts/
+.coverage
+htmlcov/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+local.properties

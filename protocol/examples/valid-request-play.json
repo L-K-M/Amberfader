@@ -1,0 +1,9 @@
+{
+  "protocolVersion": 1,
+  "kind": "request",
+  "id": "req-00007",
+  "sessionId": "runtime-session-example",
+  "bindingToken": "selected-document-example",
+  "method": "player.play",
+  "params": {}
+}

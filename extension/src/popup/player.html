@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self'; object-src 'none'; base-uri 'none'" />
+    <title>Amberfader</title>
+    <link rel="stylesheet" href="css/player.css" />
+  </head>
+  <body>
+    <main id="player" aria-label="Amberfader player">
+      <div class="top">
+        <img id="art" alt="" width="64" height="64" />
+        <div class="meta">
+          <div id="title" class="title">—</div>
+          <div id="artists" class="sub">—</div>
+          <div id="time" class="time">–:–– / –:––</div>
+          <div class="transport">
+            <button id="btn-prev" class="tb" title="Previous" aria-label="Previous">⏮</button>
+            <button id="btn-play" class="tb play" title="Play" aria-label="Play or pause">▶</button>
+            <button id="btn-next" class="tb" title="Next" aria-label="Next">⏭</button>
+          </div>
+        </div>
+      </div>
+      <input id="seek" type="range" min="0" max="1000" value="0" step="1"
+             aria-label="Seek" title="Seek" />
+      <div class="bottom">
+        <input id="volume" type="range" min="0" max="100" value="80" step="1"
+               aria-label="Volume" title="Volume" />
+        <button id="btn-search" title="Search (Ctrl+F)">Search</button>
+        <button id="btn-show" title="Show YouTube Music">Show&nbsp;YT</button>
+        <button id="btn-hide" title="Hide playback tab (opt-in)">Hide</button>
+        <button id="btn-menu" title="Options">☰</button>
+      </div>
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+    </main>
+    <script src="js/player.js"></script>
+  </body>
+</html>

@@ -1,0 +1,65 @@
+# Compatibility
+
+Status legend: **verified** = exercised on a real target; **expected** =
+implemented to a documented API contract, awaiting live confirmation;
+**unsupported** = known not to work. Phase 0 probing has not yet run — assume
+*expected* unless marked otherwise.
+
+## Browsers
+
+| Browser | Install type | Native messaging | Status |
+|---|---|---|---|
+| Firefox | deb / rpm | `~/.mozilla/native-messaging-hosts` + system manifest | expected |
+| Firefox | Flatpak | per-user manifest in the Flatpak data dir | expected |
+| Firefox | Snap | confined — no host-path access | **unsupported in v1** |
+| Firefox | macOS/Windows | not a target | unsupported |
+
+`strict_min_version`: set after Phase 0 identifies the oldest working
+Firefox. `tabs.hide()` requires Firefox ≥ 61 and the `tabHide` optional
+permission; `background.scripts` event-page behavior requires a Firefox MV3
+release. The probe checklist records the tested version in the environment
+row of the acceptance matrix.
+
+## Desktop environments
+
+| Environment | Status |
+|---|---|
+| X11 + any DE | expected |
+| Wayland + any DE | expected (Qt `wayland`/`xcb` platform abstraction) |
+| No `$XDG_RUNTIME_DIR` | **unsupported** — the app refuses to start rather
+than placing the control socket somewhere world-readable |
+
+## Packaging
+
+| Format | Status |
+|---|---|
+| `.deb` | expected — `scripts/build-deb.sh` |
+| `.flatpak` | expected — `scripts/build-flatpak.sh` repacks the deb layout |
+| AppImage / Snap | not planned |
+
+The Flatpak bundle does **not** ship a native-messaging host manifest: a
+bundle cannot write host paths, so `scripts/install-user` registers the host
+per-user against the running app's path inside the sandbox. The helper
+invocation therefore differs from the deb (`flatpak run ch.lkmc.amberfader
+--helper` style entry); see `scripts/install-user --flatpak`.
+
+## Known environment gaps
+
+- Snap-confined Firefox cannot reach the host's native-messaging directory.
+  `scripts/doctor` detects a Snap Firefox and says so instead of failing
+  mysteriously (records compat limitation A6).
+- A Flatpak **browser** talking to a **deb-installed** helper, or vice versa,
+  is a registered combination, not a verified one — the per-user manifest
+  path differs per browser package type and `install-user` covers the
+  combinations it knows how to express.
+
+## Resource budgets (to be measured during the W5 soak)
+
+| Metric | Budget | Measured |
+|---|---|---|
+| Helper RSS | ≤ 20 MiB steady state | pending |
+| GUI RSS | ≤ 150 MiB steady state | pending |
+| Idle CPU | ~0% (event-driven; 1 Hz position sampling while playing) | pending |
+| Socket traffic | bounded by 256 KiB frame cap; state events ~1 Hz max | pending |
+
+Pending means not yet measured — not "assumed fine".

@@ -1,0 +1,11 @@
+{
+  "protocolVersion": 1,
+  "kind": "response",
+  "id": "req-00009",
+  "ok": false,
+  "result": {},
+  "error": {
+    "code": "internal_error",
+    "message": "both fields present"
+  }
+}

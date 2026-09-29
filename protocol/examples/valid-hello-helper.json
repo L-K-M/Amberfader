@@ -1,0 +1,7 @@
+{
+  "protocolVersion": 1,
+  "kind": "hello",
+  "component": "helper",
+  "componentVersion": "0.1.0",
+  "profileId": "profile-example"
+}

@@ -1,0 +1,11 @@
+{
+  "protocolVersion": 1,
+  "kind": "request",
+  "id": "req-00044",
+  "sessionId": "runtime-session-example",
+  "bindingToken": "selected-document-example",
+  "method": "player.setVolume",
+  "params": {
+    "volume": 0.35
+  }
+}

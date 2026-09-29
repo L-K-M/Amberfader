@@ -1,0 +1,117 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  verify-version:
+    name: Verify release tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Match tag, manifest, package, python files, and main history
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          SEMVER_RE='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$'
+
+          if [[ "$TAG" != v* || ! "$VERSION" =~ $SEMVER_RE ]]; then
+            echo "::error::Release tag must use vX.Y.Z or vX.Y.Z-pre form."
+            exit 1
+          fi
+
+          MANIFEST_VERSION="$(node -p "JSON.parse(require('node:fs').readFileSync('extension/manifest.json','utf8')).version")"
+          if [[ "$VERSION" != "$MANIFEST_VERSION" ]]; then
+            echo "::error::Tag $TAG must match extension/manifest.json ($MANIFEST_VERSION)."
+            exit 1
+          fi
+
+          npm ci --ignore-scripts
+          npm run version:check
+
+          if ! git merge-base --is-ancestor HEAD origin/main 2>/dev/null; then
+            echo "::error::Release tag commit must be on main."
+            exit 1
+          fi
+
+  ci:
+    name: Gate on CI
+    needs: verify-version
+    uses: ./.github/workflows/ci.yml
+
+  artifacts:
+    name: Build extension, deb, and flatpak
+    needs: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write  # gh release create uploads assets
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v7.1.2
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build extension package
+        run: npm run ext:package
+
+      - name: Build .deb
+        run: scripts/build-deb.sh "${{ github.ref_name }}" dist
+
+      - name: Build .flatpak
+        run: scripts/build-flatpak.sh dist/amberfader_*_*.deb || echo "::warning::flatpak-builder unavailable — skipping flatpak artifact"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: amberfader-${{ github.ref_name }}
+          path: |
+            dist/web-ext-artifacts/
+            dist/*.deb
+            dist/*.flatpak
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          artifacts=()
+          while IFS= read -r f; do artifacts+=("$f"); done < <(find dist -maxdepth 2 -type f \( -name '*.zip' -o -name '*.deb' -o -name '*.flatpak' \))
+          if [ ${#artifacts[@]} -eq 0 ]; then
+            echo "::error::no release artifacts produced"
+            exit 1
+          fi
+          gh release create "${{ github.ref_name }}" \
+            --title "Amberfader ${{ github.ref_name }}" \
+            --generate-notes \
+            "${artifacts[@]}"

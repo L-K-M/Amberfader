@@ -1,0 +1,27 @@
+# Flatpak manifest. scripts/build-flatpak.sh extracts the .deb into
+# dist/flatpak/stage and builds from that — the bundle ships the same files
+# the .deb installs, relaid under /app. The KDE runtime supplies python3;
+# the pip --target tree in the deb carries PySide6 and must match the
+# runtime's python abi — bump the wheel selection and runtime version
+# together when either moves.
+id: ch.lkmc.amberfader
+runtime: org.kde.Platform
+runtime-version: '6.8'
+sdk: org.kde.Sdk
+command: amberfader
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # The control socket lives in the host's per-user runtime dir; the GUI must
+  # see exactly this subtree to reach the helper channel. Nothing broader.
+  - --filesystem=xdg-run/amberfader
+modules:
+  - name: amberfader
+    buildsystem: simple
+    sources:
+      - type: dir
+        path: ../../dist/flatpak/stage
+    build-commands:
+      - "if [ -d app ]; then cp -a app/. /app/; else cp -a . /app/; fi"

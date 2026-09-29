@@ -1,0 +1,10 @@
+{
+  "protocolVersion": 1,
+  "kind": "request",
+  "id": "req-00003",
+  "sessionId": "runtime-session-example",
+  "method": "targets.select",
+  "params": {
+    "targetKey": "target-key-example"
+  }
+}
