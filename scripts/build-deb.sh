@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# Builds dist/amberfader_<version>_<arch>.deb.
+#
+# The deb layout:
+#   /opt/amberfader/lib/              pip --target install of amberfader[gui]
+#   /usr/bin/amberfader{,-helper}     wrappers setting PYTHONPATH
+#   /usr/lib/mozilla/native-messaging-hosts/amberfader.json
+#   /usr/share/applications/ch.lkmc.amberfader.desktop
+#   /usr/share/icons/hicolor/96x96/apps/amberfader.png
+# Depends: python3 only — PySide6 arrives inside the pip --target tree.
+#
+# Usage: scripts/build-deb.sh <version> <dist-dir>
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+VERSION="${1:?usage: build-deb.sh <version> <dist-dir>}"
+DIST="${2:?usage: build-deb.sh <version> <dist-dir>}"
+STAGE="$DIST/deb/stage"
+LIB="$STAGE/opt/amberfader/lib"
+ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
+
+echo "-- staging .deb tree (version $VERSION, arch $ARCH)"
+rm -rf "$DIST/deb"
+mkdir -p "$LIB" "$STAGE/usr/bin" "$STAGE/usr/lib/mozilla/native-messaging-hosts" \
+  "$STAGE/usr/share/applications" "$STAGE/usr/share/icons/hicolor/96x96/apps" \
+  "$STAGE/DEBIAN"
+
+# Python + deps into the target dir. Uses the machine's python; the deb is
+# honest about its interpreter via Depends and its abi-tagged wheels.
+if command -v uv >/dev/null 2>&1; then
+  uv pip install --quiet --target "$LIB" ".[gui]"
+else
+  python3 -m pip install --quiet --target "$LIB" ".[gui]"
+fi
+# Distutils metadata dirs are noise for end users; keep the code only.
+find "$LIB" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+
+cat > "$STAGE/usr/bin/amberfader" <<'EOF'
+#!/bin/sh
+exec env PYTHONPATH=/opt/amberfader/lib /usr/bin/python3 -m amberfader.app "$@"
+EOF
+cat > "$STAGE/usr/bin/amberfader-helper" <<'EOF'
+#!/bin/sh
+exec env PYTHONPATH=/opt/amberfader/lib /usr/bin/python3 -m amberfader.helper "$@"
+EOF
+chmod 755 "$STAGE/usr/bin/amberfader" "$STAGE/usr/bin/amberfader-helper"
+
+cat > "$STAGE/usr/lib/mozilla/native-messaging-hosts/amberfader.json" <<'EOF'
+{
+  "name": "amberfader",
+  "description": "Amberfader native messaging host",
+  "path": "/usr/bin/amberfader-helper",
+  "type": "stdio",
+  "allowed_extensions": ["amberfader@ch.lkmc"]
+}
+EOF
+
+cp extension/icons/icon-96.png "$STAGE/usr/share/icons/hicolor/96x96/apps/amberfader.png"
+cat > "$STAGE/usr/share/applications/ch.lkmc.amberfader.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=Amberfader
+Comment=Classic-style remote for YouTube Music in Firefox
+Exec=amberfader
+Icon=amberfader
+Terminal=false
+Categories=Audio;Music;Player;
+StartupWMClass=amberfader
+EOF
+
+cat > "$STAGE/DEBIAN/control" <<EOF
+Package: amberfader
+Version: $VERSION
+Section: sound
+Priority: optional
+Architecture: $ARCH
+Maintainer: L-K-M
+Depends: python3 (>= 3.11)
+Description: Classic-style remote for YouTube Music in Firefox
+ Compact player for an existing music.youtube.com tab: playback control,
+ artwork, and song search without bringing the browser forward. Registers a
+ Firefox native-messaging host for deb/rpm-packaged Firefox; Flatpak Firefox
+ is configured per-user via scripts/install-user.
+EOF
+
+OUT="$DIST/amberfader_${VERSION}_${ARCH}.deb"
+dpkg-deb --root-owner-group --build "$STAGE" "$OUT"
+echo "-- built $OUT"

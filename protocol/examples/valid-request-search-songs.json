@@ -1,0 +1,11 @@
+{
+  "protocolVersion": 1,
+  "kind": "request",
+  "id": "req-00051",
+  "sessionId": "runtime-session-example",
+  "bindingToken": "selected-document-example",
+  "method": "search.songs",
+  "params": {
+    "query": "klaus nomi cold song"
+  }
+}

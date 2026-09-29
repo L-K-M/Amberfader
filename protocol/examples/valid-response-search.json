@@ -1,0 +1,34 @@
+{
+  "protocolVersion": 1,
+  "kind": "response",
+  "id": "req-00051",
+  "sessionId": "runtime-session-example",
+  "bindingToken": "selected-document-example",
+  "ok": true,
+  "result": {
+    "searchToken": "search-token-example",
+    "complete": false,
+    "results": [
+      {
+        "resultId": "result-id-1",
+        "kind": "song",
+        "title": "Cold Song",
+        "artists": ["Klaus Nomi"],
+        "album": "Klaus Nomi",
+        "durationSeconds": 216.0,
+        "supported": true,
+        "artworkId": null
+      },
+      {
+        "resultId": "result-id-2",
+        "kind": "album",
+        "title": "Cold Song — Album",
+        "artists": ["Klaus Nomi"],
+        "album": null,
+        "durationSeconds": null,
+        "supported": false,
+        "artworkId": null
+      }
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "protocolVersion": 1,
+  "kind": "response",
+  "id": "req-00010",
+  "sessionId": "runtime-session-example",
+  "bindingToken": "selected-document-example",
+  "ok": true,
+  "result": {
+    "bindingToken": "selected-document-example",
+    "revision": 118,
+    "track": {
+      "occurrenceId": "track-occurrence-example",
+      "providerId": "video-id-example",
+      "title": "Example Song",
+      "artists": ["Example Artist"],
+      "album": "Example Album",
+      "artworkId": "artwork-id-example"
+    },
+    "status": "playing",
+    "contentKind": "track",
+    "positionSeconds": 83.5,
+    "durationSeconds": 252.0,
+    "playbackRate": 1.0,
+    "volume": 0.8,
+    "muted": false,
+    "capabilities": ["play", "pause", "previous", "next", "seek", "volume", "searchSongs", "playSearchResult"]
+  }
+}

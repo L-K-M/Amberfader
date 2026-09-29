@@ -1,0 +1,27 @@
+{
+  "protocolVersion": 1,
+  "kind": "event",
+  "sessionId": "runtime-session-example",
+  "bindingToken": "selected-document-example",
+  "event": "state",
+  "data": {
+    "bindingToken": "selected-document-example",
+    "revision": 119,
+    "track": {
+      "occurrenceId": "track-occurrence-example-2",
+      "providerId": null,
+      "title": "Another Example",
+      "artists": ["Example Artist", "Guest"],
+      "album": null,
+      "artworkId": null
+    },
+    "status": "paused",
+    "contentKind": "unknown",
+    "positionSeconds": 12.0,
+    "durationSeconds": 240.5,
+    "playbackRate": 1.0,
+    "volume": null,
+    "muted": null,
+    "capabilities": ["play", "next", "seek"]
+  }
+}

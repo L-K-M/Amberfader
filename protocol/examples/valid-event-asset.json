@@ -1,0 +1,15 @@
+{
+  "protocolVersion": 1,
+  "kind": "event",
+  "sessionId": "runtime-session-example",
+  "bindingToken": "selected-document-example",
+  "event": "asset",
+  "data": {
+    "artworkId": "artwork-id-example",
+    "occurrenceId": "track-occurrence-example",
+    "mime": "image/jpeg",
+    "width": 226,
+    "height": 226,
+    "dataBase64": "iVBORw0KGgoAAAANSUhEUg=="
+  }
+}

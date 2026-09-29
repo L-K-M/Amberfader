@@ -1,0 +1,12 @@
+{
+  "protocolVersion": 1,
+  "kind": "request",
+  "id": "req-00060",
+  "sessionId": "runtime-session-example",
+  "bindingToken": "selected-document-example",
+  "method": "search.playResult",
+  "params": {
+    "searchToken": "search-token-example",
+    "resultId": "result-id-example"
+  }
+}

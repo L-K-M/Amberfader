@@ -1,0 +1,14 @@
+{
+  "protocolVersion": 1,
+  "kind": "event",
+  "sessionId": "runtime-session-example",
+  "event": "asset",
+  "data": {
+    "artworkId": "artwork-id-example",
+    "occurrenceId": null,
+    "mime": "image/png",
+    "width": 300,
+    "height": 300,
+    "dataBase64": "iVBORw0KGgo="
+  }
+}

@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Amberfader diagnostics. Reports versions, host-manifest registration for
+# both Firefox packagings, executable permissions, socket state, optional
+# permissions, and protocol files. Never reports cookies, page content,
+# browsing history, or unredacted search text.
+#
+# Usage: scripts/doctor [--prefix DIR]
+set -uo pipefail
+
+PREFIX="$HOME/.local/share/amberfader"
+HOST_NAME="amberfader"
+ADDON_ID="amberfader@ch.lkmc"
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --prefix) PREFIX="${2:?}"; shift 2 ;;
+    *) echo "!! unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+OK=0; PROBLEMS=0
+good() { echo "  ok      $*"; OK=$((OK+1)); }
+bad()  { echo "  PROBLEM $*"; PROBLEMS=$((PROBLEMS+1)); }
+info() { echo "  --      $*"; }
+
+echo "==> environment"
+for v in "$(python3 --version 2>&1)" "$(node --version 2>/dev/null | sed 's/^/node /')" "$(firefox --version 2>/dev/null || echo 'firefox: not on PATH')"; do
+  info "$v"
+done
+[[ -n "${XDG_RUNTIME_DIR:-}" ]] && good "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" \
+  || bad "XDG_RUNTIME_DIR not set — the private control socket needs it"
+
+if flatpak info org.mozilla.firefox >/dev/null 2>&1; then
+  info "Flatpak Firefox: installed ($(flatpak info org.mozilla.firefox 2>/dev/null | awk -F= '/^version/{print $2}' | head -1 || echo '?'))"
+  if flatpak info --show-permissions org.mozilla.firefox 2>/dev/null | grep -q 'org.freedesktop.Flatpak'; then
+    good "flatpak-spawn (org.freedesktop.Flatpak) permission present"
+  else
+    bad "Flatpak Firefox lacks org.freedesktop.Flatpak — native mode needs: flatpak override --user org.mozilla.firefox --talk-name=org.freedesktop.Flatpak"
+  fi
+else
+  info "Flatpak Firefox: not installed"
+fi
+
+echo "==> install prefix ($PREFIX)"
+if [[ -x "$PREFIX/bin/amberfader-helper" ]]; then good "helper launcher executable"; else bad "missing $PREFIX/bin/amberfader-helper (run scripts/install-user)"; fi
+if [[ -x "$PREFIX/bin/amberfader-helper-flatpak" ]]; then good "flatpak launcher executable"; else info "no flatpak launcher (only needed for Flatpak Firefox)"; fi
+if [[ -x "$PREFIX/venv/bin/python" ]]; then
+  good "venv python"
+  if "$PREFIX/venv/bin/python" -c 'import amberfader, amberfader.helper, jsonschema' 2>/dev/null; then
+    good "amberfader package + helper import (helper is PySide6-free)"
+  else
+    bad "amberfader package not importable in venv"
+  fi
+  if "$PREFIX/venv/bin/python" -c 'import PySide6' 2>/dev/null; then
+    good "PySide6 importable (GUI extra)"
+  else
+    info "PySide6 not installed in venv (install with .[gui] or scripts/install-user)"
+  fi
+else
+  info "no venv (helper-only or system install?)"
+fi
+
+echo "==> native-messaging host registration"
+check_manifest() { # name dir expect_path
+  local name="$1" dir="$2" expect="$3" file="$2/$HOST_NAME.json"
+  if [[ ! -f "$file" ]]; then info "$name: not registered ($file absent)"; return 1; fi
+  local path exts
+  path="$(sed -n 's/.*"path"[^"]*"\([^"]*\)".*/\1/p' "$file")"
+  exts="$(tr -d ' \n' < "$file" | grep -o '"allowed_extensions":\[[^]]*\]' || true)"
+  [[ "$path" == "$expect" ]] && good "$name: path=$path" || bad "$name: path is '$path', expected '$expect'"
+  [[ -x "$path" ]] && good "$name: helper path is executable" || bad "$name: '$path' is not executable"
+  case "$exts" in
+    *"$ADDON_ID"*) good "$name: allowed_extensions contains $ADDON_ID" ;;
+    *) bad "$name: allowed_extensions does not contain $ADDON_ID ($exts)" ;;
+  esac
+  return 0
+}
+check_manifest "deb/rpm" "$HOME/.mozilla/native-messaging-hosts" "$PREFIX/bin/amberfader-helper" || true
+check_manifest "flatpak" "$HOME/.var/app/org.mozilla.firefox/.mozilla/native-messaging-hosts" "$PREFIX/bin/amberfader-helper-flatpak" || true
+
+echo "==> control socket"
+SOCK="${XDG_RUNTIME_DIR:-/nonexistent}/amberfader/control.sock"
+if [[ -S "$SOCK" ]]; then
+  good "socket present: $SOCK"
+  [[ "$(stat -c %a "$(dirname "$SOCK")" 2>/dev/null)" == "700" ]] \
+    && good "socket dir is mode 0700" \
+    || bad "socket dir mode is not 0700"
+else
+  info "no control socket (GUI not running — it is created on app start)"
+fi
+
+echo "==> desktop entry"
+[[ -f "$HOME/.local/share/applications/ch.lkmc.amberfader.desktop" ]] \
+  && good "desktop entry present" || info "no desktop entry"
+
+echo
+if [[ $PROBLEMS -eq 0 ]]; then
+  echo "==> doctor: $OK checks ok, no problems"
+else
+  echo "==> doctor: $PROBLEMS problem(s) — see PROBLEM lines above"
+fi
+exit $(( PROBLEMS > 0 ? 1 : 0 ))

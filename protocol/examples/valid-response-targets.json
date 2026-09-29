@@ -1,0 +1,23 @@
+{
+  "protocolVersion": 1,
+  "kind": "response",
+  "id": "req-00002",
+  "sessionId": "runtime-session-example",
+  "ok": true,
+  "result": {
+    "targets": [
+      {
+        "targetKey": "target-key-a",
+        "label": "YouTube Music",
+        "audible": true,
+        "selected": true
+      },
+      {
+        "targetKey": "target-key-b",
+        "label": "YouTube Music",
+        "audible": false,
+        "selected": false
+      }
+    ]
+  }
+}

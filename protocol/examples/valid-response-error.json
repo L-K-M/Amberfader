@@ -1,0 +1,12 @@
+{
+  "protocolVersion": 1,
+  "kind": "response",
+  "id": "req-00009",
+  "sessionId": "runtime-session-example",
+  "bindingToken": "selected-document-example",
+  "ok": false,
+  "error": {
+    "code": "pending_outcome",
+    "message": "Command was dispatched but the player did not confirm the outcome before the deadline."
+  }
+}

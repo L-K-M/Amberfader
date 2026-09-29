@@ -1,0 +1,176 @@
+#!/usr/bin/env bash
+# Amberfader per-user installer (no sudo).
+#
+# Installs the Python app under ~/.local/share/amberfader, registers the
+# native-messaging host with Firefox — deb/rpm AND Flatpak packaging are both
+# supported — installs launcher scripts and a desktop entry. Idempotent: run
+# it again to update.
+#
+#   deb/rpm Firefox:  manifest in ~/.mozilla/native-messaging-hosts/, helper path
+#                     is the real venv executable.
+#   Flatpak Firefox:  manifest in ~/.var/app/org.mozilla.firefox/.mozilla/
+#                     native-messaging-hosts/, path is a launcher that re-enters
+#                     the host via `flatpak-spawn --host`. The sandbox needs the
+#                     org.freedesktop.Flatpak talk permission (this script tells
+#                     you if it's missing; the extension keeps working without
+#                     native mode either way).
+#
+# Usage: scripts/install-user [--firefox auto|native|flatpak|both] [--prefix DIR]
+#                             [--python BIN] [--no-venv]
+#   auto (default) registers every detected Firefox packaging.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+PREFIX="$HOME/.local/share/amberfader"
+FIREFOX_MODE="auto"
+PYTHON_BIN="python3"
+NO_VENV=0
+HOST_NAME="amberfader"
+ADDON_ID="amberfader@ch.lkmc"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --firefox) FIREFOX_MODE="${2:?}"; shift 2 ;;
+    --prefix) PREFIX="${2:?}"; shift 2 ;;
+    --python) PYTHON_BIN="${2:?}"; shift 2 ;;
+    --no-venv) NO_VENV=1; shift ;;
+    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    *) echo "!! unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+say()  { echo "==> $*"; }
+warn() { echo "!! $*" >&2; }
+note() { echo "-- $*"; }
+
+# ---- python environment ---------------------------------------------------
+
+PYENV="$PREFIX/venv"
+if [[ $NO_VENV -eq 0 ]]; then
+  if command -v uv >/dev/null 2>&1; then
+    say "creating venv with uv ($PYENV)"
+    uv venv "$PYENV" --python "$PYTHON_BIN" >/dev/null
+    UV_PIP="uv pip install --python $PYENV/bin/python"
+  else
+    say "creating venv ($PYENV)"
+    "$PYTHON_BIN" -m venv "$PYENV"
+    UV_PIP="$PYENV/bin/pip install"
+  fi
+  say "installing amberfader[gui] into the venv"
+  $UV_PIP --quiet ".[gui]"
+  PYTHON="$PYENV/bin/python"
+else
+  PYTHON="$PYTHON_BIN"
+  "$PYTHON" -c 'import amberfader, jsonschema' 2>/dev/null || {
+    warn "--no-venv but the amberfader package is not importable by $PYTHON"; exit 1; }
+fi
+
+# ---- launchers ------------------------------------------------------------
+
+BINDIR="$PREFIX/bin"
+mkdir -p "$BINDIR"
+
+cat > "$BINDIR/amberfader-helper" <<EOF
+#!/bin/sh
+exec "$PYTHON" -m amberfader.helper "\$@"
+EOF
+cat > "$BINDIR/amberfader" <<EOF
+#!/bin/sh
+exec "$PYTHON" -m amberfader.app "\$@"
+EOF
+cat > "$BINDIR/amberfader-helper-flatpak" <<EOF
+#!/bin/sh
+# Runs inside the Flatpak sandbox; the helper itself must live on the host so
+# it can reach the host-side control socket in \$XDG_RUNTIME_DIR.
+exec flatpak-spawn --host "$BINDIR/amberfader-helper" "\$@"
+EOF
+chmod +x "$BINDIR/amberfader" "$BINDIR/amberfader-helper" "$BINDIR/amberfader-helper-flatpak"
+
+# ---- detection -------------------------------------------------------------
+
+have_native_firefox() {
+  command -v firefox >/dev/null 2>&1 && ! flatpak info org.mozilla.firefox >/dev/null 2>&1 && return 0
+  [[ -d "$HOME/.mozilla" && ! "$(readlink -f "$(command -v firefox 2>/dev/null || echo /none)" 2>/dev/null)" == */flatpak/* ]] && return 0
+  [[ -d "$HOME/.mozilla" ]] && return 0
+  return 1
+}
+have_flatpak_firefox() {
+  flatpak info org.mozilla.firefox >/dev/null 2>&1 && return 0
+  [[ -d "$HOME/.var/app/org.mozilla.firefox" ]] && return 0
+  return 1
+}
+
+DO_NATIVE=0; DO_FLATPAK=0
+case "$FIREFOX_MODE" in
+  auto)
+    have_native_firefox && DO_NATIVE=1
+    have_flatpak_firefox && DO_FLATPAK=1
+    if [[ $DO_NATIVE -eq 0 && $DO_FLATPAK -eq 0 ]]; then
+      warn "no Firefox installation detected; registering the deb/rpm manifest anyway"
+      DO_NATIVE=1
+    fi
+    ;;
+  native) DO_NATIVE=1 ;;
+  flatpak) DO_FLATPAK=1 ;;
+  both) DO_NATIVE=1; DO_FLATPAK=1 ;;
+  *) warn "--firefox must be auto|native|flatpak|both"; exit 2 ;;
+esac
+
+write_manifest() { # target_dir helper_path
+  mkdir -p "$1"
+  cat > "$1/$HOST_NAME.json" <<EOF
+{
+  "name": "$HOST_NAME",
+  "description": "Amberfader native messaging host",
+  "path": "$2",
+  "type": "stdio",
+  "allowed_extensions": ["$ADDON_ID"]
+}
+EOF
+  note "wrote $1/$HOST_NAME.json"
+}
+
+# ---- deb/rpm ---------------------------------------------------------
+
+if [[ $DO_NATIVE -eq 1 ]]; then
+  say "registering native host for deb/rpm Firefox"
+  write_manifest "$HOME/.mozilla/native-messaging-hosts" "$BINDIR/amberfader-helper"
+fi
+
+# ---- flatpak ---------------------------------------------------------
+
+if [[ $DO_FLATPAK -eq 1 ]]; then
+  say "registering native host for Flatpak Firefox"
+  FPDIR="$HOME/.var/app/org.mozilla.firefox/.mozilla/native-messaging-hosts"
+  write_manifest "$FPDIR" "$BINDIR/amberfader-helper-flatpak"
+  if flatpak info --show-permissions org.mozilla.firefox 2>/dev/null \
+       | grep -q 'org.freedesktop.Flatpak'; then
+    note "flatpak-spawn permission present"
+  else
+    warn "Flatpak Firefox lacks the org.freedesktop.Flatpak talk permission."
+    warn "Native mode cannot reach the host helper until you run:"
+    warn "  flatpak override --user org.mozilla.firefox --talk-name=org.freedesktop.Flatpak"
+    warn "The extension-only player keeps working without it."
+  fi
+fi
+
+# ---- desktop entry ----------------------------------------------------
+
+APPS="$HOME/.local/share/applications"
+mkdir -p "$APPS"
+cat > "$APPS/ch.lkmc.amberfader.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Amberfader
+Comment=Classic-style remote for YouTube Music in Firefox
+Exec=$BINDIR/amberfader
+Icon=amberfader
+Terminal=false
+Categories=Audio;Music;Player;
+StartupWMClass=amberfader
+EOF
+note "wrote $APPS/ch.lkmc.amberfader.desktop"
+
+say "done"
+note "next: load the extension (see README 'ext:run' for dev, or install the signed add-on),"
+note "then enable native mode in the extension options. scripts/doctor verifies the setup."

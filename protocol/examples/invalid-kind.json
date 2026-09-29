@@ -1,0 +1,7 @@
+{
+  "protocolVersion": 1,
+  "kind": "telepathy",
+  "id": "req-00001",
+  "method": "connection.ping",
+  "params": {}
+}

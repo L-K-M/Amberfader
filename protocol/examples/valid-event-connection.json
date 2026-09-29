@@ -1,0 +1,11 @@
+{
+  "protocolVersion": 1,
+  "kind": "event",
+  "sessionId": "runtime-session-example",
+  "event": "connection",
+  "data": {
+    "component": "target",
+    "status": "disconnected",
+    "reason": "playback tab navigated away from music.youtube.com"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "protocolVersion": 1,
+  "kind": "request",
+  "id": "req-00007",
+  "method": "player.play",
+  "params": {}
+}
