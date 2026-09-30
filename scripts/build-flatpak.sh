@@ -82,10 +82,13 @@ krb_tmp="$(mktemp -d)"
 for kdeb in "$krb_tmp"/*.deb; do dpkg-deb -x "$kdeb" "$krb_tmp/x"; done
 find "$krb_tmp/x" \( -type f -o -type l \) -name 'lib*.so*' -exec cp -a {} "$STAGE/app/lib/PySide6/Qt/lib/" \;
 rm -rf "$krb_tmp"
-# Fail hard if the primary soname didn't land — a partial/empty download
-# would otherwise produce a bundle that imports fine until QtNetwork loads.
-[[ -e "$STAGE/app/lib/PySide6/Qt/lib/libgssapi_krb5.so.2" ]] ||
-  { echo "!! krb5 vendoring produced no libgssapi_krb5.so.2 (apt-get download failed?)" >&2; exit 1; }
+# Fail hard unless every soname of the chain landed — a partial apt-get
+# download would otherwise ship a bundle that dies when QtNetwork loads.
+for so in libgssapi_krb5.so.2 libkrb5.so.3 libk5crypto.so.3 \
+          libcom_err.so.2 libkrb5support.so.0 libkeyutils.so.1; do
+  [[ -e "$STAGE/app/lib/PySide6/Qt/lib/$so" ]] ||
+    { echo "!! krb5 vendoring missing $so (apt-get download partial failure?)" >&2; exit 1; }
+done
 
 echo "-- flatpak-builder"
 flatpak remote-add --user --if-not-exists flathub "$FLATHUB_REPO"
@@ -108,8 +111,27 @@ flatpak build-bundle --runtime-repo="$FLATHUB_REPO" "$REPO" "$OUT" "$APP_ID"
 COMMAND_NAME="$(sed -n '/^command:[[:space:]]*/{s///;p;q}' "packaging/flatpak/$APP_ID.yml" | tr -d "\"'[:space:]")"
 [ -n "$COMMAND_NAME" ] || { echo "!! no command: key in manifest" >&2; exit 1; }
 flatpak install --user -y --noninteractive "$OUT"
-flatpak run --env=QT_QPA_PLATFORM=offscreen --env=PYTHONPATH=/app/lib \
-  --env=LD_LIBRARY_PATH=/app/lib/PySide6/Qt/lib --command=sh "$APP_ID" -c \
-  'test -x "/app/bin/$1" || { echo "missing /app/bin/$1" >&2; ls -l /app/bin >&2; exit 1; }; grep -qE "PYTHONPATH=\"?/app/lib" "/app/bin/$1" || { echo "!! $1 wrapper no longer exports PYTHONPATH=/app/lib — probe env would diverge from real launch" >&2; exit 1; }; grep -qE "LD_LIBRARY_PATH=\"?/app/lib/PySide6/Qt/lib" "/app/bin/$1" || { echo "!! $1 wrapper no longer exports LD_LIBRARY_PATH — probe env would diverge" >&2; exit 1; }; command -v ldd >/dev/null 2>&1 || { echo "!! ldd not available in runtime; cannot verify libs" >&2; exit 1; }; bad="$(find /app/bin -maxdepth 1 -type f -exec ldd {} \; 2>&1 | grep "not found" | sort -u || true)"; [ -z "$bad" ] || { printf "unresolved libs in /app/bin:\n%s\n" "$bad" >&2; exit 1; }; /usr/bin/python3 -c "import sys;from PySide6.QtWidgets import QApplication;a=QApplication(sys.argv);import amberfader.app,amberfader.helper"' \
-  _ "$COMMAND_NAME"
+# `sh -s` reads the probe from stdin so it stays a reviewable multi-line
+# script (not a 700-char one-liner); "$COMMAND_NAME" still lands in $1.
+# The output marker is asserted host-side: if flatpak ever stops
+# forwarding stdin, `sh -s` would read EOF and pass vacuously — the
+# missing marker turns that silent pass into a hard failure.
+smoke_out="$(flatpak run --env=QT_QPA_PLATFORM=offscreen --env=PYTHONPATH=/app/lib \
+  --env=LD_LIBRARY_PATH=/app/lib/PySide6/Qt/lib --command=sh "$APP_ID" \
+  -s "$COMMAND_NAME" <<'PROBE'
+test -x "/app/bin/$1" || { echo "missing /app/bin/$1" >&2; ls -l /app/bin >&2; exit 1; }
+grep -qE "PYTHONPATH=\"?/app/lib" "/app/bin/$1" ||
+  { echo "!! $1 wrapper no longer exports PYTHONPATH=/app/lib — probe env would diverge from real launch" >&2; exit 1; }
+grep -qE "LD_LIBRARY_PATH=\"?/app/lib/PySide6/Qt/lib" "/app/bin/$1" ||
+  { echo "!! $1 wrapper no longer exports LD_LIBRARY_PATH — probe env would diverge" >&2; exit 1; }
+command -v ldd >/dev/null 2>&1 ||
+  { echo "!! ldd not available in runtime; cannot verify libs" >&2; exit 1; }
+bad="$(find /app/bin -maxdepth 1 -type f -exec ldd {} \; 2>&1 | grep "not found" | sort -u || true)"
+[ -z "$bad" ] || { printf "unresolved libs in /app/bin:\n%s\n" "$bad" >&2; exit 1; }
+/usr/bin/python3 -c "import sys;from PySide6.QtWidgets import QApplication;a=QApplication(sys.argv);import amberfader.app,amberfader.helper"
+echo "__amberfader-smoke-ok__"
+PROBE
+)"
+[[ $smoke_out == *__amberfader-smoke-ok__* ]] ||
+  { echo "!! smoke probe produced no success marker — stdin not forwarded to the sandbox?" >&2; exit 1; }
 echo "-- built $OUT"
