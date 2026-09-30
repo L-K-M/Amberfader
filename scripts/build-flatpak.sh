@@ -41,11 +41,15 @@ mkdir -p "$STAGE/app"
 mkdir -p "$STAGE/app/bin"
 cat > "$STAGE/app/bin/amberfader" <<'EOF'
 #!/bin/sh
-exec env PYTHONPATH=/app/lib /usr/bin/python3 -m amberfader.app "$@"
+exec env PYTHONPATH=/app/lib \
+  LD_LIBRARY_PATH="/app/lib/PySide6/Qt/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  /usr/bin/python3 -m amberfader.app "$@"
 EOF
 cat > "$STAGE/app/bin/amberfader-helper" <<'EOF'
 #!/bin/sh
-exec env PYTHONPATH=/app/lib /usr/bin/python3 -m amberfader.helper "$@"
+exec env PYTHONPATH=/app/lib \
+  LD_LIBRARY_PATH="/app/lib/PySide6/Qt/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  /usr/bin/python3 -m amberfader.helper "$@"
 EOF
 chmod 755 "$STAGE/app/bin/amberfader" "$STAGE/app/bin/amberfader-helper"
 # Desktop file: app-id filename + Exec rewrites per flatpak rules. The deb
@@ -62,11 +66,13 @@ fi
 rm -rf "$STAGE/app/lib/mozilla" "$STAGE/DEBIAN" 2>/dev/null || true
 
 # Vendor the Kerberos libs the wheel's libQt6Network NEEDs: the KDE runtime
-# doesn't ship libgssapi_krb5 (the .deb gets it via package Depends). Landing
-# the .so's in PySide6/Qt/lib puts them inside libQt6Network's $ORIGIN RPATH
-# scope — they resolve with no wrapper/LD_LIBRARY_PATH changes and can't
-# collide with runtime libs (only reachable via that RPATH). noble's krb5
-# needs glibc <= the runtime's, so the vendored set stays loadable.
+# doesn't ship libgssapi_krb5 (the .deb gets it via package Depends). The
+# wheel uses DT_RUNPATH=$ORIGIN — it finds the DIRECT dep libgssapi_krb5.so.2
+# in PySide6/Qt/lib, but RUNPATH does not reach transitive deps, so the
+# wrappers also export LD_LIBRARY_PATH for the deeper krb5 chain (the runtime
+# happens to ship libkrb5.so.3 etc. today — the vendored copies keep that
+# working if a future runtime drops them). noble's krb5 needs glibc <= the
+# runtime's, so the vendored set stays loadable.
 [[ -d "$STAGE/app/lib/PySide6/Qt/lib" ]] ||
   { echo "!! expected PySide6/Qt/lib missing from the staged wheel tree" >&2; exit 1; }
 echo "-- vendoring krb5 for QtNetwork (runtime lacks libgssapi_krb5)"
@@ -76,6 +82,10 @@ krb_tmp="$(mktemp -d)"
 for kdeb in "$krb_tmp"/*.deb; do dpkg-deb -x "$kdeb" "$krb_tmp/x"; done
 find "$krb_tmp/x" \( -type f -o -type l \) -name 'lib*.so*' -exec cp -a {} "$STAGE/app/lib/PySide6/Qt/lib/" \;
 rm -rf "$krb_tmp"
+# Fail hard if the primary soname didn't land — a partial/empty download
+# would otherwise produce a bundle that imports fine until QtNetwork loads.
+[[ -e "$STAGE/app/lib/PySide6/Qt/lib/libgssapi_krb5.so.2" ]] ||
+  { echo "!! krb5 vendoring produced no libgssapi_krb5.so.2 (apt-get download failed?)" >&2; exit 1; }
 
 echo "-- flatpak-builder"
 flatpak remote-add --user --if-not-exists flathub "$FLATHUB_REPO"
@@ -98,7 +108,8 @@ flatpak build-bundle --runtime-repo="$FLATHUB_REPO" "$REPO" "$OUT" "$APP_ID"
 COMMAND_NAME="$(sed -n '/^command:[[:space:]]*/{s///;p;q}' "packaging/flatpak/$APP_ID.yml" | tr -d "\"'[:space:]")"
 [ -n "$COMMAND_NAME" ] || { echo "!! no command: key in manifest" >&2; exit 1; }
 flatpak install --user -y --noninteractive "$OUT"
-flatpak run --env=QT_QPA_PLATFORM=offscreen --env=PYTHONPATH=/app/lib --command=sh "$APP_ID" -c \
-  'test -x "/app/bin/$1" || { echo "missing /app/bin/$1" >&2; ls -l /app/bin >&2; exit 1; }; grep -q "PYTHONPATH=/app/lib" "/app/bin/$1" || { echo "!! $1 wrapper no longer exports PYTHONPATH=/app/lib — probe env would diverge from real launch" >&2; exit 1; }; command -v ldd >/dev/null 2>&1 || { echo "!! ldd not available in runtime; cannot verify libs" >&2; exit 1; }; bad="$(find /app/bin -maxdepth 1 -type f -exec ldd {} \; 2>&1 | grep "not found" | sort -u || true)"; [ -z "$bad" ] || { printf "unresolved libs in /app/bin:\n%s\n" "$bad" >&2; exit 1; }; /usr/bin/python3 -c "import sys;from PySide6.QtWidgets import QApplication;a=QApplication(sys.argv);import amberfader.app,amberfader.helper"' \
+flatpak run --env=QT_QPA_PLATFORM=offscreen --env=PYTHONPATH=/app/lib \
+  --env=LD_LIBRARY_PATH=/app/lib/PySide6/Qt/lib --command=sh "$APP_ID" -c \
+  'test -x "/app/bin/$1" || { echo "missing /app/bin/$1" >&2; ls -l /app/bin >&2; exit 1; }; grep -q "PYTHONPATH=/app/lib" "/app/bin/$1" || { echo "!! $1 wrapper no longer exports PYTHONPATH=/app/lib — probe env would diverge from real launch" >&2; exit 1; }; grep -q "LD_LIBRARY_PATH=/app/lib/PySide6/Qt/lib" "/app/bin/$1" || { echo "!! $1 wrapper no longer exports LD_LIBRARY_PATH — probe env would diverge" >&2; exit 1; }; command -v ldd >/dev/null 2>&1 || { echo "!! ldd not available in runtime; cannot verify libs" >&2; exit 1; }; bad="$(find /app/bin -maxdepth 1 -type f -exec ldd {} \; 2>&1 | grep "not found" | sort -u || true)"; [ -z "$bad" ] || { printf "unresolved libs in /app/bin:\n%s\n" "$bad" >&2; exit 1; }; /usr/bin/python3 -c "import sys;from PySide6.QtWidgets import QApplication;a=QApplication(sys.argv);import amberfader.app,amberfader.helper"' \
   _ "$COMMAND_NAME"
 echo "-- built $OUT"
