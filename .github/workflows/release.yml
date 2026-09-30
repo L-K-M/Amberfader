@@ -88,7 +88,19 @@ jobs:
         run: scripts/build-deb.sh "${{ github.ref_name }}" dist
 
       - name: Build .flatpak
-        run: scripts/build-flatpak.sh dist/amberfader_*_*.deb || echo "::warning::flatpak-builder unavailable — skipping flatpak artifact"
+        # flatpak-builder was never installed here, so the old `|| warning`
+        # skipped the artifact on every release. Install it and fail hard —
+        # a broken repack must not ship a release that's silently missing
+        # the flatpak.
+        run: |
+          # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
+          # (flatpak's sandbox helper) builds in.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+          # elfutils is required: flatpak-builder execs eu-strip on payload ELFs
+          sudo apt-get update && sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
+          DEB="$(find dist -maxdepth 1 -type f -name 'amberfader_*.deb' -print -quit)"
+          [ -n "$DEB" ] || { echo "::error::no .deb to repack"; exit 1; }
+          scripts/build-flatpak.sh "$DEB"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
