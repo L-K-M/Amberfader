@@ -83,6 +83,6 @@ COMMAND_NAME="$(sed -n '/^command:[[:space:]]*/{s///;p;q}' "packaging/flatpak/$A
 [ -n "$COMMAND_NAME" ] || { echo "!! no command: key in manifest" >&2; exit 1; }
 flatpak install --user -y --noninteractive "$OUT"
 flatpak run --env=QT_QPA_PLATFORM=offscreen --env=PYTHONPATH=/app/lib --command=sh "$APP_ID" -c \
-  'test -x "/app/bin/$1" || { echo "missing /app/bin/$1" >&2; ls -l /app/bin >&2; exit 1; }; bad="$(find /app/bin -maxdepth 1 -type f -exec ldd {} \; 2>&1 | grep "not found" | sort -u || true)"; [ -z "$bad" ] || { printf "unresolved libs in /app/bin:\n%s\n" "$bad" >&2; exit 1; }; /usr/bin/python3 -c "import sys;from PySide6.QtWidgets import QApplication;a=QApplication(sys.argv);import amberfader.app,amberfader.helper"' \
+  'test -x "/app/bin/$1" || { echo "missing /app/bin/$1" >&2; ls -l /app/bin >&2; exit 1; }; grep -q "PYTHONPATH=/app/lib" "/app/bin/$1" || { echo "!! $1 wrapper no longer exports PYTHONPATH=/app/lib — probe env would diverge from real launch" >&2; exit 1; }; command -v ldd >/dev/null 2>&1 || { echo "!! ldd not available in runtime; cannot verify libs" >&2; exit 1; }; bad="$(find /app/bin -maxdepth 1 -type f -exec ldd {} \; 2>&1 | grep "not found" | sort -u || true)"; [ -z "$bad" ] || { printf "unresolved libs in /app/bin:\n%s\n" "$bad" >&2; exit 1; }; /usr/bin/python3 -c "import sys;from PySide6.QtWidgets import QApplication;a=QApplication(sys.argv);import amberfader.app,amberfader.helper"' \
   _ "$COMMAND_NAME"
 echo "-- built $OUT"
