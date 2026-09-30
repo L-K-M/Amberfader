@@ -82,7 +82,7 @@ flatpak build-bundle --runtime-repo="$FLATHUB_REPO" "$REPO" "$OUT" "$APP_ID"
 COMMAND_NAME="$(sed -n '/^command:[[:space:]]*/{s///;p;q}' "packaging/flatpak/$APP_ID.yml" | tr -d "\"'[:space:]")"
 [ -n "$COMMAND_NAME" ] || { echo "!! no command: key in manifest" >&2; exit 1; }
 flatpak install --user -y --noninteractive "$OUT"
-flatpak run --env=QT_QPA_PLATFORM=offscreen --command=sh "$APP_ID" -c \
-  'test -x "/app/bin/$1" || { echo "missing /app/bin/$1" >&2; ls -l /app/bin >&2; exit 1; }; /usr/bin/python3 -c "import sys;from PySide6.QtCore import QTimer;from PySide6.QtWidgets import QApplication;a=QApplication(sys.argv);import amberfader.app,amberfader.helper"' \
+flatpak run --env=QT_QPA_PLATFORM=offscreen --env=PYTHONPATH=/app/lib --command=sh "$APP_ID" -c \
+  'test -x "/app/bin/$1" || { echo "missing /app/bin/$1" >&2; ls -l /app/bin >&2; exit 1; }; bad="$(find /app/bin -maxdepth 1 -type f -exec ldd {} \; 2>&1 | grep "not found" | sort -u || true)"; [ -z "$bad" ] || { printf "unresolved libs in /app/bin:\n%s\n" "$bad" >&2; exit 1; }; /usr/bin/python3 -c "import sys;from PySide6.QtWidgets import QApplication;a=QApplication(sys.argv);import amberfader.app,amberfader.helper"' \
   _ "$COMMAND_NAME"
 echo "-- built $OUT"
