@@ -61,6 +61,22 @@ fi
 # Flatpak Firefox registration is per-user via scripts/install-user.
 rm -rf "$STAGE/app/lib/mozilla" "$STAGE/DEBIAN" 2>/dev/null || true
 
+# Vendor the Kerberos libs the wheel's libQt6Network NEEDs: the KDE runtime
+# doesn't ship libgssapi_krb5 (the .deb gets it via package Depends). Landing
+# the .so's in PySide6/Qt/lib puts them inside libQt6Network's $ORIGIN RPATH
+# scope — they resolve with no wrapper/LD_LIBRARY_PATH changes and can't
+# collide with runtime libs (only reachable via that RPATH). noble's krb5
+# needs glibc <= the runtime's, so the vendored set stays loadable.
+[[ -d "$STAGE/app/lib/PySide6/Qt/lib" ]] ||
+  { echo "!! expected PySide6/Qt/lib missing from the staged wheel tree" >&2; exit 1; }
+echo "-- vendoring krb5 for QtNetwork (runtime lacks libgssapi_krb5)"
+krb_tmp="$(mktemp -d)"
+(cd "$krb_tmp" && apt-get download \
+  libgssapi-krb5-2 libkrb5-3 libk5crypto3 libcom-err2 libkrb5support0 libkeyutils1)
+for kdeb in "$krb_tmp"/*.deb; do dpkg-deb -x "$kdeb" "$krb_tmp/x"; done
+find "$krb_tmp/x" \( -type f -o -type l \) -name 'lib*.so*' -exec cp -a {} "$STAGE/app/lib/PySide6/Qt/lib/" \;
+rm -rf "$krb_tmp"
+
 echo "-- flatpak-builder"
 flatpak remote-add --user --if-not-exists flathub "$FLATHUB_REPO"
 flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse \
