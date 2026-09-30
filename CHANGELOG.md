@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- CI now repacks the .deb as a Flatpak bundle and smoke-checks the payload
+  (command exists in /app/bin, all bundled ELF libraries resolve in the
+  runtime). release.yml installs flatpak-builder instead of soft-skipping
+  the flatpak artifact on every release.
+
 ## [0.1.0] - Unreleased
 
 ### Added

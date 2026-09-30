@@ -49,6 +49,16 @@ rm -rf "$STAGE/app/lib/mozilla" "$STAGE/DEBIAN" 2>/dev/null || true
 echo "-- flatpak-builder"
 flatpak-builder --disable-rofiles-fuse --force-clean --repo="$REPO" \
   "$BUILD" "packaging/flatpak/$APP_ID.yml"
+
+# Smoke: the manifest's command must exist under /app/bin and every bundled
+# ELF (PySide6 .so tree included) must resolve its libraries inside the
+# runtime — catches a bad /usr->/app remap or a missing runtime dep before
+# the bundle ships. Ubuntu 24.04's flatpak-builder 1.4.2 has no --user flag
+# on --run; plain --run resolves the user-installed runtime fine.
+COMMAND_NAME="$(sed -n '/^command:[[:space:]]*/{s///;p;q}' "packaging/flatpak/$APP_ID.yml")"
+[ -n "$COMMAND_NAME" ] || { echo "!! no command: key in manifest" >&2; exit 1; }
+flatpak-builder --run "$BUILD" "packaging/flatpak/$APP_ID.yml" \
+  sh -c 'bin="/app/bin/$1"; test -x "$bin" || { echo "missing $bin" >&2; ls -l /app/bin >&2; exit 1; }; bad="$(find /app -type f \( -name "*.so*" -o -path "/app/bin/$1" \) -exec ldd {} \; 2>/dev/null | grep "not found" | sort -u || true)"; [ -z "$bad" ] || { printf "unresolved libraries:\n%s\n" "$bad" >&2; exit 1; }' _ "$COMMAND_NAME"
 VERSION="$(basename "$DEB" | sed -n 's/^amberfader_\(.*\)_.*\.deb/\1/p')"
 OUT="dist/amberfader_${VERSION:-local}.flatpak"
 flatpak build-bundle "$REPO" "$OUT" "$APP_ID"
