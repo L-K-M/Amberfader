@@ -16,10 +16,22 @@ APP_ID="ch.lkmc.amberfader"
 command -v flatpak-builder >/dev/null 2>&1 || {
   echo "!! flatpak-builder not installed" >&2; exit 1; }
 
+FLATHUB_REPO=https://dl.flathub.org/repo/flathub.flatpakrepo
+
 echo "-- extracting $(basename "$DEB")"
 rm -rf dist/flatpak
 mkdir -p "$STAGE" "$BUILD" "$REPO"
 dpkg-deb -x "$DEB" "$STAGE"
+
+# Any payload outside usr/, opt/amberfader/, DEBIAN would be silently dropped
+# by the remap below — fail loudly instead of shipping a gutted bundle.
+unexpected="$(find "$STAGE" -mindepth 1 -maxdepth 1 -printf '%f\n' | grep -vxE 'usr|opt|DEBIAN' || true)"
+unexpected_opt="$(find "$STAGE/opt" -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null | grep -vx 'amberfader' || true)"
+if [[ -n $unexpected$unexpected_opt ]]; then
+  printf '!! deb ships payload outside usr/ + opt/amberfader/:\n%s\n%s\n' \
+    "$unexpected" "$unexpected_opt" >&2
+  exit 1
+fi
 
 echo "-- remapping /usr and /opt/amberfader to /app"
 mkdir -p "$STAGE/app"
@@ -36,30 +48,39 @@ cat > "$STAGE/app/bin/amberfader-helper" <<'EOF'
 exec env PYTHONPATH=/app/lib /usr/bin/python3 -m amberfader.helper "$@"
 EOF
 chmod 755 "$STAGE/app/bin/amberfader" "$STAGE/app/bin/amberfader-helper"
-# Desktop file: app-id filename + Exec rewrites per flatpak rules.
-if [[ -f "$STAGE/app/share/applications/ch.lkmc.amberfader.desktop" ]]; then
-  sed -i 's/^Exec=.*/Exec=amberfader/' "$STAGE/app/share/applications/ch.lkmc.amberfader.desktop"
-  mv "$STAGE/app/share/applications/ch.lkmc.amberfader.desktop" \
-     "$STAGE/app/share/applications/$APP_ID.desktop"
+# Desktop file: app-id filename + Exec rewrites per flatpak rules. The deb
+# already ships it app-id-named — rename only when it doesn't.
+DESKTOP_DIR="$STAGE/app/share/applications"
+DESKTOP_SRC="$(find "$DESKTOP_DIR" -maxdepth 1 -name '*.desktop' -print -quit 2>/dev/null || true)"
+if [[ -n $DESKTOP_SRC ]]; then
+  sed -i 's/^Exec=.*/Exec=amberfader/' "$DESKTOP_SRC"
+  [[ $(basename "$DESKTOP_SRC") == "$APP_ID.desktop" ]] ||
+    mv "$DESKTOP_SRC" "$DESKTOP_DIR/$APP_ID.desktop"
 fi
 # The deb's system-wide host manifest does not belong inside the bundle —
 # Flatpak Firefox registration is per-user via scripts/install-user.
 rm -rf "$STAGE/app/lib/mozilla" "$STAGE/DEBIAN" 2>/dev/null || true
 
 echo "-- flatpak-builder"
-flatpak-builder --disable-rofiles-fuse --force-clean --repo="$REPO" \
-  "$BUILD" "packaging/flatpak/$APP_ID.yml"
+flatpak remote-add --user --if-not-exists flathub "$FLATHUB_REPO"
+flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse \
+  --force-clean --repo="$REPO" "$BUILD" "packaging/flatpak/$APP_ID.yml"
 
-# Smoke: the manifest's command must exist under /app/bin and every bundled
-# ELF (PySide6 .so tree included) must resolve its libraries inside the
-# runtime — catches a bad /usr->/app remap or a missing runtime dep before
-# the bundle ships. Ubuntu 24.04's flatpak-builder 1.4.2 has no --user flag
-# on --run; plain --run resolves the user-installed runtime fine.
-COMMAND_NAME="$(sed -n '/^command:[[:space:]]*/{s///;p;q}' "packaging/flatpak/$APP_ID.yml")"
-[ -n "$COMMAND_NAME" ] || { echo "!! no command: key in manifest" >&2; exit 1; }
-flatpak-builder --run "$BUILD" "packaging/flatpak/$APP_ID.yml" \
-  sh -c 'bin="/app/bin/$1"; test -x "$bin" || { echo "missing $bin" >&2; ls -l /app/bin >&2; exit 1; }; bad="$(find /app -type f \( -name "*.so*" -o -path "/app/bin/$1" \) -exec ldd {} \; 2>/dev/null | grep "not found" | sort -u || true)"; [ -z "$bad" ] || { printf "unresolved libraries:\n%s\n" "$bad" >&2; exit 1; }' _ "$COMMAND_NAME"
 VERSION="$(basename "$DEB" | sed -n 's/^amberfader_\(.*\)_.*\.deb/\1/p')"
 OUT="dist/amberfader_${VERSION:-local}.flatpak"
-flatpak build-bundle "$REPO" "$OUT" "$APP_ID"
+flatpak build-bundle --runtime-repo="$FLATHUB_REPO" "$REPO" "$OUT" "$APP_ID"
+
+# Smoke: install the bundle and probe the real runtime — flatpak-builder
+# --run only exercises the SDK build sandbox, which is a superset of the
+# runtime and can mask a missing dep. Asserts the manifest's command exists
+# under /app/bin and every bundled ELF (PySide6 .so tree included) resolves
+# its libraries. ldd stderr must reach grep: glibc symbol-version failures
+# ("GLIBC_2.x not found") are printed on stderr, while "not a dynamic
+# executable" noise never contains "not found".
+COMMAND_NAME="$(sed -n '/^command:[[:space:]]*/{s///;p;q}' "packaging/flatpak/$APP_ID.yml" | tr -d "\"'[:space:]")"
+[ -n "$COMMAND_NAME" ] || { echo "!! no command: key in manifest" >&2; exit 1; }
+flatpak install --user -y --noninteractive "$OUT"
+flatpak run --command=sh "$APP_ID" -c \
+  'bin="/app/bin/$1"; test -x "$bin" || { echo "missing $bin" >&2; ls -l /app/bin >&2; exit 1; }; bad="$(find /app -type f \( -name "*.so*" -o -path "/app/bin/*" \) -exec ldd {} \; 2>&1 | grep "not found" | sort -u || true)"; [ -z "$bad" ] || { printf "unresolved libraries:\n%s\n" "$bad" >&2; exit 1; }' \
+  _ "$COMMAND_NAME"
 echo "-- built $OUT"
