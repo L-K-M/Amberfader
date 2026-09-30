@@ -73,14 +73,16 @@ flatpak build-bundle --runtime-repo="$FLATHUB_REPO" "$REPO" "$OUT" "$APP_ID"
 # Smoke: install the bundle and probe the real runtime — flatpak-builder
 # --run only exercises the SDK build sandbox, which is a superset of the
 # runtime and can mask a missing dep. Asserts the manifest's command exists
-# under /app/bin and every bundled ELF (PySide6 .so tree included) resolves
-# its libraries. ldd stderr must reach grep: glibc symbol-version failures
-# ("GLIBC_2.x not found") are printed on stderr, while "not a dynamic
-# executable" noise never contains "not found".
+# under /app/bin, then imports the app's real Qt chain inside the sandbox:
+# a genuine QApplication on the offscreen platform forces PySide6's binding
+# .so + bundled Qt libs + platform plugin to load for real — strictly
+# stronger than ldd, which can't tell the Essentials wheel's dead addon
+# modules (WebEngine/Pdf/VirtualKeyboard/sql-driver/designer .so's the app
+# never imports — flagged in CI) from live payload.
 COMMAND_NAME="$(sed -n '/^command:[[:space:]]*/{s///;p;q}' "packaging/flatpak/$APP_ID.yml" | tr -d "\"'[:space:]")"
 [ -n "$COMMAND_NAME" ] || { echo "!! no command: key in manifest" >&2; exit 1; }
 flatpak install --user -y --noninteractive "$OUT"
-flatpak run --command=sh "$APP_ID" -c \
-  'bin="/app/bin/$1"; test -x "$bin" || { echo "missing $bin" >&2; ls -l /app/bin >&2; exit 1; }; bad="$(find /app -type f \( -name "*.so*" -o -path "/app/bin/*" \) -exec ldd {} \; 2>&1 | grep "not found" | sort -u || true)"; [ -z "$bad" ] || { printf "unresolved libraries:\n%s\n" "$bad" >&2; exit 1; }' \
+flatpak run --env=QT_QPA_PLATFORM=offscreen --command=sh "$APP_ID" -c \
+  'test -x "/app/bin/$1" || { echo "missing /app/bin/$1" >&2; ls -l /app/bin >&2; exit 1; }; /usr/bin/python3 -c "import sys;from PySide6.QtCore import QTimer;from PySide6.QtWidgets import QApplication;a=QApplication(sys.argv);import amberfader.app,amberfader.helper"' \
   _ "$COMMAND_NAME"
 echo "-- built $OUT"

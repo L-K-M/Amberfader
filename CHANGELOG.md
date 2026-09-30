@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- CI now repacks the .deb as a Flatpak bundle and smoke-checks the payload
-  (command exists in /app/bin, all bundled ELF libraries resolve in the
-  runtime). release.yml installs flatpak-builder instead of soft-skipping
-  the flatpak artifact on every release.
+- CI now repacks the .deb as a Flatpak bundle and smoke-checks the installed
+  app in the real runtime (command exists in /app/bin; QApplication import
+  probe loads the full PySide6/Qt chain). release.yml installs
+  flatpak-builder instead of soft-skipping the flatpak artifact on every
+  release.
 
 ## [0.1.0] - Unreleased
 
