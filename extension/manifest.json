@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Amberfader",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Compact classic-style remote control for YouTube Music. Controls playback and search in an existing music.youtube.com tab.",
   "default_locale": "en",
   "icons": {
