@@ -8,11 +8,12 @@ helper is a real disconnect — never silently retried.
 from __future__ import annotations
 
 import argparse
-import itertools
 import os
 import sys
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
+from . import PROTOCOL_VERSION
 from .protocol import validate_message
 from .transport.local import (
     FramedSocket,
@@ -29,6 +30,7 @@ if TYPE_CHECKING:  # pragma: no cover
 CONTROL_DEADLINE_MS = 5000
 SEARCH_DEADLINE_MS = 15000
 MAX_PENDING = 64
+BINDING_METHOD_PREFIXES = ("player.", "search.", "browser.")
 
 
 class AmberfaderApp:
@@ -50,7 +52,8 @@ class AmberfaderApp:
         self.window: MainWindow | None = None
         self.conn: FramedSocket | None = None
         self._pending: dict[str, dict[str, Any]] = {}
-        self._ids = itertools.count(1)
+        self._session_id: str | None = None
+        self._binding_token: str | None = None
 
     # ---- lifecycle --------------------------------------------------------
 
@@ -79,17 +82,28 @@ class AmberfaderApp:
     def request(self, method: str, params: dict) -> None:
         if self.window is None:
             return
+        needs_binding = method.startswith(BINDING_METHOD_PREFIXES)
+        if needs_binding and (self._session_id is None or self._binding_token is None):
+            self.window.route_response(method, False, {
+                "message": "Playback tab is not connected. Reconnect in the extension options.",
+            })
+            return
         if len(self._pending) >= MAX_PENDING:
             self.window.show_status("Too many requests in flight", error=True)
             return
-        rid = f"ui-{next(self._ids):06d}"
+        # The adapter dedup cache survives GUI restarts within one document.
+        rid = f"gui-{uuid4().hex}"
         msg: dict[str, Any] = {
-            "protocolVersion": 1,
+            "protocolVersion": PROTOCOL_VERSION,
             "kind": "request",
             "id": rid,
             "method": method,
             "params": params,
         }
+        if self._session_id is not None:
+            msg["sessionId"] = self._session_id
+        if needs_binding:
+            msg["bindingToken"] = self._binding_token
         from PySide6.QtCore import QTimer
 
         deadline = SEARCH_DEADLINE_MS if method.startswith("search.") else CONTROL_DEADLINE_MS
@@ -113,11 +127,22 @@ class AmberfaderApp:
         if entry is None or self.window is None:
             return
         entry["timer"].stop()
+        if ok and entry["method"] == "state.get" and payload:
+            snapshot = {
+                "protocolVersion": PROTOCOL_VERSION, "kind": "event", "event": "state",
+                "data": payload,
+            }
+            if validate_message(snapshot):
+                ok = False
+                payload = {"message": "Firefox returned an invalid player snapshot."}
+            else:
+                self.window.apply_state(payload)
         self.window.route_response(entry["method"], ok, payload)
 
     # ---- inbound wiring ---------------------------------------------------
 
     def _on_helper(self, sock: FramedSocket) -> None:
+        self._session_id = self._binding_token = None
         self.conn = sock
         sock.messageReceived.connect(self._on_message)
         sock.disconnected.connect(self._on_helper_gone)
@@ -127,6 +152,7 @@ class AmberfaderApp:
 
     def _on_helper_gone(self) -> None:
         self.conn = None
+        self._session_id = self._binding_token = None
         for rid in list(self._pending):
             self._settle(rid, False, {"message": "Firefox bridge disconnected"})
         if self.window is not None:
@@ -141,6 +167,14 @@ class AmberfaderApp:
             return  # handled at server level
         if problems:
             return  # invalid peer traffic is dropped silently
+        session_id = msg.get("sessionId")
+        if isinstance(session_id, str):
+            if self._session_id != session_id:
+                self._binding_token = None
+            self._session_id = session_id
+        binding_token = msg.get("bindingToken")
+        if isinstance(binding_token, str):
+            self._binding_token = binding_token
         if kind == "response":
             ok = bool(msg.get("ok"))
             payload = (
@@ -163,6 +197,7 @@ class AmberfaderApp:
                     data.get("component", ""), data.get("status", ""), data.get("reason", "")
                 )
             elif event == "binding" and data.get("status") != "bound":
+                self._binding_token = None
                 self.window.set_connection("target", "disconnected", data.get("reason", ""))
                 if self.window._search is not None:
                     self.window._search.mark_stale()

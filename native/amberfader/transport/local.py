@@ -8,9 +8,10 @@ import os
 import stat
 from typing import Any
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QElapsedTimer, QObject, Signal
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
+from .. import PROTOCOL_VERSION
 from ..protocol import FrameError, FrameFeed, encode_frame
 from .paths import default_socket_path, path_has_live_owner, runtime_socket_dir
 
@@ -148,7 +149,7 @@ def try_activate_existing(path: str, timeout_ms: int = 1500) -> bool:
     sock.write(
         encode_frame(
             {
-                "protocolVersion": 1,
+                "protocolVersion": PROTOCOL_VERSION,
                 "kind": "hello",
                 "component": "gui-instance",
                 "componentVersion": "0",
@@ -156,11 +157,19 @@ def try_activate_existing(path: str, timeout_ms: int = 1500) -> bool:
         )
     )
     sock.flush()
-    sock.waitForReadyRead(timeout_ms)
     feed = FrameFeed()
+    deadline = QElapsedTimer()
+    deadline.start()
     try:
-        for _ in feed.feed(bytes(sock.readAll())):
-            return True
+        while True:
+            remaining_ms = timeout_ms - deadline.elapsed()
+            if remaining_ms <= 0:
+                return False
+            if not sock.bytesAvailable() and not sock.waitForReadyRead(remaining_ms):
+                return False
+            for message in feed.feed(bytes(sock.readAll())):
+                return message.get("kind") == ACTIVATE_RESPONSE and message.get("ok") is True
     except FrameError:
         return False
-    return True
+    finally:
+        sock.disconnectFromServer()

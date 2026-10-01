@@ -52,6 +52,8 @@ export class ArtworkService {
   private inFlight = 0;
   private readonly waiters: Array<() => void> = [];
   private epoch = 0;
+  private currentRequestKey: string | null = null;
+  private pendingRequest: Promise<AssetData | null> | null = null;
 
   // Decoders differ between an extension page (DOM canvas) and tests; inject.
   private readonly decode: (bytes: Uint8Array, mime: string) => Promise<{
@@ -71,20 +73,57 @@ export class ArtworkService {
       (async (bytes, mime) => {
         const blob = new Blob([bytes], { type: mime });
         const bitmap = await createImageBitmap(blob);
-        return { bitmap };
+        return {
+          bitmap,
+          draw: async (image, width, height) => {
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const context = canvas.getContext("2d");
+            if (!context) throw new Error("no 2d context");
+            context.drawImage(image as ImageBitmap, 0, 0, width, height);
+            return new Promise<Blob>((resolve, reject) => {
+              canvas.toBlob(
+                (output) => output ? resolve(output) : reject(new Error("toBlob failed")),
+                "image/jpeg", 0.85,
+              );
+            });
+          },
+        };
       });
   }
 
   // Returns the asset event data, or null when the request was
   // invalid/superseded/failed (callers emit a placeholder in that case).
   async fetchAsset(req: ArtworkRequest): Promise<AssetData | null> {
+    const key = JSON.stringify([req.artworkId, req.occurrenceId, req.url]);
+    if (key === this.currentRequestKey && this.pendingRequest) return this.pendingRequest;
+
+    // Repeated position samples share one download. Only a different target
+    // supersedes it, including when that target is already cached.
+    if (key !== this.currentRequestKey) {
+      this.currentRequestKey = key;
+      this.epoch += 1;
+    }
     if (!allowedArtworkUrl(req.url)) return null;
     const cached = this.cache.get(req.artworkId);
-    if (cached) return cached.asset;
+    if (cached) return cached.asset.occurrenceId === req.occurrenceId
+      ? cached.asset
+      : { ...cached.asset, occurrenceId: req.occurrenceId };
 
-    const epoch = ++this.epoch;
+    const pending = this.fetchUncached(req, this.epoch);
+    this.pendingRequest = pending;
+    try {
+      return await pending;
+    } finally {
+      if (this.pendingRequest === pending) this.pendingRequest = null;
+    }
+  }
+
+  private async fetchUncached(req: ArtworkRequest, epoch: number): Promise<AssetData | null> {
     await this.acquire();
     try {
+      if (epoch !== this.epoch) return null;
       const data = await this.download(req.url);
       if (!data) return null;
       const asset = await this.normalize(req, data.bytes, data.mime);
@@ -99,6 +138,8 @@ export class ArtworkService {
 
   invalidateAll(): void {
     this.epoch += 1;
+    this.currentRequestKey = null;
+    this.pendingRequest = null;
   }
 
   private async acquire(): Promise<void> {

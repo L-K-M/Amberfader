@@ -31,28 +31,7 @@ const btnShow = $<HTMLButtonElement>("btn-show");
 const btnHide = $<HTMLButtonElement>("btn-hide");
 const btnMenu = $<HTMLButtonElement>("btn-menu");
 
-const artwork = new ArtworkService(async (bytes, mime) => {
-  const blob = new Blob([bytes], { type: mime });
-  const bitmap = await createImageBitmap(blob);
-  return {
-    bitmap,
-    draw: async (bmp, w, h) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("no 2d context");
-      ctx.drawImage(bmp as ImageBitmap, 0, 0, w, h);
-      return new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(
-          (b) => (b ? resolve(b) : reject(new Error("toBlob failed"))),
-          "image/jpeg",
-          0.85,
-        );
-      });
-    },
-  };
-});
+const artwork = new ArtworkService();
 
 let state: PlayerState | null = null;
 let stateAt = 0; // monotonic receipt time for interpolation
@@ -62,6 +41,12 @@ let connectionError: string | null = null;
 
 const client = new ProtocolClient({
   onState: (s) => {
+    if (state?.bindingToken !== s.bindingToken ||
+        state?.track?.occurrenceId !== s.track?.occurrenceId ||
+        state?.track?.artworkId !== s.track?.artworkId) {
+      artwork.invalidateAll();
+      artEl.removeAttribute("src");
+    }
     connectionError = null;
     state = s;
     stateAt = performance.now();
@@ -89,7 +74,11 @@ const client = new ProtocolClient({
 });
 
 client.onArtworkPropose = ({ url, artworkId, occurrenceId }) => {
+  const bindingToken = client.bindingToken;
   void artwork.fetchAsset({ url, artworkId, occurrenceId }).then((asset) => {
+    if (state?.bindingToken !== bindingToken ||
+        state?.track?.occurrenceId !== occurrenceId || state?.track?.artworkId !== artworkId) return;
+
     if (!asset) {
       artEl.removeAttribute("src");
       return;

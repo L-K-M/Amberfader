@@ -56,3 +56,23 @@ scripts/uninstall-user          # remove app files (keeps preferences unless --p
 
 See [`AGENTS.md`](AGENTS.md) for conventions and [`docs/compatibility.md`](docs/compatibility.md)
 for the tested-environment record.
+
+## Connect an installed Flatpak app
+
+Installing the app does not register its helper with your browser. Run the
+bundled installer on the host:
+
+```sh
+bash -o pipefail -c 'flatpak run --command=cat ch.lkmc.amberfader /app/share/amberfader/install-user | bash -s -- --app flatpak'
+```
+
+It detects native and Flatpak Firefox/Zen. For Flatpak browsers, follow any
+printed permission command and restart the browser. Restart Amberfader, then
+enable native mode or press **Reconnect** in the extension options.
+
+From a checkout, use `scripts/install-user --app flatpak` instead. This uses
+the installed app's helper without creating another Python environment.
+
+The native-mode section reports helper errors, including missing registration.
+For missing artwork, run **Run probes** and share the artwork host list; image
+permissions are added only after the live origin is captured.

@@ -10,6 +10,7 @@ set -uo pipefail
 PREFIX="$HOME/.local/share/amberfader"
 HOST_NAME="amberfader"
 ADDON_ID="amberfader@ch.lkmc"
+FLATPAK_BROWSER_IDS=("org.mozilla.firefox" "app.zen_browser.zen" "io.github.zen_browser.zen")
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --prefix) PREFIX="${2:?}"; shift 2 ;;
@@ -29,16 +30,18 @@ done
 [[ -n "${XDG_RUNTIME_DIR:-}" ]] && good "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" \
   || bad "XDG_RUNTIME_DIR not set — the private control socket needs it"
 
-if flatpak info org.mozilla.firefox >/dev/null 2>&1; then
-  info "Flatpak Firefox: installed ($(flatpak info org.mozilla.firefox 2>/dev/null | awk -F= '/^version/{print $2}' | head -1 || echo '?'))"
-  if flatpak info --show-permissions org.mozilla.firefox 2>/dev/null | grep -q 'org.freedesktop.Flatpak'; then
+for id in "${FLATPAK_BROWSER_IDS[@]}"; do
+  if ! flatpak info "$id" >/dev/null 2>&1; then continue; fi
+  info "Flatpak browser: $id"
+  if flatpak info --show-permissions "$id" 2>/dev/null | grep -q 'org.freedesktop.Flatpak'; then
     good "flatpak-spawn (org.freedesktop.Flatpak) permission present"
   else
-    bad "Flatpak Firefox lacks org.freedesktop.Flatpak — native mode needs: flatpak override --user org.mozilla.firefox --talk-name=org.freedesktop.Flatpak"
+    bad "$id needs: flatpak override --user $id --talk-name=org.freedesktop.Flatpak --persist=.mozilla"
   fi
-else
-  info "Flatpak Firefox: not installed"
-fi
+  if [[ $id != org.mozilla.firefox ]] && ! flatpak info --show-permissions "$id" 2>/dev/null | grep -q '\.mozilla'; then
+    bad "$id needs persistent native hosts: flatpak override --user $id --persist=.mozilla"
+  fi
+done
 
 echo "==> install prefix ($PREFIX)"
 if [[ -x "$PREFIX/bin/amberfader-helper" ]]; then good "helper launcher executable"; else bad "missing $PREFIX/bin/amberfader-helper (run scripts/install-user)"; fi
@@ -60,22 +63,31 @@ else
 fi
 
 echo "==> native-messaging host registration"
-check_manifest() { # name dir expect_path
-  local name="$1" dir="$2" expect="$3" file="$2/$HOST_NAME.json"
+check_manifest() { # name dir expected_sandbox_path [host_executable_path]
+  local name="$1" expect="$3" file="$2/$HOST_NAME.json" executable="${4:-$3}"
   if [[ ! -f "$file" ]]; then info "$name: not registered ($file absent)"; return 1; fi
   local path exts
   path="$(sed -n 's/.*"path"[^"]*"\([^"]*\)".*/\1/p' "$file")"
   exts="$(tr -d ' \n' < "$file" | grep -o '"allowed_extensions":\[[^]]*\]' || true)"
-  [[ "$path" == "$expect" ]] && good "$name: path=$path" || bad "$name: path is '$path', expected '$expect'"
-  [[ -x "$path" ]] && good "$name: helper path is executable" || bad "$name: '$path' is not executable"
+  if [[ "$path" == "$expect" ]]; then good "$name: path=$path"; else bad "$name: path is '$path', expected '$expect'"; fi
+  if [[ -x "$executable" ]]; then good "$name: helper path is executable"; else bad "$name: '$executable' is not executable"; fi
   case "$exts" in
     *"$ADDON_ID"*) good "$name: allowed_extensions contains $ADDON_ID" ;;
     *) bad "$name: allowed_extensions does not contain $ADDON_ID ($exts)" ;;
   esac
   return 0
 }
-check_manifest "deb/rpm" "$HOME/.mozilla/native-messaging-hosts" "$PREFIX/bin/amberfader-helper" || true
-check_manifest "flatpak" "$HOME/.var/app/org.mozilla.firefox/.mozilla/native-messaging-hosts" "$PREFIX/bin/amberfader-helper-flatpak" || true
+REGISTERED=0
+if check_manifest "native Firefox/Zen" "$HOME/.mozilla/native-messaging-hosts" "$PREFIX/bin/amberfader-helper"; then
+  REGISTERED=$((REGISTERED+1))
+fi
+for id in "${FLATPAK_BROWSER_IDS[@]}"; do
+  FPDIR="$HOME/.var/app/$id/.mozilla/native-messaging-hosts"
+  if check_manifest "$id" "$FPDIR" "$HOME/.mozilla/native-messaging-hosts/amberfader-helper" "$FPDIR/amberfader-helper"; then
+    REGISTERED=$((REGISTERED+1))
+  fi
+done
+if [[ $REGISTERED -eq 0 ]]; then bad "no native host registered; run scripts/install-user (--app flatpak for the Flatpak app)"; fi
 
 echo "==> control socket"
 SOCK="${XDG_RUNTIME_DIR:-/nonexistent}/amberfader/control.sock"

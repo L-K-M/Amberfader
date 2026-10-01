@@ -95,11 +95,14 @@ async function main(): Promise<void> {
   // asynchronous storage reads or adapter startup have finished.
   browser.runtime.onMessage.addListener((msg: unknown, sender: unknown) => {
     if (!isInternalMessage(msg)) return undefined;
-    const s = sender as { id?: string; tab?: unknown };
-    if (s.id !== browser.runtime.id || s.tab) {
-      // Only the router's own pages/background may command the adapter.
+    const s = sender as { id?: string; tab?: unknown; url?: string };
+    if (s.id !== browser.runtime.id) {
       return undefined;
     }
+    // An options page opened in a tab can carry sender.tab. Allow only its
+    // diagnostic probe; site content scripts cannot probe or drive a peer tab.
+    if (s.tab && (msg.type !== "probe.run" ||
+        !s.url?.startsWith(browser.runtime.getURL("")))) return undefined;
     switch (msg.type) {
       case "adapter.snapshot":
         return started.then(({ adapter }) => snapshot(adapter));

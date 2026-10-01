@@ -10,6 +10,7 @@ set -euo pipefail
 PREFIX="$HOME/.local/share/amberfader"
 PURGE=0
 HOST_NAME="amberfader"
+FLATPAK_BROWSER_IDS=("org.mozilla.firefox" "app.zen_browser.zen" "io.github.zen_browser.zen")
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --prefix) PREFIX="${2:?}"; shift 2 ;;
@@ -27,7 +28,10 @@ remove() {
 
 say "removing native-messaging manifests"
 remove "$HOME/.mozilla/native-messaging-hosts/$HOST_NAME.json"
-remove "$HOME/.var/app/org.mozilla.firefox/.mozilla/native-messaging-hosts/$HOST_NAME.json"
+for id in "${FLATPAK_BROWSER_IDS[@]}"; do
+  remove "$HOME/.var/app/$id/.mozilla/native-messaging-hosts/$HOST_NAME.json"
+  remove "$HOME/.var/app/$id/.mozilla/native-messaging-hosts/amberfader-helper"
+done
 
 say "removing desktop entry + app files"
 remove "$HOME/.local/share/applications/ch.lkmc.amberfader.desktop"

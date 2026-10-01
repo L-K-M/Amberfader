@@ -12,9 +12,10 @@ import {
 } from "../adapter/selectors";
 import { fillControlledInput } from "../adapter/search";
 import { hostname } from "../shared/sanitize";
+import { PROBE_REPORT_VERSION } from "../protocol/internal";
 
 export interface ProbeReport {
-  probeVersion: 1;
+  probeVersion: typeof PROBE_REPORT_VERSION;
   ranAt: string;
   urlHost: string | null;
   locale: string;
@@ -135,21 +136,45 @@ function suiteSearchInput(): Record<string, unknown> {
 
 function suiteArtwork(): Record<string, unknown> {
   const hosts = new Set<string>();
+  const origins = new Set<string>();
   const images = document.querySelectorAll("img");
   let count = 0;
   for (const img of images) {
     count += 1;
     const h = hostname(img.currentSrc || img.src);
     if (h) hosts.add(h);
+    const origin = httpsOrigin(img.currentSrc || img.src);
+    if (origin) origins.add(origin);
     if (img.srcset) {
       for (const part of img.srcset.split(",")) {
         const u = part.trim().split(" ")[0];
         const hh = hostname(u);
         if (hh) hosts.add(hh);
+        const candidateOrigin = httpsOrigin(u ?? "");
+        if (candidateOrigin) origins.add(candidateOrigin);
       }
     }
   }
-  return { imageCount: count, hosts: [...hosts].sort() };
+  const playerArtwork = TRACK_INFO.artwork.map((selector) => {
+    const image = document.querySelector(selector);
+    if (!(image instanceof HTMLImageElement)) return { selector, present: false };
+    const source = image.currentSrc || image.src;
+    return {
+      selector, present: true, sourceHost: hostname(source), sourceOrigin: httpsOrigin(source),
+      width: image.naturalWidth, height: image.naturalHeight, complete: image.complete,
+    };
+  });
+  return { imageCount: count, hosts: [...hosts].sort(), origins: [...origins].sort(), playerArtwork };
+}
+
+function httpsOrigin(source: string): string | null {
+  if (!source) return null;
+  try {
+    const url = new URL(source, document.baseURI);
+    return url.protocol === "https:" ? url.origin : null;
+  } catch {
+    return null;
+  }
 }
 
 async function suiteMediaOps(): Promise<Record<string, unknown>> {
@@ -208,7 +233,7 @@ export async function runProbes(suites?: string[]): Promise<ProbeReport> {
     }
   }
   return {
-    probeVersion: 1,
+    probeVersion: PROBE_REPORT_VERSION,
     ranAt: new Date().toISOString(),
     urlHost: hostname(location.href),
     locale: navigator.language,

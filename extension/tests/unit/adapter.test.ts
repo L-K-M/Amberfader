@@ -105,6 +105,20 @@ describe("YouTubeMusicAdapter (synthetic fixture)", () => {
     adapter.stop();
   });
 
+  it("proposes the browser-resolved artwork source rather than the src fallback", async () => {
+    mountPlayer();
+    const image = document.querySelector("img")!;
+    const loadedSource = "https://lh3.googleusercontent.com/selected-srcset-image";
+    Object.defineProperty(image, "currentSrc", { value: loadedSource });
+    const adapter = new YouTubeMusicAdapter();
+    await adapter.start();
+    try {
+      expect(adapter.proposedArtworkUrl).toBe(loadedSource);
+    } finally {
+      adapter.stop();
+    }
+  });
+
   it("previous/next click exactly one control per invocation", async () => {
     mountPlayer();
     const clicks: string[] = [];

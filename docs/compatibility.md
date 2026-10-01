@@ -11,6 +11,8 @@ implemented to a documented API contract, awaiting live confirmation;
 |---|---|---|---|
 | Firefox | deb / rpm | `~/.mozilla/native-messaging-hosts` + system manifest | expected |
 | Firefox | Flatpak | per-user manifest in the Flatpak data dir | expected |
+| Zen | native Linux | `~/.mozilla/native-messaging-hosts` | expected |
+| Zen | Flatpak (`app.zen_browser.zen` / `io.github.zen_browser.zen`) | per-app `.mozilla/native-messaging-hosts`; persist `.mozilla` and allow `flatpak-spawn` | expected |
 | Firefox | Snap | confined — no host-path access | **unsupported in v1** |
 | Firefox | macOS/Windows | not a target | unsupported |
 
@@ -37,11 +39,15 @@ than placing the control socket somewhere world-readable |
 | `.flatpak` | expected — `scripts/build-flatpak.sh` repacks the deb layout |
 | AppImage / Snap | not planned |
 
-The Flatpak bundle does **not** ship a native-messaging host manifest: a
-bundle cannot write host paths, so `scripts/install-user` registers the host
-per-user against the running app's path inside the sandbox. The helper
-invocation therefore differs from the deb (`flatpak run ch.lkmc.amberfader
---helper` style entry); see `scripts/install-user --flatpak`.
+The Flatpak bundle ships a host-side registration script, not a native-host
+manifest. `scripts/install-user --app flatpak` registers a launcher running
+`flatpak run --command=amberfader-helper ch.lkmc.amberfader`. A Flatpak browser
+uses `flatpak-spawn --host` to invoke that launcher.
+
+Gecko's native-host directory is `.mozilla`, independent of Zen's `.zen`
+profile directory. The installer prints the required `.mozilla` persistence
+and talk-permission command for Flatpak Zen. These combinations remain
+unverified on a live desktop.
 
 ## Known environment gaps
 

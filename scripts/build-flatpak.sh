@@ -52,6 +52,9 @@ exec env PYTHONPATH=/app/lib \
   /usr/bin/python3 -m amberfader.helper "$@"
 EOF
 chmod 755 "$STAGE/app/bin/amberfader" "$STAGE/app/bin/amberfader-helper"
+# Run this installer on the host to register the bundled helper with the
+# browser, without a second Python installation or wider app permissions.
+install -Dm755 scripts/install-user "$STAGE/app/share/amberfader/install-user"
 # Desktop file: app-id filename + Exec rewrites per flatpak rules. The deb
 # already ships it app-id-named — rename only when it doesn't.
 DESKTOP_DIR="$STAGE/app/share/applications"
@@ -62,7 +65,7 @@ if [[ -n $DESKTOP_SRC ]]; then
     mv "$DESKTOP_SRC" "$DESKTOP_DIR/$APP_ID.desktop"
 fi
 # The deb's system-wide host manifest does not belong inside the bundle —
-# Flatpak Firefox registration is per-user via scripts/install-user.
+# Browser registration is per-user via the bundled host-side installer.
 rm -rf "$STAGE/app/lib/mozilla" "$STAGE/DEBIAN" 2>/dev/null || true
 
 # Vendor the Kerberos libs the wheel's libQt6Network NEEDs: the KDE runtime
@@ -130,6 +133,14 @@ bad="$(find /app/bin -maxdepth 1 -type f -exec ldd {} \; 2>&1 | grep "not found"
 [ -z "$bad" ] || { printf "unresolved libs in /app/bin:\n%s\n" "$bad" >&2; exit 1; }
 /usr/bin/python3 -c "import sys;from PySide6.QtWidgets import QApplication;a=QApplication(sys.argv);import amberfader.app,amberfader.helper" ||
   { echo "!! python smoke import failed" >&2; exit 1; }
+test -d "$XDG_RUNTIME_DIR/amberfader" ||
+  { echo "!! shared control socket directory absent at sandbox startup" >&2; exit 1; }
+test -x /app/share/amberfader/install-user ||
+  { echo "!! bundled native-host installer missing" >&2; exit 1; }
+helper_output="$(/app/bin/amberfader-helper /app/native-host.json amberfader@ch.lkmc </dev/null)" ||
+  { echo "!! helper rejected Firefox startup arguments" >&2; exit 1; }
+test -z "$helper_output" ||
+  { echo "!! helper printed unframed output" >&2; exit 1; }
 echo "__amberfader-smoke-ok__"
 PROBE
 )" || true

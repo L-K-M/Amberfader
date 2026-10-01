@@ -5,8 +5,8 @@
 // Design notes (spec §3):
 // - All listeners register at module top level via router.install(); state
 //   needed after a restart is rebuilt from storage + a fresh adapter snapshot.
-// - Sender roles: content script (sender.tab present) may only push internal
-//   adapter messages; extension pages (no tab) may send client commands and
+// - Sender roles: site content scripts may only push internal
+//   adapter messages; extension pages may send client commands and
 //   internal page traffic; everything else is rejected.
 // - The binding token binds (tabId, content-document nonce). Both are checked
 //   on every command; a reload or navigation invalidates the token.
@@ -87,11 +87,15 @@ export class Router {
   // ---- sender classification ---------------------------------------------
 
   private senderIsContentScript(sender: unknown): sender is { tab: { id: number }; documentId?: string; frameId: number } {
+    const url = typeof sender === "object" && sender !== null
+      ? (sender as { url?: unknown }).url
+      : undefined;
     return (
       typeof sender === "object" &&
       sender !== null &&
       (sender as { tab?: unknown }).tab !== undefined &&
-      (sender as { frameId?: unknown }).frameId === 0
+      (sender as { frameId?: unknown }).frameId === 0 &&
+      !(typeof url === "string" && url.startsWith(browser.runtime.getURL("")))
     );
   }
 
@@ -195,13 +199,17 @@ export class Router {
         return response;
       }
       case "native.status": {
-        this.broadcast({
+        if (isContent) return undefined;
+        const event: EventMessage = {
           protocolVersion: PROTOCOL_VERSION,
           kind: "event",
           event: "connection",
           sessionId: this.sessionId,
           data: msg.notice,
-        });
+        };
+        if (!validateMessage(event)) return undefined;
+        await browser.storage.local.set({ nativeConnection: msg.notice });
+        this.broadcast(event);
         return { ok: true };
       }
       case "ui.command": {
@@ -628,6 +636,9 @@ export class Router {
       if (this.ports.controller === port) {
         this.ports.controller = null;
         this.nativeAttached = false;
+        void browser.storage.local.set({ nativeConnection: {
+          component: "controller", status: "disconnected", reason: "controller page closed",
+        } });
         this.broadcast({
           protocolVersion: PROTOCOL_VERSION,
           kind: "event",
