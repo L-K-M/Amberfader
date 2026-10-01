@@ -120,6 +120,8 @@ export class ProtocolClient {
     const resp = await this.request("state.get", {});
     if (resp.ok && resp.result) {
       this.events.onState?.(resp.result as unknown as PlayerState);
+    } else if (!resp.ok && resp.error.code !== "stale_target") {
+      this.events.onConnection?.("adapter", "disconnected", resp.error.message);
     }
   }
 

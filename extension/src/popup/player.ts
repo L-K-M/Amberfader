@@ -58,24 +58,34 @@ let state: PlayerState | null = null;
 let stateAt = 0; // monotonic receipt time for interpolation
 let seeking = false;
 let pendingTransport = false;
+let connectionError: string | null = null;
 
 const client = new ProtocolClient({
   onState: (s) => {
+    connectionError = null;
     state = s;
     stateAt = performance.now();
     render();
   },
   onBinding: (status, reason) => {
     if (status !== "bound") {
-      showStatus(reason ? `Target lost: ${reason}` : "No playback target selected");
+      state = null;
+      connectionError = reason ? `Target lost: ${reason}` : "No playback target selected";
+      render();
     }
   },
   onConnection: (component, status, reason) => {
-    if (component === "target" && status !== "connected") {
-      showStatus(reason ?? "Playback tab disconnected");
+    if ((component === "target" || component === "adapter") && status !== "connected") {
+      state = null;
+      connectionError = reason ?? "Playback tab disconnected";
+      render();
     }
   },
-  onDisconnected: () => showStatus("Disconnected from Firefox — retrying…", true),
+  onDisconnected: () => {
+    state = null;
+    connectionError = "Disconnected from Firefox. Retrying…";
+    render();
+  },
 });
 
 client.onArtworkPropose = ({ url, artworkId, occurrenceId }) => {
@@ -153,7 +163,7 @@ function render(): void {
   btnShow.disabled = !state;
 
   if (state === null) {
-    showStatus("Waiting for a YouTube Music tab…");
+    showStatus(connectionError ?? "Waiting for a YouTube Music tab…", connectionError !== null);
   } else if (state.status === "unknown" && !t) {
     showStatus("Player state unknown — the page may still be loading");
   }

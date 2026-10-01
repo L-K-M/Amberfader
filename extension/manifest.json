@@ -20,7 +20,7 @@
   "background": {
     "scripts": ["js/background.js"]
   },
-  "permissions": ["storage"],
+  "permissions": ["storage", "scripting"],
   "host_permissions": ["https://music.youtube.com/*"],
   "optional_permissions": ["nativeMessaging", "tabHide"],
   "content_scripts": [

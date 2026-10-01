@@ -62,6 +62,13 @@ export interface AdapterExec {
   expectedNonce: string;
 }
 
+// Read-only handshake, also used after an event-page restart. The reply is an
+// AdapterStatePush with the current document nonce, state and artwork source.
+export interface AdapterSnapshot {
+  scope: "amberfader-internal";
+  type: "adapter.snapshot";
+}
+
 export interface AdapterActivate {
   scope: "amberfader-internal";
   type: "adapter.activate";
@@ -131,6 +138,7 @@ export type InternalMessage =
   | AdapterSearchResult
   | AdapterConnectionNotice
   | AdapterExec
+  | AdapterSnapshot
   | AdapterActivate
   | ProbeRun
   | NativeAttach

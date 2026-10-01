@@ -16,10 +16,23 @@ interface FakeTab {
 class FakeBrowser {
   tabsList: FakeTab[] = [];
   sentToTab: Array<{ tabId: number; msg: unknown }> = [];
-  tabSendImpl: (tabId: number, msg: unknown) => Promise<unknown> = async () => ({
-    result: { ok: true, outcome: { observedStateRevision: 1 } },
-    replayed: false,
-  });
+  tabSendImpl: (tabId: number, msg: unknown) => Promise<unknown> = async (_tabId, msg) => {
+    if ((msg as { type: string }).type === "adapter.snapshot") {
+      return {
+        scope: "amberfader-internal", type: "adapter.state", documentNonce: "nonce-1",
+        artworkUrl: null,
+        state: {
+          revision: 1, track: null, status: "paused", contentKind: "unknown",
+          positionSeconds: null, durationSeconds: null, playbackRate: null,
+          volume: null, muted: null, capabilities: ["play", "pause"],
+        },
+      };
+    }
+    return {
+      result: { ok: true, outcome: { observedStateRevision: 1 } },
+      replayed: false,
+    };
+  };
   storage: Record<string, unknown> = {};
   removed: Array<(tabId: number) => void> = [];
   updated: Array<(tabId: number, ci: { url?: string }) => void> = [];
@@ -63,8 +76,8 @@ class FakeBrowser {
       create: async () => ({}),
     },
     permissions: {
-      contains: async ({ permissions }: { permissions?: string[] }) =>
-        (permissions ?? []).includes("tabHide"),
+      contains: async ({ permissions, origins }: { permissions?: string[]; origins?: string[] }) =>
+        (permissions ?? []).includes("tabHide") || (origins ?? []).includes("https://music.youtube.com/*"),
       getAll: async () => ({ permissions: [], origins: [] }),
     },
     runtime: {
@@ -247,7 +260,9 @@ describe("Router", () => {
     );
     const resp = (await router.handleClientMessage(req({ method: "state.get" })));
     expect(resp.ok).toBe(true);
-    expect((resp as { result: unknown }).result).toBeNull(); // nothing leaked
+    expect((resp as { result: unknown }).result).toMatchObject({
+      track: null, status: "paused", contentKind: "unknown",
+    }); // Only the selected adapter's snapshot, never the other tab's push.
     void pageSender;
   });
 });

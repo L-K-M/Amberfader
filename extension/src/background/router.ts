@@ -21,6 +21,7 @@ import type {
   ErrorCode,
   EventMessage,
   PlayerState,
+  ProtocolError,
   RequestMessage,
   ResponseMessage,
   TargetDescriptor,
@@ -30,6 +31,10 @@ import { isInternalMessage } from "../protocol/internal";
 
 
 const MUSIC_URL = "https://music.youtube.com/*";
+const CONTENT_SCRIPT_FILE = "js/content.js";
+const ADAPTER_CONNECT_DEADLINE_MS = 5000;
+const ADAPTER_CONNECT_TIMEOUT = new Error("adapter connection timed out");
+const SITE_ACCESS_MESSAGE = "Allow site access to music.youtube.com in the extension permissions, then reopen Amberfader.";
 const STORAGE_KEYS = {
   installId: "installId",
   nativeEnabled: "nativeEnabled",
@@ -102,13 +107,18 @@ export class Router {
       case "adapter.register": {
         if (!isContent) return undefined;
         const tabId = (sender as { tab: { id: number } }).tab.id;
+        // A music tab may open after the UI, or register before the first
+        // client request. Discover it without guessing between multiple tabs.
+        if (!this.selection) await this.listTargets();
         if (this.selection?.tabId === tabId) {
           // New document for a selected tab: rebind to the fresh nonce.
           if (this.selection.documentNonce !== msg.documentNonce) {
             this.selection = {
               ...this.selection,
               documentNonce: msg.documentNonce,
-              bindingToken: crypto.randomUUID(),
+              bindingToken: this.selection.documentNonce === null
+                ? this.selection.bindingToken
+                : crypto.randomUUID(),
             };
             this.lastState = null;
             this.broadcast({
@@ -116,6 +126,7 @@ export class Router {
               kind: "event",
               event: "binding",
               sessionId: this.sessionId,
+              bindingToken: this.selection.bindingToken,
               data: { status: "bound" },
             });
           }
@@ -259,12 +270,23 @@ export class Router {
     switch (req.method) {
       case "connection.ping":
         return okResponse(req.id, { pong: Date.now(), sessionId: this.sessionId }, extra);
-      case "state.get":
+      case "state.get": {
+        const hasSiteAccess = await browser.permissions.contains({ origins: [MUSIC_URL] });
+        if (!hasSiteAccess) return errResponse(req.id, "missing_permission", SITE_ACCESS_MESSAGE, extra);
+
+        // Every client (including native) starts with state.get. Recover from
+        // an existing tab rather than relying on a one-shot page-load push.
+        await this.listTargets();
+        if (this.selection && !this.lastState) {
+          const error = await this.refreshAdapter(this.selection);
+          if (error) return errResponse(req.id, error.code, error.message, extra);
+        }
         return okResponse(
           req.id,
           (this.lastState as unknown as Record<string, unknown>) ?? null,
           { sessionId: this.sessionId, bindingToken: this.selection?.bindingToken },
         );
+      }
       case "state.subscribe":
       case "state.unsubscribe":
         // Port lifetime is the subscription; these exist so clients on
@@ -318,6 +340,7 @@ export class Router {
       protocolVersion: PROTOCOL_VERSION,
       kind: "event",
       sessionId: this.sessionId,
+      bindingToken: this.selection.bindingToken,
       event: "binding",
       data: { status: "bound" },
     });
@@ -338,12 +361,80 @@ export class Router {
     } catch {
       return errResponse(req.id, "stale_target", "tab is gone");
     }
-    this.bind(key, tabId);
+    const selection = this.bind(key, tabId);
+    const error = await this.refreshAdapter(selection);
+    if (error) return errResponse(req.id, error.code, error.message, {
+      sessionId: this.sessionId, bindingToken: this.selection?.bindingToken,
+    });
     return okResponse(
       req.id,
       { selected: key },
       { sessionId: this.sessionId, bindingToken: this.selection?.bindingToken },
     );
+  }
+
+  private async snapshotFromTab(tabId: number): Promise<unknown> {
+    const message = { scope: "amberfader-internal", type: "adapter.snapshot" };
+    try {
+      return await browser.tabs.sendMessage(tabId, message, { frameId: 0 });
+    } catch {
+      // Firefox does not inject declarative scripts into already-open tabs.
+      // Attach only after the handshake fails; never reload or touch playback.
+      await browser.scripting.executeScript({
+        target: { tabId, frameIds: [0] },
+        files: [CONTENT_SCRIPT_FILE],
+      });
+      return browser.tabs.sendMessage(tabId, message, { frameId: 0 });
+    }
+  }
+
+  private async refreshAdapter(selection: Selection): Promise<ProtocolError | null> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const snapshot = await Promise.race([
+        this.snapshotFromTab(selection.tabId),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(ADAPTER_CONNECT_TIMEOUT),
+            ADAPTER_CONNECT_DEADLINE_MS);
+        }),
+      ]);
+      if (this.selection?.bindingToken !== selection.bindingToken) {
+        return { code: "stale_target", message: "playback target changed while connecting" };
+      }
+      if (!isInternalMessage(snapshot) || snapshot.type !== "adapter.state" ||
+          typeof snapshot.documentNonce !== "string" || !snapshot.documentNonce ||
+          !validateMessage({
+            protocolVersion: PROTOCOL_VERSION, kind: "event", event: "state",
+            data: { ...snapshot.state, bindingToken: this.selection.bindingToken },
+          })) {
+        return { code: "disconnected", message: "adapter returned an invalid snapshot" };
+      }
+      // Initial registration keeps the token. A newer document can therefore
+      // attach while this snapshot is pending without changing that token.
+      if (this.selection.documentNonce !== selection.documentNonce &&
+          this.selection.documentNonce !== snapshot.documentNonce) {
+        return { code: "stale_target", message: "playback document changed while connecting" };
+      }
+      const sender = { tab: { id: selection.tabId }, frameId: 0 };
+      await this.onInternalMessage({
+        scope: "amberfader-internal", type: "adapter.register",
+        documentNonce: snapshot.documentNonce, capabilities: snapshot.state.capabilities,
+      }, sender);
+      await this.onInternalMessage(snapshot, sender);
+      return null;
+    } catch (error) {
+      if (error === ADAPTER_CONNECT_TIMEOUT) return {
+        code: "timeout",
+        message: `YouTube Music did not respond within ${ADAPTER_CONNECT_DEADLINE_MS / 1000} seconds. Reload the music tab, then reopen Amberfader.`,
+      };
+
+      return {
+        code: "disconnected",
+        message: `Cannot connect to YouTube Music. ${SITE_ACCESS_MESSAGE} If needed, reload the music tab.`,
+      };
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 
   private unbind(reason: string): void {

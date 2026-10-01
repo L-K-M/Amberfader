@@ -26,6 +26,15 @@ save the report. Verify:
 
 ## Acceptance matrix
 
+- [ ] With YouTube Music already playing, install/reload Amberfader and open
+      its player. The tab attaches without reloading or interrupting playback.
+- [ ] Pause YouTube Music, then open Amberfader. The current track appears
+      without waiting for a playback event.
+- [ ] Open Amberfader before opening YouTube Music. The new tab is discovered.
+- [ ] Restart the extension background event page. Reopen the player and
+      verify that a fresh binding and snapshot restore controls.
+- [ ] Deny YouTube Music site access. The player shows an actionable connection
+      error rather than waiting indefinitely. Regrant access and reopen it.
 - [ ] GUI shows artwork, title, artist, album for the playing track.
 - [ ] Play, pause, previous, next each act exactly once per click and report
       honest failures (no silent double-fire, no fake success).
