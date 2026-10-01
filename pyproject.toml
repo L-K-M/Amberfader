@@ -1,6 +1,6 @@
 [project]
 name = "amberfader"
-version = "0.1.0"
+version = "0.1.1"
 description = "Classic-style remote for YouTube Music in Firefox: native-messaging helper + PySide6 desktop app"
 readme = "README.md"
 license = { text = "Unlicense" }

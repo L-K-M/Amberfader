@@ -1,6 +1,6 @@
 {
   "name": "amberfader",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Compact classic-style remote for YouTube Music running in Firefox",
