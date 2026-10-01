@@ -221,7 +221,45 @@ describe("playback tab discovery", () => {
     await connecting;
     expect(bus.states).toHaveLength(0);
     expect(bus.onConnection).toHaveBeenCalledOnce();
+    expect(bus.onConnection).toHaveBeenCalledWith(
+      "adapter", "disconnected", expect.stringContaining("did not respond"),
+    );
+    expect(bus.onConnection.mock.calls[0]?.[2]).not.toContain("site access");
     expect(bus.inject).not.toHaveBeenCalled();
+  });
+
+  it("keeps a newer document's paused state when an older snapshot arrives late", async () => {
+    const bus = await setup();
+    await bus.loadContent();
+    const snapshot = await bus.sendToTab(TAB_ID, {
+      scope: "amberfader-internal", type: "adapter.snapshot",
+    }) as { state: Omit<PlayerState, "bindingToken"> };
+    await bus.restartRouter();
+    let finishSnapshot!: (value: unknown) => void;
+    bus.sendToTab.mockImplementation(() => new Promise((resolve) => { finishSnapshot = resolve; }));
+    const connecting = bus.client.connect();
+    await vi.waitFor(() => expect(finishSnapshot).toBeTypeOf("function"));
+    const router = bus.getRouter();
+    const sender = { tab: { id: TAB_ID }, frameId: 0 };
+    await router.onInternalMessage({
+      scope: "amberfader-internal", type: "adapter.register",
+      documentNonce: "new-document", capabilities: snapshot.state.capabilities,
+    }, sender);
+    await router.onInternalMessage({
+      scope: "amberfader-internal", type: "adapter.state", documentNonce: "new-document",
+      artworkUrl: null,
+      state: {
+        ...snapshot.state,
+        track: { ...snapshot.state.track!, providerId: "new-document-track" },
+      },
+    }, sender);
+    finishSnapshot(snapshot);
+    await connecting;
+    const state = await bus.client.request("state.get", {});
+    expect(state.ok && state.result).toMatchObject({
+      track: { providerId: "new-document-track" },
+    });
+    expect(bus.onConnection).not.toHaveBeenCalled();
   });
 
   it("ignores a snapshot that arrives after the selected tab closes", async () => {

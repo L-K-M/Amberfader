@@ -33,6 +33,7 @@ import { isInternalMessage } from "../protocol/internal";
 const MUSIC_URL = "https://music.youtube.com/*";
 const CONTENT_SCRIPT_FILE = "js/content.js";
 const ADAPTER_CONNECT_DEADLINE_MS = 5000;
+const ADAPTER_CONNECT_TIMEOUT = new Error("adapter connection timed out");
 const SITE_ACCESS_MESSAGE = "Allow site access to music.youtube.com in the extension permissions, then reopen Amberfader.";
 const STORAGE_KEYS = {
   installId: "installId",
@@ -393,7 +394,7 @@ export class Router {
       const snapshot = await Promise.race([
         this.snapshotFromTab(selection.tabId),
         new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error("adapter connection timed out")),
+          timer = setTimeout(() => reject(ADAPTER_CONNECT_TIMEOUT),
             ADAPTER_CONNECT_DEADLINE_MS);
         }),
       ]);
@@ -408,6 +409,12 @@ export class Router {
           })) {
         return { code: "disconnected", message: "adapter returned an invalid snapshot" };
       }
+      // Initial registration keeps the token. A newer document can therefore
+      // attach while this snapshot is pending without changing that token.
+      if (this.selection.documentNonce !== selection.documentNonce &&
+          this.selection.documentNonce !== snapshot.documentNonce) {
+        return { code: "stale_target", message: "playback document changed while connecting" };
+      }
       const sender = { tab: { id: selection.tabId }, frameId: 0 };
       await this.onInternalMessage({
         scope: "amberfader-internal", type: "adapter.register",
@@ -415,7 +422,12 @@ export class Router {
       }, sender);
       await this.onInternalMessage(snapshot, sender);
       return null;
-    } catch {
+    } catch (error) {
+      if (error === ADAPTER_CONNECT_TIMEOUT) return {
+        code: "timeout",
+        message: `YouTube Music did not respond within ${ADAPTER_CONNECT_DEADLINE_MS / 1000} seconds. Reload the music tab, then reopen Amberfader.`,
+      };
+
       return {
         code: "disconnected",
         message: `Cannot connect to YouTube Music. ${SITE_ACCESS_MESSAGE} If needed, reload the music tab.`,
