@@ -85,7 +85,9 @@ jobs:
         run: npm run ext:package
 
       - name: Build .deb
-        run: scripts/build-deb.sh "${{ github.ref_name }}" dist
+        # The verify job already proved ref_name is vX.Y.Z; strip the v —
+        # Debian versions must start with a digit.
+        run: scripts/build-deb.sh "${GITHUB_REF_NAME#v}" dist
 
       - name: Build .flatpak
         # flatpak-builder was never installed here, so the old `|| warning`
