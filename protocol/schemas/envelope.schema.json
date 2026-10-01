@@ -37,7 +37,7 @@
         },
         "status": { "$ref": "#/$defs/playbackStatus" },
         "contentKind": { "enum": ["track", "advertisement", "unknown"] },
-        "positionSeconds": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "positionSeconds": { "type": ["number", "null"], "minimum": 0 },
         "durationSeconds": { "type": ["number", "null"], "exclusiveMinimum": 0 },
         "playbackRate": { "type": ["number", "null"], "exclusiveMinimum": 0 },
         "volume": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
