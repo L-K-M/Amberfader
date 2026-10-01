@@ -142,6 +142,7 @@ jobs:
 
       - name: Checksum and upload Flatpak bundle
         run: |
+          find dist -maxdepth 1 -type f -name '*.flatpak' -print -quit | grep -q . || { echo "::error::no .flatpak bundle produced by build-flatpak.sh"; exit 1; }
           for f in dist/*.flatpak; do
             (cd dist && sha256sum "$(basename "$f")" > "$(basename "$f").sha256")
           done
