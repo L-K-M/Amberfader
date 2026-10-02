@@ -77,7 +77,6 @@ class AmberfaderApp:
         from .ui.main_window import MainWindow
 
         self.window = MainWindow(self.request, scale=self._scale)
-        self.window.show_status("Waiting for Firefox…")
         self.server.helperConnected.connect(self._on_helper)
         self.server.activationRequested.connect(self._on_activation)
         self.server.invalidPeer.connect(lambda s: s.socket.disconnectFromServer())

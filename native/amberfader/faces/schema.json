@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/L-K-M/Amberfader/blob/main/native/amberfader/faces/schema.json",
+  "title": "Amberfader Face v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["formatVersion", "id", "name", "author", "description", "size", "background", "drag", "palette", "controls"],
+  "properties": {
+    "$schema": {"type": "string", "maxLength": 256},
+    "formatVersion": {"const": 1},
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,47}$"},
+    "name": {"type": "string", "minLength": 1, "maxLength": 64},
+    "author": {"type": "string", "minLength": 1, "maxLength": 96},
+    "description": {"type": "string", "minLength": 1, "maxLength": 240},
+    "size": {
+      "type": "array", "prefixItems": [{"type": "integer", "minimum": 360, "maximum": 1024}, {"type": "integer", "minimum": 180, "maximum": 768}],
+      "items": false, "minItems": 2
+    },
+    "background": {"$ref": "#/$defs/image"},
+    "drag": {"$ref": "#/$defs/rect"},
+    "font": {"enum": ["sans", "mono", "serif"]},
+    "timeSize": {"type": "integer", "minimum": 16, "maximum": 36},
+    "radius": {"type": "integer", "minimum": 0, "maximum": 24},
+    "palette": {
+      "type": "object", "additionalProperties": false,
+      "required": ["window", "panel", "display", "text", "muted", "readout", "accent", "border", "buttonTop", "buttonBottom", "danger"],
+      "properties": {
+        "window": {"$ref": "#/$defs/color"}, "panel": {"$ref": "#/$defs/color"},
+        "display": {"$ref": "#/$defs/color"}, "text": {"$ref": "#/$defs/color"},
+        "muted": {"$ref": "#/$defs/color"}, "readout": {"$ref": "#/$defs/color"},
+        "accent": {"$ref": "#/$defs/color"}, "border": {"$ref": "#/$defs/color"},
+        "buttonTop": {"$ref": "#/$defs/color"}, "buttonBottom": {"$ref": "#/$defs/color"},
+        "danger": {"$ref": "#/$defs/color"}
+      }
+    },
+    "controls": {
+      "type": "object", "additionalProperties": false,
+      "required": ["art", "title", "artists", "time", "playback", "previous", "play", "next", "like", "seek", "volume", "search", "show", "hide", "menu", "status", "minimize", "close"],
+      "properties": {
+        "art": {"$ref": "#/$defs/rect"}, "title": {"$ref": "#/$defs/rect"},
+        "artists": {"$ref": "#/$defs/rect"}, "time": {"$ref": "#/$defs/rect"},
+        "playback": {"$ref": "#/$defs/rect"}, "previous": {"$ref": "#/$defs/rect"},
+        "play": {"$ref": "#/$defs/rect"}, "next": {"$ref": "#/$defs/rect"},
+        "like": {"$ref": "#/$defs/rect"}, "seek": {"$ref": "#/$defs/rect"},
+        "volume": {"$ref": "#/$defs/rect"}, "search": {"$ref": "#/$defs/rect"},
+        "show": {"$ref": "#/$defs/rect"}, "hide": {"$ref": "#/$defs/rect"},
+        "menu": {"$ref": "#/$defs/rect"}, "status": {"$ref": "#/$defs/rect"},
+        "minimize": {"$ref": "#/$defs/rect"}, "close": {"$ref": "#/$defs/rect"}
+      }
+    },
+    "buttons": {
+      "type": "object", "propertyNames": {"enum": ["previous", "play", "next", "like", "search", "show", "hide", "menu", "minimize", "close"]},
+      "additionalProperties": {
+        "type": "object", "additionalProperties": false, "required": ["normal"],
+        "properties": {
+          "normal": {"$ref": "#/$defs/image"}, "hover": {"$ref": "#/$defs/image"},
+          "pressed": {"$ref": "#/$defs/image"}, "disabled": {"$ref": "#/$defs/image"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
+    "image": {"type": "string", "pattern": "^[a-zA-Z0-9_-]+\\.png$", "maxLength": 96},
+    "rect": {
+      "type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 1024},
+      "minItems": 4, "maxItems": 4
+    }
+  }
+}

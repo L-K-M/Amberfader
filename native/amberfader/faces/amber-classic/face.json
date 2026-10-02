@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "id": "amber-classic",
+  "name": "Amber Classic",
+  "author": "Amberfader",
+  "description": "An amber hi-fi remote: warm glass, dark walnut, and a compact cover display.",
+  "size": [440, 274],
+  "background": "background.png",
+  "drag": [18, 8, 300, 28],
+  "font": "sans", "timeSize": 24, "radius": 4,
+  "palette": {
+    "window": "#241a10", "panel": "#2f2314", "display": "#17110b",
+    "text": "#e8ddc8", "muted": "#b9a589", "readout": "#f4c56e",
+    "accent": "#e8a33d", "border": "#8a5a20",
+    "buttonTop": "#493721", "buttonBottom": "#251a0e", "danger": "#ff8b79"
+  },
+  "controls": {
+    "art": [18, 52, 100, 100], "title": [134, 50, 288, 26],
+    "artists": [134, 80, 288, 22], "time": [134, 108, 192, 32],
+    "playback": [332, 116, 90, 18],
+    "previous": [134, 152, 44, 32], "play": [184, 152, 44, 32],
+    "next": [234, 152, 44, 32], "like": [284, 152, 44, 32],
+    "seek": [18, 192, 404, 20], "volume": [18, 222, 112, 24],
+    "search": [142, 220, 74, 28], "show": [226, 220, 84, 28], "hide": [320, 220, 54, 28],
+    "menu": [332, 8, 36, 28], "minimize": [374, 8, 22, 28], "close": [402, 8, 22, 28],
+    "status": [18, 252, 404, 18]
+  }
+}

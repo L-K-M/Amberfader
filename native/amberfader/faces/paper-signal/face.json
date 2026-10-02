@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "id": "paper-signal",
+  "name": "Paper Signal",
+  "author": "Amberfader",
+  "description": "A classic-Mac cover sleeve: pinstripe title bar, cream paper, and clicky ink-stamped controls.",
+  "size": [420, 432],
+  "background": "background.png",
+  "drag": [24, 10, 274, 26],
+  "font": "serif", "timeSize": 26, "radius": 0,
+  "palette": {
+    "window": "#e8dfbd", "panel": "#fff9df", "display": "#f7edc7",
+    "text": "#302d29", "muted": "#5c584f", "readout": "#302d29",
+    "accent": "#416556", "border": "#7e796a",
+    "buttonTop": "#fffcec", "buttonBottom": "#bdb59d", "danger": "#a52f29"
+  },
+  "controls": {
+    "art": [24, 52, 180, 180], "title": [224, 64, 174, 26],
+    "artists": [224, 100, 174, 42], "time": [224, 154, 174, 40],
+    "playback": [224, 206, 174, 20],
+    "previous": [24, 250, 46, 32], "play": [76, 246, 56, 40],
+    "next": [138, 250, 46, 32], "like": [190, 250, 46, 32],
+    "volume": [260, 254, 136, 24], "seek": [24, 296, 372, 20],
+    "search": [24, 328, 104, 32], "show": [140, 328, 138, 32], "hide": [290, 328, 106, 32],
+    "menu": [308, 10, 36, 28], "minimize": [350, 12, 22, 24], "close": [378, 12, 22, 24],
+    "status": [24, 378, 372, 20]
+  }
+}
