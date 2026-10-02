@@ -1,0 +1,29 @@
+{
+  "probeVersion": 1,
+  "ranAt": "2026-10-02T11:53:17.211Z",
+  "urlHost": "music.youtube.com",
+  "locale": "en-US",
+  "artwork": {
+    "imageCount": 72,
+    "origins": [
+      "https://music.youtube.com",
+      "https://yt3.ggpht.com",
+      "https://yt3.googleusercontent.com"
+    ],
+    "playerArtwork": [
+      {
+        "selector": "ytmusic-player-bar img.image",
+        "present": true,
+        "sourceHost": "yt3.googleusercontent.com",
+        "sourceOrigin": "https://yt3.googleusercontent.com",
+        "width": 60,
+        "height": 60,
+        "complete": true
+      },
+      {
+        "selector": "ytmusic-player-bar img#img",
+        "present": false
+      }
+    ]
+  }
+}

@@ -13,10 +13,11 @@ const MAX_OUTPUT_BYTES = 64 * 1024;
 const CACHE_BUDGET_BYTES = 20 * 1024 * 1024;
 const MAX_CONCURRENT = 3;
 const FETCH_TIMEOUT_MS = 10000;
+// The live 2026-10-02 probe found the loaded player cover on this origin.
+const OBSERVED_ARTWORK_ORIGIN = "https://yt3.googleusercontent.com";
 
-// UNVERIFIED until Phase 0 captures the real artwork origins. The manifest
-// gains optional host_permissions for exactly these origins only after the
-// probe confirms them.
+// Legacy candidates remain UNVERIFIED. Manifest access is granted only to
+// the music origin and the exact artwork origin captured above.
 export const ARTWORK_HOST_ALLOWLIST: RegExp[] = [
   /^lh3\.googleusercontent\.com$/,
   /^i\d*\.ytimg\.com$/,
@@ -38,7 +39,8 @@ export function allowedArtworkUrl(url: string): boolean {
     return false;
   }
   if (u.protocol !== "https:") return false;
-  return ARTWORK_HOST_ALLOWLIST.some((re) => re.test(u.hostname));
+  return u.origin === OBSERVED_ARTWORK_ORIGIN ||
+    ARTWORK_HOST_ALLOWLIST.some((re) => re.test(u.hostname));
 }
 
 interface CacheEntry {
