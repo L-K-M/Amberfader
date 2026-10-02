@@ -8,8 +8,11 @@
 // never retried automatically — a timeout does not prove inaction.
 import {
   CONTROLS,
+  LIKE_BUTTON_SELECTOR,
   MEDIA_ELEMENT_SELECTOR,
+  PLAYER_BAR_SELECTOR,
   PLAYER_ROOT_SELECTORS,
+  RADIO,
   TRACK_INFO,
 } from "./selectors";
 import { cleanId, cleanText, isFiniteSeconds } from "../shared/sanitize";
@@ -25,6 +28,7 @@ import type {
   TrackInfo,
 } from "../protocol/types";
 import { SiteSearch } from "./search";
+import { isEnabledControl, isVisibleControl } from "./dom";
 
 const POSITION_SAMPLE_MS = 1000;
 const CONTROL_DEADLINE_MS = 5000;
@@ -90,6 +94,18 @@ function videoIdFromLocation(): string | null {
   } catch {
     return null;
   }
+}
+
+function likeControl(): { button: HTMLElement; liked: boolean } | null {
+  const buttons = [...document.querySelectorAll(LIKE_BUTTON_SELECTOR)].filter(isVisibleControl);
+  if (buttons.length === 0) return null;
+
+  const pressed = buttons[0]!.getAttribute("aria-pressed");
+  if (pressed !== "true" && pressed !== "false") return null;
+  // Conflicting visible controls are ambiguous; never guess which song wins.
+  if (buttons.some((button) => button.getAttribute("aria-pressed") !== pressed)) return null;
+
+  return { button: buttons[0]!, liked: pressed === "true" };
 }
 
 export class YouTubeMusicAdapter implements SiteAdapter {
@@ -223,7 +239,8 @@ export class YouTubeMusicAdapter implements SiteAdapter {
   }
 
   private observePlayer(): void {
-    const root = playerRoot() ?? document.body;
+    const bars = [...document.querySelectorAll(PLAYER_BAR_SELECTOR)];
+    const roots = bars.length > 0 ? bars : [playerRoot() ?? document.body];
     this.observer?.disconnect();
     this.observer = new MutationObserver(() => {
       // A replaced media element means our listeners are stale — rebind.
@@ -231,12 +248,15 @@ export class YouTubeMusicAdapter implements SiteAdapter {
       if (el !== this.media) this.bindMedia();
       this.emit();
     });
-    this.observer.observe(root, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["aria-label", "title", "class", "value"],
-    });
+    for (const root of roots) {
+      this.observer.observe(root, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ["aria-label", "aria-pressed", "aria-disabled", "aria-hidden", "disabled", "hidden", "style", "title", "class", "value"],
+      });
+    }
   }
 
   // Slow bounded reconciliation: catches anything observers missed without
@@ -252,7 +272,7 @@ export class YouTubeMusicAdapter implements SiteAdapter {
 
   // ---------- state ----------
 
-  private detectCapabilities(): Capability[] {
+  private detectCapabilities(liked: boolean | null): Capability[] {
     const caps: Capability[] = [];
     const media = this.media;
     if (findControl("playPause") || media) {
@@ -262,11 +282,14 @@ export class YouTubeMusicAdapter implements SiteAdapter {
     if (findControl("next")) caps.push("next");
     if (media && media.seekable.length > 0) caps.push("seek");
     if (media) caps.push("volume");
+    const like = liked !== null ? likeControl() : null;
+    if (like && isEnabledControl(like.button)) caps.push("setLiked");
     // Search capabilities are advertised once the probe-verified input path
     // exists; the input's mere presence is not proof search works.
     if (document.querySelector("ytmusic-search-box, input[type='search']")) {
       caps.push("searchSongs", "playSearchResult");
     }
+    if (this.search.canStartRadio) caps.push("startRadio");
     return caps;
   }
 
@@ -349,18 +372,21 @@ export class YouTubeMusicAdapter implements SiteAdapter {
     const media = this.media;
     const track = this.readTrack();
     const status = this.playbackStatus();
+    const contentKind = this.contentKind();
+    const liked = track && contentKind !== "advertisement" ? likeControl()?.liked ?? null : null;
     const state: AdapterPlayerState = {
       revision: ++this.revision,
       track,
       status,
-      contentKind: this.contentKind(),
+      contentKind,
       positionSeconds: media ? isFiniteSeconds(media.currentTime) : null,
       durationSeconds: media ? isFiniteSeconds(media.duration) : null,
       playbackRate:
         media && Number.isFinite(media.playbackRate) ? media.playbackRate : null,
       volume: media ? media.volume : null,
       muted: media ? media.muted : null,
-      capabilities: this.detectCapabilities(),
+      liked,
+      capabilities: this.detectCapabilities(liked),
     };
     this.capabilities = state.capabilities;
     this.lastState = state;
@@ -439,10 +465,14 @@ export class YouTubeMusicAdapter implements SiteAdapter {
         return this.setVolume(params);
       case "player.setMuted":
         return this.setMuted(params);
+      case "player.setLiked":
+        return this.setLiked(params);
       case "search.songs":
         return this.searchSongs(params);
       case "search.playResult":
         return this.playSearchResult(params);
+      case "search.startRadio":
+        return this.startRadio(params);
       default:
         return {
           ok: false,
@@ -691,12 +721,71 @@ export class YouTubeMusicAdapter implements SiteAdapter {
     }
   }
 
+  private async setLiked(params: Record<string, unknown>): Promise<CommandResult> {
+    if (typeof params.occurrenceId !== "string" || typeof params.liked !== "boolean") {
+      return { ok: false, error: { code: "internal_error", message: "setLiked requires occurrenceId and a desired liked state" } };
+    }
+    // Refresh at dispatch, including after waiting behind another command.
+    const state = this.buildState();
+    if (state.track?.occurrenceId !== params.occurrenceId) {
+      return { ok: false, error: { code: "stale_target", message: "Track changed before the like request" } };
+    }
+    const control = likeControl();
+    if (!control || !isEnabledControl(control.button) || state.liked === null) {
+      return { ok: false, error: { code: "unsupported_operation", message: "No unambiguous like control is available" } };
+    }
+    if (control.liked === params.liked) {
+      return { ok: true, outcome: { observedStateRevision: state.revision } };
+    }
+
+    const waiter = this.awaitOutcome(
+      (observed) => observed.track?.occurrenceId === params.occurrenceId && observed.liked === params.liked,
+      CONTROL_DEADLINE_MS,
+    );
+    control.button.click();
+    this.emit();
+    return waiter.done;
+  }
+
   // searchSongs needs to return the rows, not just an outcome. The content
   // executor calls this narrower API directly (internal channel), keeping
   // exec() for transport commands.
   async runSearch(query: string): Promise<import("../protocol/types").SearchSongsResult> {
     const { promise } = this.search.search(query, SEARCH_DEADLINE_MS);
-    return promise;
+    const result = await promise;
+    this.emit();
+    return result;
+  }
+
+  private async startRadio(params: Record<string, unknown>): Promise<CommandResult> {
+    const searchToken = typeof params.searchToken === "string" ? params.searchToken : "";
+    const resultId = typeof params.resultId === "string" ? params.resultId : "";
+    const deadlineAt = performance.now() + CONTROL_DEADLINE_MS;
+    const prepared = await this.search.prepareRadio(searchToken, resultId, CONTROL_DEADLINE_MS);
+    if (!prepared.ok) {
+      return { ok: false, error: { code: prepared.code, message: prepared.error } };
+    }
+
+    const before = this.buildState();
+    const playlistBefore = new URL(location.href).searchParams.get(RADIO.playlistParam);
+    if (playlistBefore === prepared.playlistId && before.status === "playing") {
+      return { ok: true, outcome: { observedStateRevision: before.revision } };
+    }
+    const waiter = this.awaitOutcome(
+      (state) => state.status === "playing" && state.track !== null &&
+        new URL(location.href).searchParams.get(RADIO.playlistParam) === prepared.playlistId &&
+        (state.track.occurrenceId !== before.track?.occurrenceId ||
+          (state.positionSeconds !== null && before.positionSeconds !== null &&
+            state.positionSeconds < before.positionSeconds - 0.5)),
+      Math.max(0, deadlineAt - performance.now()),
+    );
+    const dispatched = prepared.activate();
+    if (!dispatched.ok) {
+      waiter.cancel();
+      return { ok: false, error: { code: "stale_result", message: dispatched.error } };
+    }
+    this.emit();
+    return waiter.done;
   }
 
   private async playSearchResult(

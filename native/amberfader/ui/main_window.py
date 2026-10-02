@@ -70,6 +70,8 @@ class MainWindow(QMainWindow):
         self._seeking = False
         self._seek_occ: str | None = None
         self._pending_transport = False
+        self._pending_like = False
+        self._bound_token: str | None = None
         self._search: SearchWindow | None = None
 
         self.setWindowTitle("Amberfader")
@@ -110,7 +112,10 @@ class MainWindow(QMainWindow):
         self._play.setToolTip("Play/Pause (Space)")
         self._next = QPushButton("⏭")
         self._next.setToolTip("Next")
-        for w in (self._prev, self._play, self._next):
+        self._like = QPushButton("♡?")
+        self._like.setToolTip("Liked state unknown")
+        self._like.setEnabled(False)
+        for w in (self._prev, self._play, self._next, self._like):
             transport.addWidget(w)
         transport.addStretch(1)
         meta.addLayout(transport)
@@ -146,6 +151,7 @@ class MainWindow(QMainWindow):
 
         # wiring
         self._play.clicked.connect(self._toggle_play)
+        self._like.clicked.connect(self._toggle_like)
         self._prev.clicked.connect(lambda: self._request("player.previous", {}))
         self._next.clicked.connect(lambda: self._request("player.next", {}))
         self._btn_show.clicked.connect(lambda: self._request("browser.showPlayer", {}))
@@ -175,6 +181,15 @@ class MainWindow(QMainWindow):
         self._state = state
         self._state_at.start()
         track = state.get("track")
+        # A new playback target invalidates the open search session.
+        binding = state.get("bindingToken")
+        if (
+            self._bound_token is not None
+            and binding != self._bound_token
+            and self._search is not None
+        ):
+            self._search.mark_stale()
+        self._bound_token = binding
         caps = state.get("capabilities") or []
 
         if track:
@@ -208,6 +223,7 @@ class MainWindow(QMainWindow):
         self._vol.setEnabled("volume" in caps)
         self._btn_show.setEnabled(True)
         self._btn_hide.setEnabled(True)
+        self._render_like()
         self._render_time()
 
     def _interpolated(self) -> float | None:
@@ -254,12 +270,23 @@ class MainWindow(QMainWindow):
         )
 
     def set_connection(self, component: str, status: str, reason: str = "") -> None:
+        if component in ("gui", "target", "adapter") and status != "connected":
+            self._state = None
+            self._render_like()
+            if self._search:
+                self._search.mark_stale()
+
         if component == "gui" and status == "disconnected":
             self.show_status("Disconnected from Firefox bridge", error=True)
         elif component == "target" and status != "connected":
             self.show_status(reason or "Playback tab disconnected", error=True)
-            if self._search:
-                self._search.mark_stale()
+
+    def binding_changed(self) -> None:
+        """Disable occurrence-bound actions until a fresh target state arrives."""
+        self._state = None
+        self._render_like()
+        if self._search:
+            self._search.mark_stale()
 
     def raise_requested(self) -> None:
         """Second-instance activation: surface the existing window."""
@@ -296,6 +323,51 @@ class MainWindow(QMainWindow):
         if self._state:
             self.apply_state(self._state)
 
+    def _toggle_like(self) -> None:
+        st = self._state or {}
+        liked = st.get("liked")
+        occurrence = (st.get("track") or {}).get("occurrenceId")
+        if (
+            self._pending_like
+            or not isinstance(occurrence, str)
+            or not isinstance(liked, bool)
+            or "setLiked" not in (st.get("capabilities") or [])
+        ):
+            return
+        self._pending_like = True
+        self._render_like()
+        # No optimistic flip: the heart follows the next reported state.
+        self._request(
+            "player.setLiked", {"occurrenceId": occurrence, "liked": not liked}
+        )
+
+    def _render_like(self) -> None:
+        st = self._state or {}
+        liked = st.get("liked")
+        known = isinstance(liked, bool)
+        self._like.setText(("♥" if liked else "♡") if known else "♡?")
+        self._like.setProperty("pending", self._pending_like)
+        self._like.style().unpolish(self._like)
+        self._like.style().polish(self._like)
+        if self._pending_like:
+            self._like.setEnabled(False)
+            self._like.setToolTip("Updating like…")
+            return
+        if not st.get("track"):
+            self._like.setEnabled(False)
+            self._like.setToolTip("No track selected")
+            return
+        if "setLiked" not in (st.get("capabilities") or []):
+            self._like.setEnabled(False)
+            self._like.setToolTip("Liking is not available for this track")
+            return
+        if not known:
+            self._like.setEnabled(False)
+            self._like.setToolTip("Like state is unknown for this track")
+            return
+        self._like.setEnabled(True)
+        self._like.setToolTip("Unlike this song" if liked else "Like this song")
+
     def _seek_press(self) -> None:
         self._seeking = True
         self._seek_occ = ((self._state or {}).get("track") or {}).get("occurrenceId")
@@ -331,7 +403,11 @@ class MainWindow(QMainWindow):
         self._search._q.setFocus()
 
     def route_response(self, method: str, ok: bool, payload: dict) -> None:
-        self.command_settled()
+        if method == "player.setLiked":
+            self._pending_like = False
+            self._render_like()
+        elif method in ("player.play", "player.pause"):
+            self.command_settled()
         if method.startswith("search.") and self._search is not None:
             self._search.apply_response(method, ok, payload)
         if not ok:

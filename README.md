@@ -57,6 +57,21 @@ scripts/uninstall-user          # remove app files (keeps preferences unless --p
 See [`AGENTS.md`](AGENTS.md) for conventions and [`docs/compatibility.md`](docs/compatibility.md)
 for the tested-environment record.
 
+## Likes, recents and mixes
+
+Upgrade the extension and desktop app together for these protocol additions.
+Restart the browser and desktop app after updating.
+
+- Click the heart to like or unlike the current song. **♥** means liked,
+  **♡** means unliked, and **♡?** means unknown. It changes only after the
+  site confirms the state.
+- Open **Search** to reuse recent queries or played artists. These lists are
+  shared by both windows, saved locally, and limited to 20 entries each.
+  **Clear recents** removes both lists.
+- Search, then use **Start mix** for a result. Amberfader opens that row's
+  YouTube Music action menu and activates its **Start mix** link. An unavailable
+  control or unconfirmed outcome is reported instead of retried.
+
 ## Connect an installed Flatpak app
 
 Installing the app does not register its helper with your browser. Run the

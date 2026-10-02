@@ -1,0 +1,18 @@
+<!-- Sanitized from the user's live menu capture. SVGs, classes and other
+     actions omitted; the album/playlist identifiers are fixture replacements.
+     This proves the Start mix markup, not a live activation outcome. -->
+<ytmusic-menu-popup-renderer slot="dropdown-content" tabindex="-1">
+  <button id="hidden-close-button" tabindex="-1" aria-controls="items" aria-label="Close menu"></button>
+  <tp-yt-paper-listbox id="items" role="menu" tabindex="0">
+    <ytmusic-menu-navigation-item-renderer role="menuitem" tabindex="0" aria-label="Shuffle play" aria-disabled="false" aria-selected="true">
+      <a id="navigation-endpoint" tabindex="-1" aria-hidden="true" href="watch?playlist=fixture-album">
+        <yt-formatted-string>Shuffle play</yt-formatted-string>
+      </a>
+    </ytmusic-menu-navigation-item-renderer>
+    <ytmusic-menu-navigation-item-renderer role="menuitem" tabindex="-1" aria-label="Start mix" aria-disabled="false" aria-selected="false">
+      <a id="navigation-endpoint" tabindex="-1" aria-hidden="true" href="watch?playlist=fixture-mix">
+        <yt-formatted-string>Start mix</yt-formatted-string>
+      </a>
+    </ytmusic-menu-navigation-item-renderer>
+  </tp-yt-paper-listbox>
+</ytmusic-menu-popup-renderer>

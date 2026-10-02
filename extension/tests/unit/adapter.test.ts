@@ -1,6 +1,7 @@
 // YouTubeMusicAdapter against a synthetic jsdom player. This fixture is
 // honestly labeled synthetic — Phase 0 replaces it with captured DOM.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { YouTubeMusicAdapter } from "../../src/adapter/youtubeMusic";
 import type { AdapterPlayerState } from "../../src/adapter/types";
 
@@ -189,6 +190,186 @@ describe("YouTubeMusicAdapter (synthetic fixture)", () => {
     } finally {
       vi.useRealTimers();
       adapter.stop();
+    }
+  });
+
+  it("reads the captured like control, ignoring a hidden stale player bar", async () => {
+    mountPlayer();
+    document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/like-control-2026-10-02.html", "utf8"));
+    const active = document.querySelector("#button-shape-like button") as HTMLElement;
+    const hiddenBar = active.closest("ytmusic-player-bar")!.cloneNode(true) as HTMLElement;
+    hiddenBar.hidden = true;
+    document.body.prepend(hiddenBar);
+    active.setAttribute("aria-pressed", "true"); // Synthetic liked variant.
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() =>
+      Object.assign([new DOMRect(0, 0, 24, 24)], { item: () => null }));
+    const adapter = new YouTubeMusicAdapter();
+    await adapter.start();
+    try {
+      expect(adapter.snapshot().liked).toBe(true);
+      expect(adapter.capabilities).toContain("setLiked");
+    } finally {
+      adapter.stop();
+    }
+  });
+
+  it("reports unknown likes when visible player controls disagree", async () => {
+    mountPlayer();
+    const fixture = readFileSync("extension/tests/fixtures/like-control-2026-10-02.html", "utf8");
+    document.body.insertAdjacentHTML("beforeend", fixture + fixture);
+    document.querySelector("#button-shape-like button")!.setAttribute("aria-pressed", "true");
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() =>
+      Object.assign([new DOMRect(0, 0, 24, 24)], { item: () => null }));
+    const adapter = new YouTubeMusicAdapter();
+    await adapter.start();
+    try {
+      expect(adapter.snapshot().liked).toBeNull();
+      expect(adapter.capabilities).not.toContain("setLiked");
+    } finally {
+      adapter.stop();
+    }
+  });
+
+  it("clicks once for a desired like state, waits for aria-pressed, and observes all bars", async () => {
+    mountPlayer();
+    document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/like-control-2026-10-02.html", "utf8"));
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() =>
+      Object.assign([new DOMRect(0, 0, 24, 24)], { item: () => null }));
+    const button = document.querySelector("#button-shape-like button") as HTMLButtonElement;
+    const clicked = vi.fn(() => button.setAttribute("aria-pressed", "true"));
+    button.addEventListener("click", clicked);
+    const adapter = new YouTubeMusicAdapter();
+    await adapter.start();
+    try {
+      const occurrenceId = adapter.snapshot().track!.occurrenceId;
+      expect((await adapter.exec("like-1", "player.setLiked", { occurrenceId, liked: true })).ok).toBe(true);
+      expect(adapter.snapshot().liked).toBe(true);
+      expect((await adapter.exec("like-2", "player.setLiked", { occurrenceId, liked: true })).ok).toBe(true);
+      expect(clicked).toHaveBeenCalledOnce();
+      button.setAttribute("aria-pressed", "false");
+      await Promise.resolve();
+      expect(adapter.snapshot().liked).toBe(false);
+    } finally {
+      adapter.stop();
+    }
+  });
+
+  it("rejects a like request after the track changes, before clicking", async () => {
+    mountPlayer();
+    document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/like-control-2026-10-02.html", "utf8"));
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() =>
+      Object.assign([new DOMRect(0, 0, 24, 24)], { item: () => null }));
+    const button = document.querySelector("#button-shape-like button") as HTMLButtonElement;
+    const clicked = vi.fn();
+    button.addEventListener("click", clicked);
+    const adapter = new YouTubeMusicAdapter();
+    await adapter.start();
+    try {
+      const occurrenceId = adapter.snapshot().track!.occurrenceId;
+      document.querySelector(".title")!.textContent = "New song";
+      const result = await adapter.exec("like-stale", "player.setLiked", { occurrenceId, liked: true });
+      expect(result).toMatchObject({ ok: false, error: { code: "stale_target" } });
+      expect(clicked).not.toHaveBeenCalled();
+    } finally {
+      adapter.stop();
+    }
+  });
+
+  it("does not report a like as successful without a confirmed outcome", async () => {
+    mountPlayer();
+    document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/like-control-2026-10-02.html", "utf8"));
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() =>
+      Object.assign([new DOMRect(0, 0, 24, 24)], { item: () => null }));
+    vi.useFakeTimers();
+    const adapter = new YouTubeMusicAdapter();
+    await adapter.start();
+    try {
+      const result = adapter.exec("like-timeout", "player.setLiked", {
+        occurrenceId: adapter.snapshot().track!.occurrenceId, liked: true,
+      });
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(await result).toMatchObject({ ok: false, error: { code: "pending_outcome" } });
+      expect(adapter.snapshot().liked).toBe(false);
+    } finally {
+      adapter.stop();
+      vi.useRealTimers();
+    }
+  });
+
+  it("confirms a mix only after the captured playlist and changed playback are observed", async () => {
+    const { video } = mountPlayer();
+    document.body.insertAdjacentHTML("beforeend", `
+      <ytmusic-search-box><input></ytmusic-search-box>
+      <ytmusic-search-page id="search-root"></ytmusic-search-page>`);
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() =>
+      Object.assign([new DOMRect(0, 0, 24, 24)], { item: () => null }));
+    const adapter = new YouTubeMusicAdapter();
+    await adapter.start();
+    try {
+      const searching = adapter.runSearch("query");
+      document.getElementById("search-root")!.innerHTML = `
+        <ytmusic-responsive-list-item-renderer><span class="title">Seed song</span>
+          <span class="subtitle">Artist • 3:00</span><ytmusic-play-button-renderer></ytmusic-play-button-renderer>
+          <ytmusic-menu-renderer><button aria-label="Action menu"></button></ytmusic-menu-renderer>
+        </ytmusic-responsive-list-item-renderer>`;
+      const result = await searching;
+      const play = vi.fn();
+      document.querySelector("ytmusic-play-button-renderer")!.addEventListener("click", play);
+      document.querySelector("ytmusic-menu-renderer button")!.addEventListener("click", () => {
+        document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/mix-menu-2026-10-02.html", "utf8"));
+        document.querySelector("[aria-label='Start mix'] a")!.addEventListener("click", (event) => {
+          event.preventDefault();
+          history.replaceState(null, "", "https://music.youtube.com/watch?playlist=fixture-mix&v=mix-seed");
+          document.querySelector("ytmusic-player-bar .title")!.textContent = "Mix seed";
+          void video.play();
+        });
+      });
+      expect(adapter.capabilities).toContain("startRadio");
+      expect(await adapter.exec("mix-1", "search.startRadio", {
+        searchToken: result.searchToken, resultId: result.results[0]!.resultId,
+      })).toMatchObject({ ok: true });
+      expect(adapter.snapshot().status).toBe("playing");
+      expect(adapter.snapshot().track?.title).toBe("Mix seed");
+      expect(play).not.toHaveBeenCalled();
+    } finally {
+      adapter.stop();
+    }
+  });
+
+  it("uses one control deadline for menu preparation and unconfirmed mix playback", async () => {
+    mountPlayer();
+    document.body.insertAdjacentHTML("beforeend", `
+      <ytmusic-search-box><input></ytmusic-search-box>
+      <ytmusic-search-page id="search-root"></ytmusic-search-page>`);
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() =>
+      Object.assign([new DOMRect(0, 0, 24, 24)], { item: () => null }));
+    vi.useFakeTimers();
+    const adapter = new YouTubeMusicAdapter();
+    await adapter.start();
+    try {
+      const searching = adapter.runSearch("query");
+      document.getElementById("search-root")!.innerHTML = `
+        <ytmusic-responsive-list-item-renderer><span class="title">Seed song</span>
+          <span class="subtitle">Artist • 3:00</span><ytmusic-play-button-renderer></ytmusic-play-button-renderer>
+          <ytmusic-menu-renderer><button aria-label="Action menu"></button></ytmusic-menu-renderer>
+        </ytmusic-responsive-list-item-renderer>`;
+      const result = await searching;
+      const clicked = vi.fn((event: Event) => event.preventDefault());
+      document.querySelector("ytmusic-menu-renderer button")!.addEventListener("click", () => {
+        setTimeout(() => {
+          document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/mix-menu-2026-10-02.html", "utf8"));
+          document.querySelector("[aria-label='Start mix'] a")!.addEventListener("click", clicked);
+        }, 3000);
+      });
+      const pending = adapter.exec("mix-timeout", "search.startRadio", {
+        searchToken: result.searchToken, resultId: result.results[0]!.resultId,
+      });
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(await pending).toMatchObject({ ok: false, error: { code: "pending_outcome" } });
+      expect(clicked).toHaveBeenCalledOnce();
+    } finally {
+      adapter.stop();
+      vi.useRealTimers();
     }
   });
 });

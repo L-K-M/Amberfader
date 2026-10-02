@@ -1,9 +1,10 @@
 // YouTube Music selector configuration.
 //
-// EVERY selector and label pattern in this file is UNVERIFIED until the
+// Selectors and label patterns are UNVERIFIED until the
 // Phase 0 probe suite has been run on a live session (docs/manual-test-plan.md).
 // They encode the page structure as of writing, based on documented component
 // names; treat them as candidates the probes must confirm, not as truth.
+// Live observations are noted below; observed markup does not prove actions.
 // Feature-detect each capability before use — a missing control must only
 // disable its own capability.
 
@@ -15,8 +16,10 @@ export interface ControlQuery {
   ariaLabels: RegExp[];
 }
 
+export const PLAYER_BAR_SELECTOR = "ytmusic-player-bar";
+
 export const PLAYER_ROOT_SELECTORS = [
-  "ytmusic-player-bar",
+  PLAYER_BAR_SELECTOR,
   "ytmusic-app[player-page-open_]",
   "ytmusic-app",
 ];
@@ -84,7 +87,24 @@ export const SEARCH = {
     "ytmusic-responsive-list-item-renderer .play-button",
     "ytmusic-responsive-list-item-renderer ytmusic-play-button-renderer",
   ],
+  // Action menu markup observed in the user's 2026-10-02 capture.
+  rowActionMenu: ["ytmusic-menu-renderer button[aria-label='Action menu']"],
 };
 
 // aria-label/state attributes worth probing. UNVERIFIED until Phase 0.
 export const ARIA_STATE_ATTRS = ["aria-label", "title", "aria-pressed"];
+
+// Observed in the user's 2026-10-02 console capture: both player bars contain
+// this button, with aria-pressed="false". Click outcomes remain UNVERIFIED.
+export const LIKE_BUTTON_SELECTOR =
+  "ytmusic-player-bar ytmusic-like-button-renderer #button-shape-like button";
+
+// Observed Start mix navigation item. Activation/navigation remains UNVERIFIED.
+export const RADIO = {
+  popup: "ytmusic-menu-popup-renderer",
+  items: "#items [role='menuitem']",
+  label: "Start mix",
+  endpoint: "a#navigation-endpoint[href]",
+  playlistParam: "playlist",
+  watchPath: "/watch",
+} as const;

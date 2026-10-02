@@ -8,7 +8,7 @@
       "enum": ["playing", "paused", "buffering", "ended", "unknown"]
     },
     "capability": {
-      "enum": ["play", "pause", "previous", "next", "seek", "volume", "searchSongs", "playSearchResult"]
+      "enum": ["play", "pause", "previous", "next", "seek", "volume", "setLiked", "searchSongs", "playSearchResult", "startRadio"]
     },
     "playerState": {
       "type": "object",
@@ -42,6 +42,7 @@
         "playbackRate": { "type": ["number", "null"], "exclusiveMinimum": 0 },
         "volume": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
         "muted": { "type": ["boolean", "null"] },
+        "liked": { "type": ["boolean", "null"] },
         "capabilities": { "type": "array", "items": { "$ref": "#/$defs/capability" }, "uniqueItems": true }
       }
     },
@@ -57,6 +58,7 @@
         "album": { "type": ["string", "null"] },
         "durationSeconds": { "type": ["number", "null"], "exclusiveMinimum": 0 },
         "supported": { "type": "boolean" },
+        "radioSupported": { "type": "boolean" },
         "artworkId": { "type": ["string", "null"] }
       }
     },
@@ -104,6 +106,24 @@
       "additionalProperties": false,
       "properties": {
         "muted": { "type": "boolean" }
+      }
+    },
+    "playerSetLikedParams": {
+      "type": "object",
+      "required": ["occurrenceId", "liked"],
+      "additionalProperties": false,
+      "properties": {
+        "occurrenceId": { "type": "string", "minLength": 1 },
+        "liked": { "type": "boolean" }
+      }
+    },
+    "searchHistory": {
+      "type": "object",
+      "required": ["queries", "artists"],
+      "additionalProperties": false,
+      "properties": {
+        "queries": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 500 } },
+        "artists": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 500 } }
       }
     },
     "targetsSelectParams": {
@@ -200,8 +220,12 @@
             "player.seek",
             "player.setVolume",
             "player.setMuted",
+            "player.setLiked",
             "search.songs",
             "search.playResult",
+            "search.startRadio",
+            "search.history",
+            "search.clearHistory",
             "browser.showPlayer",
             "browser.hidePlayer"
           ]
@@ -220,9 +244,11 @@
                   "player.next",
                   "player.seek",
                   "player.setVolume",
-                  "player.setMuted",
-                  "search.songs",
-                  "search.playResult",
+                   "player.setMuted",
+                   "player.setLiked",
+                   "search.songs",
+                   "search.playResult",
+                   "search.startRadio",
                   "browser.showPlayer",
                   "browser.hidePlayer"
                 ]
@@ -245,6 +271,10 @@
           "then": { "properties": { "params": { "$ref": "#/$defs/playerSetMutedParams" } } }
         },
         {
+          "if": { "properties": { "method": { "const": "player.setLiked" } }, "required": ["method"] },
+          "then": { "properties": { "params": { "$ref": "#/$defs/playerSetLikedParams" } } }
+        },
+        {
           "if": { "properties": { "method": { "const": "targets.select" } }, "required": ["method"] },
           "then": { "properties": { "params": { "$ref": "#/$defs/targetsSelectParams" } } }
         },
@@ -253,7 +283,7 @@
           "then": { "properties": { "params": { "$ref": "#/$defs/searchSongsParams" } } }
         },
         {
-          "if": { "properties": { "method": { "const": "search.playResult" } }, "required": ["method"] },
+          "if": { "properties": { "method": { "enum": ["search.playResult", "search.startRadio"] } }, "required": ["method"] },
           "then": { "properties": { "params": { "$ref": "#/$defs/searchPlayResultParams" } } }
         },
         {
@@ -264,7 +294,9 @@
                   "connection.ping",
                   "state.get",
                   "state.unsubscribe",
-                  "targets.list",
+                   "targets.list",
+                   "search.history",
+                   "search.clearHistory",
                   "player.play",
                   "player.pause",
                   "player.previous",

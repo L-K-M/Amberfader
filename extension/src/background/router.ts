@@ -26,8 +26,9 @@ import type {
   ResponseMessage,
   TargetDescriptor,
 } from "../protocol/types";
-import { describeValidationError, validateMessage } from "../protocol/validate";
+import { describeValidationError, validateMessage, validateSearchSongsResult } from "../protocol/validate";
 import { isInternalMessage } from "../protocol/internal";
+import { SearchHistoryService } from "./searchHistory";
 
 
 const MUSIC_URL = "https://music.youtube.com/*";
@@ -65,6 +66,8 @@ export class Router {
   private lastState: PlayerState | null = null;
   private readonly ports: RouterPorts = { ui: new Set(), controller: null };
   private nativeAttached = false;
+  private readonly history = new SearchHistoryService();
+  private historyOccurrence: string | null = null;
 
   // ---- lifecycle --------------------------------------------------------
 
@@ -147,6 +150,16 @@ export class Router {
           bindingToken: this.selection.bindingToken,
         };
         this.lastState = stamped;
+        const occurrence = stamped.track
+          ? `${stamped.bindingToken}/${stamped.track.occurrenceId}` : null;
+        if (occurrence && occurrence !== this.historyOccurrence &&
+            stamped.status === "playing" && stamped.contentKind !== "advertisement") {
+          this.historyOccurrence = occurrence;
+          // History is best-effort; storage failure must not interrupt playback.
+          void this.history.recordArtists(stamped.track!.artists).catch(() => {
+            console.warn("Could not save recent artists");
+          });
+        }
         this.broadcast({
           protocolVersion: PROTOCOL_VERSION,
           kind: "event",
@@ -304,6 +317,16 @@ export class Router {
         return okResponse(req.id, await this.listTargets(), extra);
       case "targets.select":
         return this.selectTarget(req);
+      case "search.history":
+      case "search.clearHistory": {
+        try {
+          const history = req.method === "search.history"
+            ? await this.history.get() : await this.history.clear();
+          return okResponse(req.id, { ...history }, extra);
+        } catch {
+          return errResponse(req.id, "internal_error", "Cannot access local search history", extra);
+        }
+      }
       case "browser.showPlayer":
         return this.showPlayer(req);
       case "browser.hidePlayer":
@@ -524,7 +547,20 @@ export class Router {
     }
     // search.songs returns its row payload directly (not a CommandResult).
     if (req.method === "search.songs") {
-      return okResponse(req.id, result as Record<string, unknown>, {
+      if (!validateSearchSongsResult(result)) {
+        return errResponse(req.id, "internal_error", "Adapter returned invalid search results", {
+          sessionId: this.sessionId, bindingToken: sel.bindingToken,
+        });
+      }
+      if (this.selection?.bindingToken !== sel.bindingToken) {
+        return errResponse(req.id, "stale_target", "Playback target changed during search", {
+          sessionId: this.sessionId,
+        });
+      }
+      await this.history.recordQuery(req.params.query as string).catch(() => {
+        console.warn("Could not save recent search");
+      });
+      return okResponse(req.id, { ...result }, {
         sessionId: this.sessionId,
         bindingToken: sel.bindingToken,
       });

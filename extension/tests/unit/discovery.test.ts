@@ -279,4 +279,44 @@ describe("playback tab discovery", () => {
     expect(bus.states).toHaveLength(0);
     expect(bus.getRouter().selectedTabId).toBeNull();
   });
+
+  it("does not restore an old binding from a late like response", async () => {
+    const bus = await setup();
+    await bus.loadContent();
+    await bus.client.connect();
+    let finish!: (value: unknown) => void;
+    bus.sendToTab.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const command = bus.client.request("player.setLiked", { occurrenceId: "fake-occ-0", liked: true });
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    await bus.getRouter().onInternalMessage({
+      scope: "amberfader-internal", type: "adapter.register",
+      documentNonce: "new-document", capabilities: [],
+    }, { tab: { id: TAB_ID }, frameId: 0 });
+    const newToken = bus.client.bindingToken;
+    finish({ result: { ok: true, outcome: { observedStateRevision: 2 } }, replayed: false });
+    await command;
+    expect(bus.client.bindingToken).toBe(newToken);
+  });
+
+  it("carries heart state and radio commands through the actual content-script bus", async () => {
+    const bus = await setup();
+    await bus.loadContent();
+    await bus.client.connect();
+    const occurrenceId = bus.states.at(-1)?.track?.occurrenceId;
+    expect((await bus.client.request("player.setLiked", { occurrenceId, liked: true })).ok).toBe(true);
+    expect(bus.states.at(-1)?.liked).toBe(true);
+    expect((await bus.client.request("player.setLiked", { occurrenceId, liked: false })).ok).toBe(true);
+    expect(bus.states.at(-1)?.liked).toBe(false);
+    const search = await bus.client.request("search.songs", { query: "test query" });
+    expect(search.ok).toBe(true);
+    if (!search.ok) throw new Error("search failed");
+    const result = search.result as { searchToken: string; results: { resultId: string; radioSupported: boolean }[] };
+    expect(result.results[0]?.radioSupported).toBe(true);
+    expect((await bus.client.request("search.startRadio", {
+      searchToken: result.searchToken, resultId: result.results[0]!.resultId,
+    })).ok).toBe(true);
+    expect(bus.states.at(-1)?.status).toBe("playing");
+    // Stop the fake adapter's playback timer at the end of this bus exercise.
+    await bus.client.request("player.pause", {});
+  });
 });

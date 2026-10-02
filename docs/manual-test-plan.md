@@ -57,6 +57,20 @@ save the report. Verify:
 - [ ] Search from the compact UI returns rows; playback is uninterrupted.
 - [ ] Selecting a result starts that song; a re-render mid-search does not
       play the wrong row.
+- [ ] In both players, compare the heart with YouTube Music's Like button.
+      Click to like, then unlike. Each request acts once and the icon changes
+      only after `aria-pressed` confirms it. Unknown or conflicting controls
+      disable the heart. Switch tracks while a request is pending.
+- [ ] Search twice, close/reopen both search windows, and restart the browser.
+      Both windows show the saved newest-first queries and played artists.
+      Clicking either entry submits a search. Clear recents in one window,
+      reopen the other, and verify both lists are empty until new activity.
+- [ ] Use **Start mix** on a song result. Verify the correct row's menu opens,
+      its mix playlist starts, and no Play/Shuffle action fires. Repeat with
+      reordered results, a newer search, and a result that has no mix action.
+- [ ] Leave an unrelated YouTube Music menu open, then request a mix. The UI
+      asks you to close it rather than using its actions. Slow or unconfirmed
+      mix activation reports an uncertain outcome and never retries.
 - [ ] Two music tabs: nothing is auto-bound; explicit target selection is
       required and persists.
 - [ ] Tab navigates away or closes → binding revoked; commands fail

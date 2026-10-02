@@ -4,7 +4,8 @@
 // reload the player). One search in flight; a newer query supersedes the old.
 //
 // All selectors come from selectors.ts and are UNVERIFIED until Phase 0.
-import { SEARCH } from "./selectors";
+import { RADIO, SEARCH } from "./selectors";
+import { isEnabledControl, isVisibleControl } from "./dom";
 import { cleanId, cleanText, isFiniteSeconds } from "../shared/sanitize";
 import type {
   SearchResultRow,
@@ -25,7 +26,13 @@ interface ResolvedRow {
   kind: SearchResultRow["kind"];
   artworkId: string | null;
   supported: boolean;
+  radioSupported: boolean;
 }
+
+type RowResolution = { ok: true; row: Element } | { ok: false; error: string };
+type RadioPreparation =
+  | { ok: true; playlistId: string; activate: () => RowResolution }
+  | { ok: false; error: string; code: "stale_result" | "unsupported_operation" | "timeout" | "user_interaction_required" };
 
 interface EntryIdentity {
   title: string;
@@ -56,7 +63,7 @@ function queryAll(doc: ParentNode, selectors: string[]): Element[] {
       // Skip malformed candidate selectors rather than failing the query.
     }
   }
-  return out;
+  return [...new Set(out)];
 }
 
 function queryFirst(doc: ParentNode, selectors: string[]): Element | null {
@@ -125,6 +132,8 @@ export class SiteSearch {
   private epoch = 0;
   private teardownCurrent: (() => void) | null = null;
   private entries = new Map<string, EntryIdentity>();
+  private radioAvailable = false;
+  private cancelRadio: (() => void) | null = null;
 
   constructor(doc: Document = document) {
     this.doc = doc;
@@ -134,10 +143,17 @@ export class SiteSearch {
     return this.epoch;
   }
 
+  get canStartRadio(): boolean {
+    return this.radioAvailable;
+  }
+
   cancelCurrent(reason = "superseded by a newer query"): void {
     this.teardownCurrent?.();
     this.teardownCurrent = null;
     this.entries.clear();
+    this.radioAvailable = false;
+    this.cancelRadio?.();
+    this.cancelRadio = null;
     void reason;
   }
 
@@ -235,7 +251,7 @@ export class SiteSearch {
     if (epoch !== this.epoch) {
       throw new SearchStaleError("search superseded before scan");
     }
-    const rows = queryAll(this.doc, SEARCH.resultRow);
+    const rows = this.resultRows();
     this.entries.clear();
     const results: SearchResultRow[] = [];
     for (const [i, el] of rows.entries()) {
@@ -256,9 +272,11 @@ export class SiteSearch {
         album: null,
         durationSeconds: resolved.durationSeconds,
         supported: resolved.supported,
+        radioSupported: resolved.radioSupported,
         artworkId: resolved.artworkId,
       });
     }
+    this.radioAvailable = results.some((row) => row.radioSupported);
     // complete=false while the page may be virtualized or paginated — we only
     // claim completeness when the row count is comfortably under the cap.
     return {
@@ -299,7 +317,13 @@ export class SiteSearch {
       kind,
       artworkId,
       supported: kind === "song" && playable,
+      radioSupported: kind === "song" && queryFirst(el, SEARCH.rowActionMenu) !== null,
     };
+  }
+
+  private resultRows(): Element[] {
+    const root = queryFirst(this.doc, SEARCH.resultsRoot);
+    return root ? queryAll(root, SEARCH.resultRow) : [];
   }
 
   // Re-resolve a previously returned result by verified identity (never by a
@@ -308,11 +332,24 @@ export class SiteSearch {
     searchToken: string,
     resultId: string,
   ): { ok: true } | { ok: false; error: string } {
+    const resolved = this.resolveResult(searchToken, resultId);
+    if (!resolved.ok) return resolved;
+
+    const play = queryFirst(resolved.row, SEARCH.rowPlayButton);
+    if (play instanceof HTMLElement || play instanceof SVGElement) {
+      (play as HTMLElement).click();
+      return { ok: true };
+    }
+    return { ok: false, error: "result has no playable control" };
+  }
+
+  private resolveResult(searchToken: string, resultId: string): RowResolution {
     const identity = this.entries.get(resultId);
     if (!identity || !resultId.startsWith(`${searchToken}/`)) {
       return { ok: false, error: "stale_result" };
     }
-    const rows = queryAll(this.doc, SEARCH.resultRow);
+    const rows = this.resultRows();
+    const matches: Element[] = [];
     for (const el of rows) {
       const resolved = this.resolveRow(el);
       if (
@@ -322,14 +359,98 @@ export class SiteSearch {
         (identity.artists.length === 0 ||
           resolved.artists.join(" ") === identity.artists.join(" "))
       ) {
-        const play = queryFirst(el, SEARCH.rowPlayButton);
-        if (play instanceof HTMLElement || play instanceof SVGElement) {
-          (play as HTMLElement).click();
-          return { ok: true };
-        }
-        return { ok: false, error: "result has no playable control" };
+        matches.push(el);
       }
     }
-    return { ok: false, error: "stale_result" };
+    if (matches.length !== 1) return { ok: false, error: "Result is missing or ambiguous; search again" };
+
+    return { ok: true, row: matches[0]! };
+  }
+
+  async prepareRadio(searchToken: string, resultId: string, deadlineMs: number): Promise<RadioPreparation> {
+    const resolved = this.resolveResult(searchToken, resultId);
+    if (!resolved.ok) return { ...resolved, code: "stale_result" };
+
+    const menu = queryFirst(resolved.row, SEARCH.rowActionMenu);
+    if (!menu || !isVisibleControl(menu) || !isEnabledControl(menu)) {
+      return { ok: false, code: "unsupported_operation", error: "No available action menu for this result" };
+    }
+    if ([...this.doc.querySelectorAll(RADIO.popup)].some(isVisibleControl)) {
+      return { ok: false, code: "user_interaction_required", error: "Close the open YouTube Music menu, then try Start mix again" };
+    }
+
+    return new Promise((resolve) => {
+      const freshPopups = new Set<Element>();
+      let settled = false;
+      const finish = (result: RadioPreparation) => {
+        if (settled) return;
+        settled = true;
+        observer.disconnect();
+        clearTimeout(timer);
+        this.cancelRadio = null;
+        resolve(result);
+      };
+      const check = (mutations: MutationRecord[]) => {
+        const current = this.resolveResult(searchToken, resultId);
+        if (!current.ok || current.row !== resolved.row) {
+          finish({ ok: false, code: "stale_result", error: "Search result changed while opening its menu" });
+          return;
+        }
+        const popups = [...this.doc.querySelectorAll(RADIO.popup)];
+        for (const popup of popups) {
+          const refreshed = mutations.some((mutation) =>
+            (mutation.type === "childList" &&
+              (popup.contains(mutation.target) || [...mutation.addedNodes].some((node) => node.contains(popup)))) ||
+            (mutation.type === "characterData" && popup.contains(mutation.target)) ||
+            (mutation.type === "attributes" && popup.contains(mutation.target) &&
+              (mutation.attributeName === "href" || mutation.attributeName === "aria-label")));
+          if (refreshed) freshPopups.add(popup);
+        }
+        const visible = popups.filter(isVisibleControl);
+        if (visible.length !== 1 || !freshPopups.has(visible[0]!)) return;
+
+        const popup = visible[0]!;
+        const items = [...popup.querySelectorAll(RADIO.items)];
+        if (items.length === 0) return;
+
+        const mixItems = items.filter((item) => item.getAttribute("aria-label") === RADIO.label);
+        const mix = mixItems.length === 1 ? mixItems[0] : null;
+        const link = mix?.querySelector(RADIO.endpoint);
+        if (!mix || !isVisibleControl(mix) || !isEnabledControl(mix) || !(link instanceof HTMLAnchorElement)) {
+          finish({ ok: false, code: "unsupported_operation", error: "This result has no available Start mix action" });
+          return;
+        }
+        const target = new URL(link.href, this.doc.baseURI);
+        const playlistId = target.searchParams.get(RADIO.playlistParam);
+        if (target.origin !== this.doc.location.origin || target.pathname !== RADIO.watchPath || !playlistId) {
+          finish({ ok: false, code: "unsupported_operation", error: "Start mix has no recognized playlist link" });
+          return;
+        }
+        finish({
+          ok: true, playlistId,
+          activate: () => {
+            const row = this.resolveResult(searchToken, resultId);
+            if (!row.ok || row.row !== resolved.row || !isVisibleControl(popup) ||
+                !isVisibleControl(mix) || !isEnabledControl(mix) || link.href !== target.href) {
+              return { ok: false, error: "Mix menu or result changed before activation; search again" };
+            }
+            // Activate the site's menu item, never assign location or click Play.
+            link.click();
+            return row;
+          },
+        });
+      };
+      const observer = new MutationObserver(check);
+      const timer = setTimeout(() => finish({
+        ok: false, code: "timeout", error: "The result menu did not expose a fresh mix action before the deadline",
+      }), deadlineMs);
+      this.cancelRadio = () => finish({ ok: false, code: "stale_result", error: "Search superseded while opening the mix menu" });
+      observer.observe(this.doc.body, {
+        childList: true, subtree: true, characterData: true, attributes: true,
+        attributeFilter: ["href", "aria-label", "style", "class", "hidden", "aria-hidden", "aria-disabled"],
+      });
+      menu.click();
+      check(observer.takeRecords());
+    });
   }
 }

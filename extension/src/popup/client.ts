@@ -2,7 +2,7 @@
 // options). Commands go over runtime.sendMessage; events arrive on a
 // reconnecting "amberfader-ui" port. Port lifetime does not pin the event
 // page, so on reconnect we always take a fresh state.get snapshot.
-import { PROTOCOL_VERSION } from "../protocol/types";
+import { BINDING_METHODS, PROTOCOL_VERSION } from "../protocol/types";
 import type {
   ErrorCode,
   EventMessage,
@@ -130,7 +130,7 @@ export class ProtocolClient {
     params: Record<string, unknown>,
   ): Promise<ResponseMessage> {
     const id = `ui-${(++this.reqSeq).toString(36)}-${Date.now().toString(36)}`;
-    const needsBinding = method.startsWith("player.") || method.startsWith("search.") || method.startsWith("browser.");
+    const needsBinding = BINDING_METHODS.has(method);
     const req: Record<string, unknown> = {
       protocolVersion: PROTOCOL_VERSION,
       kind: "request",
@@ -140,10 +140,13 @@ export class ProtocolClient {
     };
     if (this.sessionId) req.sessionId = this.sessionId;
     if (needsBinding && this.bindingToken) req.bindingToken = this.bindingToken;
+    const bindingAtDispatch = this.bindingToken;
+    const sessionAtDispatch = this.sessionId;
     const resp = await this.rawSend(req);
     // Learn binding tokens from responses too (select, state.get).
     const bt = (resp as { bindingToken?: unknown }).bindingToken;
-    if (typeof bt === "string") this.bindingToken = bt;
+    if (typeof bt === "string" && this.bindingToken === bindingAtDispatch &&
+        this.sessionId === sessionAtDispatch) this.bindingToken = bt;
     return resp;
   }
 
