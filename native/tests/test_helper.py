@@ -14,6 +14,7 @@ import time
 
 import pytest
 
+from amberfader import PROTOCOL_VERSION
 from amberfader.helper import BoundedBus, Helper
 from amberfader.protocol import FrameFeed, encode_frame
 
@@ -41,7 +42,7 @@ def test_invalid_protocol_diagnostics_do_not_include_queries(tmp_path, caplog):
     query = "private query " + "x" * 501
     helper = Helper(str(tmp_path / "control.sock"))
     helper._from_browser({
-        "protocolVersion": 1, "kind": "request", "id": "invalid-query",
+        "protocolVersion": PROTOCOL_VERSION, "kind": "request", "id": "invalid-query",
         "sessionId": "session", "bindingToken": "binding",
         "method": "search.songs", "params": {"query": query},
     })

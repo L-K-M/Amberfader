@@ -257,6 +257,27 @@ def test_invalid_snapshot_is_reported_as_failure(app, qapp):
     assert "invalid" in responses[0][2]["message"]
 
 
+def test_late_response_does_not_restore_an_old_binding(app, qapp):
+    sent = []
+    app._send = lambda value: sent.append(value) or True
+    def bind(session, token):
+        app._on_message({
+            "protocolVersion": 1, "kind": "event", "event": "binding",
+            "sessionId": session, "bindingToken": token, "data": {"status": "bound"},
+        })
+    bind("old-session", "old-token")
+    app.request("player.pause", {})
+    request_id = sent[-1]["id"]
+    bind("new-session", "new-token")
+    app._on_message({
+        "protocolVersion": 1, "kind": "response", "id": request_id, "ok": True,
+        "sessionId": "old-session", "bindingToken": "old-token", "result": {},
+    })
+    app.request("player.pause", {})
+    assert sent[-1]["sessionId"] == "new-session"
+    assert sent[-1]["bindingToken"] == "new-token"
+
+
 def test_foreign_first_frame_rejected(app, qapp):
     """A peer that opens with something that is not a hello is dropped."""
     conn = pysock.socket(pysock.AF_UNIX)

@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -33,6 +34,12 @@ MAX_PENDING = 64
 BINDING_METHOD_PREFIXES = ("player.", "search.", "browser.")
 
 
+class _BindingState(Enum):
+    UNKNOWN = auto()
+    BOUND = auto()
+    REVOKED = auto()
+
+
 class AmberfaderApp:
     """One running desktop instance: socket server + windows + pending calls.
 
@@ -54,6 +61,7 @@ class AmberfaderApp:
         self._pending: dict[str, dict[str, Any]] = {}
         self._session_id: str | None = None
         self._binding_token: str | None = None
+        self._binding_state = _BindingState.UNKNOWN
 
     # ---- lifecycle --------------------------------------------------------
 
@@ -110,7 +118,10 @@ class AmberfaderApp:
         timer: QTimer = QTimer(self.app)
         timer.setSingleShot(True)
         timer.timeout.connect(lambda r=rid, m=method: self._on_timeout(r, m))
-        self._pending[rid] = {"method": method, "timer": timer}
+        self._pending[rid] = {
+            "method": method, "timer": timer,
+            "binding": (self._session_id, self._binding_token),
+        }
         timer.start(deadline)
         if not self._send(msg):
             self._settle(rid, False, {"message": "Firefox bridge is not connected"})
@@ -143,6 +154,7 @@ class AmberfaderApp:
 
     def _on_helper(self, sock: FramedSocket) -> None:
         self._session_id = self._binding_token = None
+        self._binding_state = _BindingState.UNKNOWN
         self.conn = sock
         sock.messageReceived.connect(self._on_message)
         sock.disconnected.connect(self._on_helper_gone)
@@ -153,6 +165,7 @@ class AmberfaderApp:
     def _on_helper_gone(self) -> None:
         self.conn = None
         self._session_id = self._binding_token = None
+        self._binding_state = _BindingState.UNKNOWN
         for rid in list(self._pending):
             self._settle(rid, False, {"message": "Firefox bridge disconnected"})
         if self.window is not None:
@@ -167,14 +180,35 @@ class AmberfaderApp:
             return  # handled at server level
         if problems:
             return  # invalid peer traffic is dropped silently
+        learn_binding = True
+        if kind == "response":
+            entry = self._pending.get(msg.get("id"))
+            if entry is None:
+                return
+            current = (self._session_id, self._binding_token)
+            received = (msg.get("sessionId"), msg.get("bindingToken"))
+            # Responses can establish the first snapshot binding, but cannot
+            # replace a newer observation or revive an explicitly lost target.
+            learn_binding = (
+                entry["binding"] == current or received == current
+                or (self._binding_state is _BindingState.UNKNOWN
+                    and msg.get("sessionId") == self._session_id)
+            )
+            if not learn_binding and entry["method"] == "state.get":
+                self._settle(msg["id"], False, {
+                    "message": "Playback binding changed while reading state.",
+                })
+                return
         session_id = msg.get("sessionId")
-        if isinstance(session_id, str):
+        if learn_binding and isinstance(session_id, str):
             if self._session_id != session_id:
                 self._binding_token = None
+                self._binding_state = _BindingState.UNKNOWN
             self._session_id = session_id
         binding_token = msg.get("bindingToken")
-        if isinstance(binding_token, str):
+        if learn_binding and isinstance(binding_token, str) and binding_token:
             self._binding_token = binding_token
+            self._binding_state = _BindingState.BOUND
         if kind == "response":
             ok = bool(msg.get("ok"))
             payload = (
@@ -198,6 +232,7 @@ class AmberfaderApp:
                 )
             elif event == "binding" and data.get("status") != "bound":
                 self._binding_token = None
+                self._binding_state = _BindingState.REVOKED
                 self.window.set_connection("target", "disconnected", data.get("reason", ""))
                 if self.window._search is not None:
                     self.window._search.mark_stale()

@@ -104,6 +104,7 @@ export class ArtworkService {
     if (key !== this.currentRequestKey) {
       this.currentRequestKey = key;
       this.epoch += 1;
+      this.pendingRequest = null;
     }
     if (!allowedArtworkUrl(req.url)) return null;
     const cached = this.cache.get(req.artworkId);

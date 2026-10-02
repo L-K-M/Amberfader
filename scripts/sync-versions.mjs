@@ -36,6 +36,11 @@ function sync(path, re, render) {
 sync("package.json", /"version": "([^"]+)"/, (v) => `"version": "${v}"`);
 sync("pyproject.toml", /^version = "([^"]+)"/m, (v) => `version = "${v}"`);
 sync(
+  "uv.lock",
+  /\[\[package\]\]\nname = "amberfader"\nversion = "([^"]+)"/,
+  (v) => `[[package]]\nname = "amberfader"\nversion = "${v}"`,
+);
+sync(
   "native/amberfader/__init__.py",
   /^__version__ = "([^"]+)"/m,
   (v) => `__version__ = "${v}"`,

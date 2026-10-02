@@ -54,6 +54,8 @@ PYENV="$PREFIX/venv"
 case "$APP_MODE" in
   source) cd "$(dirname "$0")/.." ;;
   flatpak)
+    command -v "$PYTHON_BIN" >/dev/null 2>&1 || {
+      warn "--app flatpak needs '$PYTHON_BIN' on the host to write manifests"; exit 1; }
     flatpak info "$APP_ID" >/dev/null 2>&1 || {
       warn "Flatpak Amberfader is not installed ($APP_ID)"; exit 1; }
     ;;
@@ -172,7 +174,7 @@ fi
 
 # ---- flatpak ---------------------------------------------------------
 
-for id in "${DETECTED_FLATPAK_BROWSERS[@]}"; do
+for id in ${DETECTED_FLATPAK_BROWSERS[@]+"${DETECTED_FLATPAK_BROWSERS[@]}"}; do
   say "registering native host for Flatpak $id"
   FPDIR="$HOME/.var/app/$id/.mozilla/native-messaging-hosts"
   mkdir -p "$FPDIR"

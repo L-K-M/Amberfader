@@ -110,6 +110,18 @@ def test_existing_source_install_mode_still_registers_the_python_helper(install_
     assert 'flatpak run' not in helper.read_text()
 
 
+def test_missing_manifest_writer_fails_before_changing_the_installation(install_environment):
+    home, _, env = install_environment
+    result = subprocess.run(
+        ["bash", str(ROOT / "scripts/install-user"), "--app", "flatpak",
+         "--python", "missing-python"],
+        env=env, capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 1
+    assert "needs 'missing-python'" in result.stderr
+    assert not (home / ".local/share/amberfader").exists()
+
+
 def test_uninstall_removes_flatpak_registration_but_preserves_other_hosts(install_environment):
     home, _, env = install_environment
     env["TEST_BROWSER_FLATPAK"] = ZEN_ID

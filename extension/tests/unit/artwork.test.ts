@@ -84,8 +84,10 @@ describe("ArtworkService", () => {
     await service.fetchAsset(cached);
     const old = service.fetchAsset({ artworkId: "old", occurrenceId: "old-track", url: "https://lh3.googleusercontent.com/slow" });
     expect(await service.fetchAsset(cached)).not.toBeNull();
+    const repeatedCached = service.fetchAsset(cached);
     finish();
     expect(await old).toBeNull();
+    expect(await repeatedCached).toMatchObject({ artworkId: "cached", occurrenceId: "cached-track" });
   });
 
   it("downscales a full-size cover with the default browser decoder", async () => {
