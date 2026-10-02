@@ -10,6 +10,7 @@ import json
 import os
 import struct
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import MappingProxyType
@@ -18,6 +19,7 @@ from typing import Any
 from jsonschema import Draft202012Validator
 
 DEFAULT_FACE_ID = "amber-classic"
+BUNDLED_FACE_ERROR = "Bundled faces are unavailable. Reinstall Amberfader."
 FACE_FORMAT_VERSION = 1
 MAX_MANIFEST_BYTES = 64 * 1024
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
@@ -25,6 +27,11 @@ MAX_PACK_BYTES = 16 * 1024 * 1024
 MAX_IMAGE_DIMENSION = 2048
 MAX_USER_FACES = 64
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+PNG_HEADER = struct.Struct(">8sI4sII5BI")
+PNG_HEADER_BYTES = PNG_HEADER.size
+PNG_HEADER_CHUNK = b"IHDR"
+PNG_HEADER_DATA_BYTES = 13
+PACK_LIMIT_ERROR = "Face images exceed the 16 MiB pack limit"
 BUILTIN_DIRECTORY = Path(__file__).with_name("faces")
 Rect = tuple[int, int, int, int]
 
@@ -68,9 +75,11 @@ def _manifest(directory: Path) -> dict[str, Any]:
     path = directory / "face.json"
     if not path.resolve().is_relative_to(directory):
         raise FaceError("face.json must stay inside the face folder")
-    data = json.loads(_read_bounded(path, MAX_MANIFEST_BYTES))
-    schema = json.loads((BUILTIN_DIRECTORY / "schema.json").read_text(encoding="utf-8"))
-    problem = next(Draft202012Validator(schema).iter_errors(data), None)
+    try:
+        data = json.loads(_read_bounded(path, MAX_MANIFEST_BYTES))
+    except (ValueError, RecursionError) as exc:
+        raise FaceError(f"Invalid face.json: {exc}") from exc
+    problem = next(_validator(BUILTIN_DIRECTORY / "schema.json").iter_errors(data), None)
     if problem is not None:
         location = ".".join(str(part) for part in problem.absolute_path) or "face.json"
         # Do not echo potentially huge or malformed field values into the UI.
@@ -78,16 +87,33 @@ def _manifest(directory: Path) -> dict[str, Any]:
     return data
 
 
-def _image(directory: Path, name: str) -> tuple[bytes, tuple[int, int]]:
+@lru_cache(maxsize=1)
+def _validator(path: Path) -> Draft202012Validator:
+    # The schema is a bundled program resource, not part of an editable pack.
+    return Draft202012Validator(json.loads(path.read_text(encoding="utf-8")))
+
+
+def _image_path(directory: Path, name: str) -> Path:
     path = (directory / name).resolve()
     if not path.is_relative_to(directory):
         raise FaceError(f"{name} must stay inside the face folder")
-    data = _read_bounded(path, MAX_IMAGE_BYTES)
-    if len(data) < 33 or not data.startswith(PNG_SIGNATURE) or data[12:16] != b"IHDR":
+    return path
+
+
+def _png_dimensions(data: bytes, name: str) -> tuple[int, int]:
+    if len(data) < PNG_HEADER_BYTES:
         raise FaceError(f"{name} is not a PNG image")
-    width, height = struct.unpack(">II", data[16:24])
+    signature, length, kind, width, height, *_ = PNG_HEADER.unpack_from(data)
+    if signature != PNG_SIGNATURE or kind != PNG_HEADER_CHUNK or length != PNG_HEADER_DATA_BYTES:
+        raise FaceError(f"{name} is not a PNG image")
     if not (0 < width <= MAX_IMAGE_DIMENSION and 0 < height <= MAX_IMAGE_DIMENSION):
         raise FaceError(f"{name} exceeds the {MAX_IMAGE_DIMENSION} px image limit")
+    return width, height
+
+
+def _image(directory: Path, name: str) -> tuple[bytes, tuple[int, int]]:
+    data = _read_bounded(_image_path(directory, name), MAX_IMAGE_BYTES)
+    width, height = _png_dimensions(data, name)
     return data, (width, height)
 
 
@@ -122,26 +148,57 @@ def _check_layout(data: dict) -> None:
                 raise FaceError(f"{name} overlaps {other}")
 
 
+def _pack_manifest(directory: Path) -> tuple[dict[str, Any], list[str]]:
+    data = _manifest(directory)
+    _check_layout(data)
+    names = {data["background"]}
+    for states in data.get("buttons", {}).values():
+        names.update(states.values())
+    return data, sorted(names)
+
+
+def _check_background_size(size: list[int], image_size: tuple[int, int]) -> None:
+    if image_size not in (tuple(size), (size[0] * 2, size[1] * 2)):
+        raise FaceError("Background must match the face size at 1x or 2x")
+
+
+def _probe_face(directory: Path) -> FaceInfo:
+    """List validated metadata without buffering discarded PNG payloads."""
+    try:
+        directory = directory.resolve()
+        data, names = _pack_manifest(directory)
+        total_bytes = 0
+        dimensions = {}
+        for name in names:
+            with _image_path(directory, name).open("rb") as stream:
+                size = os.fstat(stream.fileno()).st_size
+                if size > MAX_IMAGE_BYTES:
+                    raise FaceError(f"{name} exceeds its {MAX_IMAGE_BYTES // 1024} KiB limit")
+                total_bytes += size
+                if total_bytes > MAX_PACK_BYTES:
+                    raise FaceError(PACK_LIMIT_ERROR)
+                dimensions[name] = _png_dimensions(stream.read(PNG_HEADER_BYTES), name)
+        _check_background_size(data["size"], dimensions[data["background"]])
+        return FaceInfo(data["id"], data["name"], data["author"], data["description"], directory)
+    except (OSError, ValueError, RecursionError, struct.error) as exc:
+        raise FaceError(str(exc)) from exc
+
+
 def load_face(directory: Path) -> Face:
     """Validate a pack again on use, including file confinement and budgets."""
     try:
         directory = directory.resolve()
-        data = _manifest(directory)
-        _check_layout(data)
-        names = {data["background"]}
-        for states in data.get("buttons", {}).values():
-            names.update(states.values())
+        data, names = _pack_manifest(directory)
         images = {}
         total_bytes = 0
-        for name in sorted(names):
+        for name in names:
             images[name] = _image(directory, name)
             total_bytes += len(images[name][0])
             if total_bytes > MAX_PACK_BYTES:
-                raise FaceError("Face images exceed the 16 MiB pack limit")
+                raise FaceError(PACK_LIMIT_ERROR)
         size = tuple(data["size"])
         image_size = images[data["background"]][1]
-        if image_size not in (size, (size[0] * 2, size[1] * 2)):
-            raise FaceError("Background must match the face size at 1x or 2x")
+        _check_background_size(data["size"], image_size)
 
         return Face(
             info=FaceInfo(data["id"], data["name"], data["author"], data["description"], directory),
@@ -198,9 +255,12 @@ class FaceLibrary:
     def refresh(self) -> None:
         self._catalog.clear()
         self._problems.clear()
-        for directory in sorted(BUILTIN_DIRECTORY.iterdir()):
-            if directory.is_dir():
-                self._discover(directory)
+        try:
+            for directory in sorted(BUILTIN_DIRECTORY.iterdir()):
+                if directory.is_dir():
+                    self._discover(directory)
+        except OSError as exc:
+            raise FaceError(BUNDLED_FACE_ERROR) from exc
         if not self._directory.exists():
             return
         try:
@@ -221,7 +281,7 @@ class FaceLibrary:
 
     def _discover(self, directory: Path) -> None:
         try:
-            info = load_face(directory).info
+            info = _probe_face(directory)
             if info.id in self._catalog:
                 raise FaceError(f"Duplicate face ID: {info.id}")
             self._catalog[info.id] = info
@@ -279,11 +339,12 @@ class FaceLibrary:
         target = root / face.info.id
         if target.exists() or target.is_symlink():
             raise FaceError(f"Face folder already exists: {face.info.id}")
-        if sum(p.is_dir() and not p.name.startswith(".") for p in root.iterdir()) >= MAX_USER_FACES:
-            raise FaceError(
-                f"Remove an installed face before adding another ({MAX_USER_FACES}-face limit)"
-            )
         try:
+            count = sum(p.is_dir() and not p.name.startswith(".") for p in root.iterdir())
+            if count >= MAX_USER_FACES:
+                raise FaceError(
+                    f"Remove an installed face before adding another ({MAX_USER_FACES}-face limit)"
+                )
             with TemporaryDirectory(prefix=".install-", dir=root) as temp:
                 staging = Path(temp) / face.info.id
                 staging.mkdir()
@@ -301,7 +362,10 @@ class FaceLibrary:
                 if installed.info.id != face.info.id:
                     raise FaceError("Face changed during installation; try again")
                 staging.rename(target)
-        except OSError as exc:
+        except (OSError, ValueError, RecursionError, struct.error) as exc:
             raise FaceError(f"Cannot install face: {exc}") from exc
         self.refresh()
-        return self._catalog[face.info.id]
+        info = self._catalog.get(face.info.id)
+        if info is None:
+            raise FaceError(f"Installed face failed to load: {face.info.id}")
+        return info

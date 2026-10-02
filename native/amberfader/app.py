@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from . import PROTOCOL_VERSION
+from .face_library import FaceError
 from .protocol import validate_message
 from .transport.local import (
     FramedSocket,
@@ -76,7 +77,11 @@ class AmberfaderApp:
             return False
         from .ui.main_window import MainWindow
 
-        self.window = MainWindow(self.request, scale=self._scale)
+        try:
+            self.window = MainWindow(self.request, scale=self._scale)
+        except FaceError:
+            self.server.close()
+            raise
         self.server.helperConnected.connect(self._on_helper)
         self.server.activationRequested.connect(self._on_activation)
         self.server.invalidPeer.connect(lambda s: s.socket.disconnectFromServer())
@@ -290,7 +295,12 @@ def main() -> int:  # pragma: no cover - exercised via entry point
         return 0
 
     amber = AmberfaderApp(path, scale=args.scale)
-    if not amber.start():
+    try:
+        started = amber.start()
+    except FaceError as exc:
+        print(f"amberfader: {exc}", file=sys.stderr)
+        return 2
+    if not started:
         print(f"amberfader: cannot listen on {path}", file=sys.stderr)
         return 2
     app.aboutToQuit.connect(amber.close)

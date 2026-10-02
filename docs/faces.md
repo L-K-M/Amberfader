@@ -45,6 +45,9 @@ Preferences live at `$XDG_CONFIG_HOME/amberfader/appearance.json`, normally
 `~/.config/amberfader/appearance.json`. If a saved face disappears or becomes
 invalid, the app reports the problem and returns to Amber Classic.
 
+The per-user uninstall script removes its installation prefix, including packs
+stored there. Damaged bundled faces report a reinstall error at startup.
+
 ## Create a plugin
 
 A face plugin is data, not executable Python. Its public contract is
@@ -134,6 +137,9 @@ disabled/pending control. Keyboard focus and pending indicators remain visible.
   No nested paths, remote URLs, or symlinks outside the pack.
 - Unsupported fields, overlapping/out-of-bounds controls, invalid images and
   transparent control regions are rejected. The face browser shows errors.
+
+Discovery reads metadata and PNG headers, not full image payloads. Selected
+faces and installation snapshots are loaded and validated again before use.
 
 Qt styles are generated from validated palette tokens. Packs cannot import
 stylesheets, load fonts, make network requests, or execute code. New format

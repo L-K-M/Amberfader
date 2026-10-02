@@ -5,11 +5,14 @@ import zlib
 
 import pytest
 
+import amberfader.face_library as face_module
 from amberfader.face_library import (
     BUILTIN_DIRECTORY,
     DEFAULT_FACE_ID,
+    MAX_IMAGE_BYTES,
     MAX_IMAGE_DIMENSION,
     MAX_MANIFEST_BYTES,
+    PNG_HEADER_BYTES,
     PNG_SIGNATURE,
     FaceError,
     FaceLibrary,
@@ -75,6 +78,8 @@ def test_bundled_catalog_is_complete_and_valid(library):
     lambda d: d["palette"].update(accent="red; background: url(https://example.org)"),
     lambda d: d["controls"].pop("like"),
     lambda d: d["controls"].update(extra=[0, 0, 30, 30]),
+    lambda d: d.update(font="unknown"),
+    lambda d: d.update(buttons={"play": {"hover": "background.png"}}),
     lambda d: d["controls"].update(like=[600, 100, 30, 30]),
     lambda d: d["controls"].update(art=[18, 52, 20, 20]),
     lambda d: d["controls"].update(like=d["controls"]["play"]),
@@ -198,3 +203,99 @@ def test_xdg_locations_are_respected(monkeypatch, tmp_path):
     assert library.ensure_directory() == tmp_path / "data" / "amberfader" / "faces"
     library.remember(DEFAULT_FACE_ID)
     assert (tmp_path / "config" / "amberfader" / "appearance.json").exists()
+
+
+def test_missing_builtin_directory_has_an_actionable_domain_error(monkeypatch, tmp_path):
+    monkeypatch.setattr(face_module, "BUILTIN_DIRECTORY", tmp_path / "missing")
+    with pytest.raises(FaceError, match="Reinstall Amberfader"):
+        FaceLibrary(tmp_path / "faces", tmp_path / "appearance.json")
+
+
+def test_manifest_changed_during_install_is_reported_and_not_published(pack, library, monkeypatch):
+    original = face_module._manifest
+    reads = 0
+
+    def changing_manifest(directory):
+        nonlocal reads
+        if directory == pack[0]:
+            reads += 1
+            if reads == 2:
+                (directory / "face.json").write_text("not json")
+        return original(directory)
+
+    monkeypatch.setattr(face_module, "_manifest", changing_manifest)
+    with pytest.raises(FaceError):
+        library.install(pack[0])
+    assert not library.ensure_directory().joinpath("my-face").exists()
+
+
+def test_install_directory_read_error_stays_inside_domain_contract(pack, library, monkeypatch):
+    root = library.ensure_directory()
+    original = type(root).iterdir
+
+    def fail_scan(path):
+        if path == root:
+            raise OSError("Face folder became unreadable")
+        return original(path)
+
+    monkeypatch.setattr(type(root), "iterdir", fail_scan)
+    with pytest.raises(FaceError, match="unreadable"):
+        library.install(pack[0])
+
+
+def test_discovery_reads_headers_instead_of_image_payloads(pack, library, monkeypatch):
+    library.install(pack[0])
+    original_open = type(pack[0]).open
+    image_reads = []
+
+    class CountedImage:
+        def __init__(self, stream):
+            self._stream = stream
+
+        def __enter__(self):
+            self._stream.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            return self._stream.__exit__(*args)
+
+        def fileno(self):
+            return self._stream.fileno()
+
+        def read(self, size=-1):
+            data = self._stream.read(size)
+            image_reads.append(len(data))
+            return data
+
+    def counted_open(path, *args, **kwargs):
+        stream = original_open(path, *args, **kwargs)
+        return CountedImage(stream) if path.suffix == ".png" else stream
+
+    monkeypatch.setattr(type(pack[0]), "open", counted_open)
+    library.refresh()
+    assert image_reads
+    assert max(image_reads) <= PNG_HEADER_BYTES
+    assert "my-face" in {face.id for face in library.faces}
+
+
+def test_disappearing_installed_manifest_reports_domain_error(pack, library, monkeypatch):
+    original = library.refresh
+    target = library.ensure_directory() / "my-face"
+
+    def refreshing():
+        if target.exists():
+            (target / "face.json").unlink()
+        original()
+
+    monkeypatch.setattr(library, "refresh", refreshing)
+    with pytest.raises(FaceError, match="Installed face"):
+        library.install(pack[0])
+
+
+def test_header_only_discovery_still_rejects_image_budget_violations(pack, library):
+    info = library.install(pack[0])
+    with (info.source / "background.png").open("r+b") as stream:
+        stream.truncate(MAX_IMAGE_BYTES + 1)
+    library.refresh()
+    assert "my-face" not in {face.id for face in library.faces}
+    assert any("limit" in problem for problem in library.problems)

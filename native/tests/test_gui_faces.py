@@ -1,6 +1,8 @@
 """All faces retain command guards, art, search sessions and scaling."""
 import base64
 import json
+import subprocess
+import sys
 
 import pytest
 
@@ -257,3 +259,52 @@ def test_close_player_closes_auxiliary_windows_without_commands(themed):
     assert not window._cover_window.isVisible()
     assert not window._search.isVisible()
     assert sent == []
+
+
+def test_broken_default_face_has_reinstall_diagnostic(qapp, tmp_path, monkeypatch):
+    library = FaceLibrary(tmp_path / "faces", tmp_path / "appearance.json")
+
+    def broken(_):
+        raise FaceError("Default face damaged")
+
+    monkeypatch.setattr(library, "load", broken)
+    with pytest.raises(FaceError, match="Reinstall Amberfader"):
+        MainWindow(lambda *_: None, faces=library)
+
+
+def test_cli_reports_broken_face_install_and_cleans_socket(tmp_path):
+    socket = tmp_path / "control.sock"
+    process = subprocess.run([
+        sys.executable, "-c", """
+import sys
+from pathlib import Path
+import amberfader.face_library as faces
+from amberfader.app import main
+faces.BUILTIN_DIRECTORY = Path(sys.argv[1])
+sys.argv = ["amberfader", "--socket", sys.argv[2]]
+raise SystemExit(main())
+""", str(tmp_path / "missing-faces"), str(socket),
+    ], capture_output=True, text=True, timeout=15)
+    assert process.returncode == 2
+    assert "Reinstall Amberfader" in process.stderr
+    assert "Traceback" not in process.stderr
+    assert not socket.exists()
+
+
+def test_deleted_face_selection_is_reported_by_picker_without_false_success(themed, pack):
+    window, library, sent = themed
+    info = library.install(pack[0])
+    window.open_faces()
+    dialog = window._faces_window
+    row = next(
+        index for index in range(dialog._list.count())
+        if dialog._list.item(index).data(Qt.ItemDataRole.UserRole) == info.id
+    )
+    dialog._list.setCurrentRow(row)
+    (info.source / "face.json").unlink()
+    dialog._apply.click()
+    assert "face.json" in dialog._status.text()
+    assert "Face saved" not in dialog._status.text()
+    assert window._face_id == DEFAULT_FACE_ID
+    assert library.preferred_id() == DEFAULT_FACE_ID
+    assert not sent

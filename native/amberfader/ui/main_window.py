@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..face_library import DEFAULT_FACE_ID, Face, FaceError, FaceLibrary
+from ..face_library import BUNDLED_FACE_ERROR, DEFAULT_FACE_ID, Face, FaceError, FaceLibrary
 from .face_surface import (
     CoverLabel,
     ElidedLabel,
@@ -138,8 +138,11 @@ class MainWindow(QMainWindow):
             artwork = prepare_face(face)
         except FaceError as exc:
             initial_error = f"Saved face could not load: {exc}. Using Amber Classic."
-            face = self._faces.load(DEFAULT_FACE_ID)
-            artwork = prepare_face(face)
+            try:
+                face = self._faces.load(DEFAULT_FACE_ID)
+                artwork = prepare_face(face)
+            except FaceError as default_error:
+                raise FaceError(BUNDLED_FACE_ERROR) from default_error
         self._apply_face(face, artwork)
 
         # wiring
