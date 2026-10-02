@@ -35,6 +35,10 @@ BINDING_METHOD_PREFIXES = ("player.", "search.", "browser.")
 UNBOUND_SEARCH_METHODS = frozenset(("search.history", "search.clearHistory"))
 
 
+def _requires_binding(method: str) -> bool:
+    return method.startswith(BINDING_METHOD_PREFIXES) and method not in UNBOUND_SEARCH_METHODS
+
+
 class _BindingState(Enum):
     UNKNOWN = auto()
     BOUND = auto()
@@ -91,9 +95,7 @@ class AmberfaderApp:
     def request(self, method: str, params: dict) -> None:
         if self.window is None:
             return
-        needs_binding = (
-            method.startswith(BINDING_METHOD_PREFIXES) and method not in UNBOUND_SEARCH_METHODS
-        )
+        needs_binding = _requires_binding(method)
         if needs_binding and (self._session_id is None or self._binding_token is None):
             self.window.route_response(method, False, {
                 "message": "Playback tab is not connected. Reconnect in the extension options.",
@@ -198,9 +200,7 @@ class AmberfaderApp:
                     and msg.get("sessionId") == self._session_id)
             )
             method = entry["method"]
-            bound_request = (
-                method.startswith(BINDING_METHOD_PREFIXES) and method not in UNBOUND_SEARCH_METHODS
-            )
+            bound_request = _requires_binding(method)
             if not learn_binding and (method == "state.get" or bound_request):
                 self._settle(msg["id"], False, {
                     "message": "Playback binding changed while the request was pending.",
@@ -238,11 +238,22 @@ class AmberfaderApp:
                     data.get("component", ""), data.get("status", ""), data.get("reason", "")
                 )
             elif event == "binding":
+                if data.get("status") != "bound":
+                    self._binding_token = None
+                    self._binding_state = _BindingState.REVOKED
+
+                current = (self._session_id, self._binding_token)
+                # Settle old UI guards before a new request can start. Later
+                # replies for these IDs cannot clear a newer command's busy flag.
+                for rid, entry in list(self._pending.items()):
+                    if _requires_binding(entry["method"]) and entry["binding"] != current:
+                        self._settle(rid, False, {
+                            "message": "Playback binding changed while the request was pending.",
+                        })
+
                 if data.get("status") == "bound":
                     self.window.binding_changed()
                 else:
-                    self._binding_token = None
-                    self._binding_state = _BindingState.REVOKED
                     self.window.set_connection("target", "disconnected", data.get("reason", ""))
 
     def _on_activation(self, sock: FramedSocket) -> None:

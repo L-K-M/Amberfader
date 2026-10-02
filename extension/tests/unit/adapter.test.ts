@@ -372,4 +372,29 @@ describe("YouTubeMusicAdapter (synthetic fixture)", () => {
       vi.useRealTimers();
     }
   });
+
+  it("ignores animation-only style changes while still observing like state changes", async () => {
+    mountPlayer();
+    document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/like-control-2026-10-02.html", "utf8"));
+    vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() =>
+      Object.assign([new DOMRect(0, 0, 24, 24)], { item: () => null }));
+    const states: AdapterPlayerState[] = [];
+    const adapter = new YouTubeMusicAdapter();
+    adapter.onState((state) => states.push(state));
+    await adapter.start();
+    try {
+      const bar = document.querySelector("ytmusic-player-bar") as HTMLElement;
+      const initialCount = states.length;
+      for (let frame = 0; frame < 60; frame += 1) {
+        bar.style.setProperty("--progress", String(frame));
+        await Promise.resolve();
+      }
+      expect(states).toHaveLength(initialCount);
+      document.querySelector("#button-shape-like button")!.setAttribute("aria-pressed", "true");
+      await Promise.resolve();
+      expect(states.at(-1)?.liked).toBe(true);
+    } finally {
+      adapter.stop();
+    }
+  });
 });

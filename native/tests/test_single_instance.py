@@ -300,9 +300,9 @@ def test_late_search_results_do_not_restore_radio_actions_on_a_new_binding(app, 
     bind("old-token")
     app.request("search.songs", {"query": "query"})
     request_id = sent[-1]["id"]
-    bind("new-token")
     responses = []
     app.window.route_response = lambda method, ok, payload: responses.append((method, ok, payload))
+    bind("new-token")
     app._on_message({
         "protocolVersion": 1, "kind": "response", "id": request_id, "ok": True,
         "sessionId": "session", "bindingToken": "old-token",
@@ -310,6 +310,41 @@ def test_late_search_results_do_not_restore_radio_actions_on_a_new_binding(app, 
     })
     assert responses[0][1] is False
     assert "binding changed" in responses[0][2]["message"].lower()
+    assert len(responses) == 1
+
+
+def test_old_search_response_cannot_settle_a_new_search_after_rebinding(app, qapp):
+    sent = []
+    app._send = lambda value: sent.append(value) or True
+    def bind(token):
+        app._on_message({
+            "protocolVersion": 1, "kind": "event", "event": "binding",
+            "sessionId": "session", "bindingToken": token, "data": {"status": "bound"},
+        })
+    bind("old-token")
+    app.window.open_search()
+    search = app.window._search
+    search._q.setText("old query")
+    search._submit()
+    old_id = sent[-1]["id"]
+    bind("new-token")
+    search._q.setText("new query")
+    search._submit()
+    new_id = sent[-1]["id"]
+    app._on_message({
+        "protocolVersion": 1, "kind": "response", "id": old_id, "ok": True,
+        "sessionId": "session", "bindingToken": "old-token",
+        "result": {"searchToken": "old-search", "results": [], "complete": True},
+    })
+    assert search._busy
+    assert search._status.text() == "Searching…"
+    app._on_message({
+        "protocolVersion": 1, "kind": "response", "id": new_id, "ok": True,
+        "sessionId": "session", "bindingToken": "new-token",
+        "result": {"searchToken": "new-search", "results": [], "complete": True},
+    })
+    assert not search._busy
+    assert search._token == "new-search"
 
 
 def test_foreign_first_frame_rejected(app, qapp):

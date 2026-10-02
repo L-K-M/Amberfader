@@ -311,6 +311,8 @@ def test_new_binding_disables_heart_and_mix_until_fresh_state(window):
     w.apply_state(_state(liked=True))
     w.open_search()
     _load_results(w._search)
+    w._search._list.setCurrentItem(w._search._list.item(0))
+    assert w._search._btn_radio.isEnabled()
     w.binding_changed()
     assert not w._like.isEnabled()
     assert w._like.text() == "♡?"

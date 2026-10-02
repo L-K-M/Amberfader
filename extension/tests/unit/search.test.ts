@@ -234,8 +234,37 @@ describe("SiteSearch", () => {
     rows[0]!.querySelector("button")!.addEventListener("click", () => {
       document.body.insertAdjacentHTML("beforeend", mixMenu().replaceAll("Start mix", "Other action"));
     });
-    expect(await search.prepareRadio(token, result.results[0]!.resultId, 500)).toMatchObject({
+    expect(await search.prepareRadio(token, result.results[0]!.resultId, 30)).toMatchObject({
       ok: false, code: "unsupported_operation",
     });
+  });
+
+  it("waits for a progressively rendered mix item and its endpoint", async () => {
+    const { search, token, rows, result } = await radioSearch();
+    rows[0]!.querySelector("button")!.addEventListener("click", () => {
+      document.body.insertAdjacentHTML("beforeend", mixMenu());
+      const mix = document.querySelector("[aria-label='Start mix']")!;
+      mix.remove();
+      setTimeout(() => {
+        const link = mix.querySelector("a")!;
+        const href = link.getAttribute("href")!;
+        link.removeAttribute("href");
+        document.querySelector("ytmusic-menu-popup-renderer #items")!.append(mix);
+        setTimeout(() => link.setAttribute("href", href), 0);
+      }, 0);
+    });
+    expect(await search.prepareRadio(token, result.results[0]!.resultId, 500)).toMatchObject({
+      ok: true, playlistId: "fixture-mix",
+    });
+  });
+
+  it("does not advertise mixes for a disabled action menu", async () => {
+    pageShell();
+    const search = new SiteSearch(document);
+    const { promise } = search.search("query", 500);
+    addRows(1);
+    document.querySelector("ytmusic-responsive-list-item-renderer")!.insertAdjacentHTML("beforeend", `
+      <ytmusic-menu-renderer><button aria-label="Action menu" aria-disabled="true"></button></ytmusic-menu-renderer>`);
+    expect((await promise).results[0]?.radioSupported).toBe(false);
   });
 });

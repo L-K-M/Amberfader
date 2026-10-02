@@ -254,7 +254,8 @@ export class YouTubeMusicAdapter implements SiteAdapter {
         subtree: true,
         characterData: true,
         attributes: true,
-        attributeFilter: ["aria-label", "aria-pressed", "aria-disabled", "aria-hidden", "disabled", "hidden", "style", "title", "class", "value"],
+        // Animation styles are sampled by reconciliation, not every frame.
+        attributeFilter: ["aria-label", "aria-pressed", "aria-disabled", "aria-hidden", "disabled", "hidden", "title", "class", "value"],
       });
     }
   }

@@ -308,6 +308,7 @@ export class SiteSearch {
       thumb instanceof HTMLImageElement && thumb.src
         ? cleanId(thumb.src.slice(-64))
         : null;
+    const menu = queryFirst(el, SEARCH.rowActionMenu);
 
     return {
       element: el,
@@ -317,7 +318,7 @@ export class SiteSearch {
       kind,
       artworkId,
       supported: kind === "song" && playable,
-      radioSupported: kind === "song" && queryFirst(el, SEARCH.rowActionMenu) !== null,
+      radioSupported: kind === "song" && menu instanceof HTMLElement && isEnabledControl(menu),
     };
   }
 
@@ -382,6 +383,7 @@ export class SiteSearch {
     return new Promise((resolve) => {
       const freshPopups = new Set<Element>();
       let settled = false;
+      let sawFreshMenu = false;
       const finish = (result: RadioPreparation) => {
         if (settled) return;
         settled = true;
@@ -410,6 +412,7 @@ export class SiteSearch {
         if (visible.length !== 1 || !freshPopups.has(visible[0]!)) return;
 
         const popup = visible[0]!;
+        sawFreshMenu = true;
         const items = [...popup.querySelectorAll(RADIO.items)];
         if (items.length === 0) return;
 
@@ -417,7 +420,7 @@ export class SiteSearch {
         const mix = mixItems.length === 1 ? mixItems[0] : null;
         const link = mix?.querySelector(RADIO.endpoint);
         if (!mix || !isVisibleControl(mix) || !isEnabledControl(mix) || !(link instanceof HTMLAnchorElement)) {
-          finish({ ok: false, code: "unsupported_operation", error: "This result has no available Start mix action" });
+          // Items, endpoint attributes and enabled state can arrive separately.
           return;
         }
         const target = new URL(link.href, this.doc.baseURI);
@@ -442,7 +445,9 @@ export class SiteSearch {
       };
       const observer = new MutationObserver(check);
       const timer = setTimeout(() => finish({
-        ok: false, code: "timeout", error: "The result menu did not expose a fresh mix action before the deadline",
+        ok: false, code: sawFreshMenu ? "unsupported_operation" : "timeout",
+        error: sawFreshMenu ? "Start mix was unavailable before the deadline"
+          : "The result menu did not expose a fresh mix action before the deadline",
       }), deadlineMs);
       this.cancelRadio = () => finish({ ok: false, code: "stale_result", error: "Search superseded while opening the mix menu" });
       observer.observe(this.doc.body, {
