@@ -15,11 +15,11 @@
 #                     you if it's missing; the extension keeps working without
 #                     native mode either way).
 #
-# Usage: scripts/install-user [--firefox auto|native|flatpak|both] [--prefix DIR]
-#                             [--python BIN] [--no-venv]
-#   auto (default) registers every detected Firefox packaging.
+# Usage: scripts/install-user [--app source|flatpak] [--firefox auto|native|flatpak|both]
+#                             [--prefix DIR] [--python BIN] [--no-venv]
+#   auto (default) detects Firefox and Zen. --app flatpak registers an installed
+#   Flatpak app without installing Python or replacing its desktop launcher.
 set -euo pipefail
-cd "$(dirname "$0")/.."
 
 PREFIX="$HOME/.local/share/amberfader"
 FIREFOX_MODE="auto"
@@ -27,14 +27,19 @@ PYTHON_BIN="python3"
 NO_VENV=0
 HOST_NAME="amberfader"
 ADDON_ID="amberfader@ch.lkmc"
+APP_ID="ch.lkmc.amberfader"
+APP_MODE="source"
+FIREFOX_FLATPAK_ID="org.mozilla.firefox"
+FLATPAK_BROWSER_IDS=("$FIREFOX_FLATPAK_ID" "app.zen_browser.zen" "io.github.zen_browser.zen")
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --app) APP_MODE="${2:?}"; shift 2 ;;
     --firefox) FIREFOX_MODE="${2:?}"; shift 2 ;;
     --prefix) PREFIX="${2:?}"; shift 2 ;;
     --python) PYTHON_BIN="${2:?}"; shift 2 ;;
     --no-venv) NO_VENV=1; shift ;;
-    -h|--help) sed -n '2,20p' "$0" | sed 's/^# \?//'; exit 0 ;;
+    -h|--help) sed -n '2,21p' "$0" | sed 's/^# \?//'; exit 0 ;;
     *) echo "!! unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -46,7 +51,18 @@ note() { echo "-- $*"; }
 # ---- python environment ---------------------------------------------------
 
 PYENV="$PREFIX/venv"
-if [[ $NO_VENV -eq 0 ]]; then
+case "$APP_MODE" in
+  source) cd "$(dirname "$0")/.." ;;
+  flatpak)
+    command -v "$PYTHON_BIN" >/dev/null 2>&1 || {
+      warn "--app flatpak needs '$PYTHON_BIN' on the host to write manifests"; exit 1; }
+    flatpak info "$APP_ID" >/dev/null 2>&1 || {
+      warn "Flatpak Amberfader is not installed ($APP_ID)"; exit 1; }
+    ;;
+  *) warn "--app must be source|flatpak"; exit 2 ;;
+esac
+
+if [[ $APP_MODE == source && $NO_VENV -eq 0 ]]; then
   if command -v uv >/dev/null 2>&1; then
     say "creating venv with uv ($PYENV)"
     uv venv "$PYENV" --python "$PYTHON_BIN" >/dev/null
@@ -59,7 +75,7 @@ if [[ $NO_VENV -eq 0 ]]; then
   say "installing amberfader[gui] into the venv"
   $UV_PIP --quiet ".[gui]"
   PYTHON="$PYENV/bin/python"
-else
+elif [[ $APP_MODE == source ]]; then
   PYTHON="$PYTHON_BIN"
   "$PYTHON" -c 'import amberfader, jsonschema' 2>/dev/null || {
     warn "--no-venv but the amberfader package is not importable by $PYTHON"; exit 1; }
@@ -70,18 +86,32 @@ fi
 BINDIR="$PREFIX/bin"
 mkdir -p "$BINDIR"
 
-cat > "$BINDIR/amberfader-helper" <<EOF
+if [[ $APP_MODE == flatpak ]]; then
+  cat > "$BINDIR/amberfader-helper" <<EOF
+#!/bin/sh
+exec flatpak run --command=amberfader-helper "$APP_ID" "\$@"
+EOF
+  cat > "$BINDIR/amberfader" <<EOF
+#!/bin/sh
+exec flatpak run "$APP_ID" "\$@"
+EOF
+  if [[ -n ${XDG_RUNTIME_DIR:-} ]]; then
+    mkdir -p "$XDG_RUNTIME_DIR/$HOST_NAME"
+    chmod 700 "$XDG_RUNTIME_DIR/$HOST_NAME"
+  fi
+else
+  cat > "$BINDIR/amberfader-helper" <<EOF
 #!/bin/sh
 exec "$PYTHON" -m amberfader.helper "\$@"
 EOF
-cat > "$BINDIR/amberfader" <<EOF
+  cat > "$BINDIR/amberfader" <<EOF
 #!/bin/sh
 exec "$PYTHON" -m amberfader.app "\$@"
 EOF
+fi
 cat > "$BINDIR/amberfader-helper-flatpak" <<EOF
 #!/bin/sh
-# Runs inside the Flatpak sandbox; the helper itself must live on the host so
-# it can reach the host-side control socket in \$XDG_RUNTIME_DIR.
+# Re-enter the host; its launcher chooses the source helper or Flatpak app.
 exec flatpak-spawn --host "$BINDIR/amberfader-helper" "\$@"
 EOF
 chmod +x "$BINDIR/amberfader" "$BINDIR/amberfader-helper" "$BINDIR/amberfader-helper-flatpak"
@@ -94,64 +124,84 @@ have_native_firefox() {
   [[ -d "$HOME/.mozilla" ]] && return 0
   return 1
 }
-have_flatpak_firefox() {
-  flatpak info org.mozilla.firefox >/dev/null 2>&1 && return 0
-  [[ -d "$HOME/.var/app/org.mozilla.firefox" ]] && return 0
+have_native_zen() {
+  command -v zen >/dev/null 2>&1 && return 0
+  [[ -d "$HOME/.zen" || -d "$HOME/.config/zen" ]] && return 0
   return 1
 }
 
-DO_NATIVE=0; DO_FLATPAK=0
+DO_NATIVE=0
+DETECTED_FLATPAK_BROWSERS=()
 case "$FIREFOX_MODE" in
   auto)
-    have_native_firefox && DO_NATIVE=1
-    have_flatpak_firefox && DO_FLATPAK=1
-    if [[ $DO_NATIVE -eq 0 && $DO_FLATPAK -eq 0 ]]; then
-      warn "no Firefox installation detected; registering the deb/rpm manifest anyway"
+    if have_native_firefox || have_native_zen; then DO_NATIVE=1; fi
+    for id in "${FLATPAK_BROWSER_IDS[@]}"; do
+      if flatpak info "$id" >/dev/null 2>&1 || [[ -d "$HOME/.var/app/$id" ]]; then
+        DETECTED_FLATPAK_BROWSERS+=("$id")
+      fi
+    done
+    if [[ $DO_NATIVE -eq 0 && ${#DETECTED_FLATPAK_BROWSERS[@]} -eq 0 ]]; then
+      warn "no Firefox or Zen installation detected; registering the native manifest anyway"
       DO_NATIVE=1
     fi
     ;;
   native) DO_NATIVE=1 ;;
-  flatpak) DO_FLATPAK=1 ;;
-  both) DO_NATIVE=1; DO_FLATPAK=1 ;;
+  flatpak) DETECTED_FLATPAK_BROWSERS=("$FIREFOX_FLATPAK_ID") ;;
+  both) DO_NATIVE=1; DETECTED_FLATPAK_BROWSERS=("$FIREFOX_FLATPAK_ID") ;;
   *) warn "--firefox must be auto|native|flatpak|both"; exit 2 ;;
 esac
 
 write_manifest() { # target_dir helper_path
   mkdir -p "$1"
-  cat > "$1/$HOST_NAME.json" <<EOF
-{
-  "name": "$HOST_NAME",
-  "description": "Amberfader native messaging host",
-  "path": "$2",
-  "type": "stdio",
-  "allowed_extensions": ["$ADDON_ID"]
-}
-EOF
+  "$PYTHON_BIN" - "$1/$HOST_NAME.json" "$2" "$HOST_NAME" "$ADDON_ID" <<'PY'
+import json
+import sys
+with open(sys.argv[1], "w", encoding="utf-8") as output:
+    json.dump({"name": sys.argv[3], "description": "Amberfader native messaging host",
+               "path": sys.argv[2], "type": "stdio", "allowed_extensions": [sys.argv[4]]},
+              output, indent=2)
+    output.write("\n")
+PY
   note "wrote $1/$HOST_NAME.json"
 }
 
 # ---- deb/rpm ---------------------------------------------------------
 
 if [[ $DO_NATIVE -eq 1 ]]; then
-  say "registering native host for deb/rpm Firefox"
+  say "registering native host for native Firefox/Zen"
   write_manifest "$HOME/.mozilla/native-messaging-hosts" "$BINDIR/amberfader-helper"
 fi
 
 # ---- flatpak ---------------------------------------------------------
 
-if [[ $DO_FLATPAK -eq 1 ]]; then
-  say "registering native host for Flatpak Firefox"
-  FPDIR="$HOME/.var/app/org.mozilla.firefox/.mozilla/native-messaging-hosts"
-  write_manifest "$FPDIR" "$BINDIR/amberfader-helper-flatpak"
-  if flatpak info --show-permissions org.mozilla.firefox 2>/dev/null \
-       | grep -q 'org.freedesktop.Flatpak'; then
+for id in ${DETECTED_FLATPAK_BROWSERS[@]+"${DETECTED_FLATPAK_BROWSERS[@]}"}; do
+  say "registering native host for Flatpak $id"
+  FPDIR="$HOME/.var/app/$id/.mozilla/native-messaging-hosts"
+  mkdir -p "$FPDIR"
+  # Gecko searches .mozilla even when Zen's profile is .zen. Place the
+  # launcher in that persisted subtree so the browser can execute it.
+  cp "$BINDIR/amberfader-helper-flatpak" "$FPDIR/amberfader-helper"
+  write_manifest "$FPDIR" "$HOME/.mozilla/native-messaging-hosts/amberfader-helper"
+  if flatpak info --show-permissions "$id" 2>/dev/null \
+        | grep -q 'org.freedesktop.Flatpak'; then
     note "flatpak-spawn permission present"
   else
-    warn "Flatpak Firefox lacks the org.freedesktop.Flatpak talk permission."
+    warn "Flatpak $id lacks the org.freedesktop.Flatpak talk permission."
     warn "Native mode cannot reach the host helper until you run:"
-    warn "  flatpak override --user org.mozilla.firefox --talk-name=org.freedesktop.Flatpak"
+    warn "  flatpak override --user $id --talk-name=org.freedesktop.Flatpak --persist=.mozilla"
     warn "The extension-only player keeps working without it."
   fi
+  if [[ $id != "$FIREFOX_FLATPAK_ID" ]]; then
+    note "Zen must persist Gecko's native-host directory. Run:"
+    note "  flatpak override --user $id --persist=.mozilla --talk-name=org.freedesktop.Flatpak"
+    note "Restart Zen after changing its Flatpak permissions."
+  fi
+done
+
+if [[ $APP_MODE == flatpak ]]; then
+  say "registration complete"
+  note "Restart Amberfader, then press Reconnect in the extension options."
+  exit 0
 fi
 
 # ---- desktop entry ----------------------------------------------------

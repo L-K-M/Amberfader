@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > LLM disclosure: This codebase was written with substantial help from large language models: AI coding agents working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
 
-**Latest release:** v<!-- version -->0.1.4<!-- /version --> · [Download](https://github.com/L-K-M/Amberfader/releases/latest)
+**Latest release:** v<!-- version -->0.1.5<!-- /version --> · [Download](https://github.com/L-K-M/Amberfader/releases/latest)
 
 A compact classic-style remote control for YouTube Music running in Firefox,
 inspired by the small focused interfaces of Audion and classic Winamp.
@@ -56,3 +56,23 @@ scripts/uninstall-user          # remove app files (keeps preferences unless --p
 
 See [`AGENTS.md`](AGENTS.md) for conventions and [`docs/compatibility.md`](docs/compatibility.md)
 for the tested-environment record.
+
+## Connect an installed Flatpak app
+
+Installing the app does not register its helper with your browser. Run the
+bundled installer on the host:
+
+```sh
+bash -o pipefail -c 'flatpak run --command=cat ch.lkmc.amberfader /app/share/amberfader/install-user | bash -s -- --app flatpak'
+```
+
+It detects native and Flatpak Firefox/Zen. For Flatpak browsers, follow any
+printed permission command and restart the browser. Restart Amberfader, then
+enable native mode or press **Reconnect** in the extension options.
+
+From a checkout, use `scripts/install-user --app flatpak` instead. This uses
+the installed app's helper without creating another Python environment.
+
+The native-mode section reports helper errors, including missing registration.
+For missing artwork, run **Run probes** and share the artwork host list; image
+permissions are added only after the live origin is captured.

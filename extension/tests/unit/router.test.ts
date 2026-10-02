@@ -126,6 +126,18 @@ describe("Router", () => {
     expect(resp.ok).toBe(false);
   });
 
+  it("accepts native diagnostics from an extension controller tab, not site content", async () => {
+    const { router, fake } = await makeRouter();
+    const notice = { component: "helper", status: "disconnected", reason: "No such native application" };
+    const message = { scope: "amberfader-internal", type: "native.status", notice };
+    await router.onInternalMessage(message, contentSender(7));
+    expect(fake.storage.nativeConnection).toBeUndefined();
+    await router.onInternalMessage(message, {
+      tab: { id: 20 }, frameId: 0, url: fake.api.runtime.getURL("controller.html"),
+    });
+    expect(fake.storage.nativeConnection).toEqual(notice);
+  });
+
   it("lists targets and auto-selects only a single unambiguous tab", async () => {
     const { router, fake } = await makeRouter();
     fake.tabsList = [

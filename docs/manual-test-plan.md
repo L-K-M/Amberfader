@@ -36,6 +36,18 @@ save the report. Verify:
 - [ ] Deny YouTube Music site access. The player shows an actionable connection
       error rather than waiting indefinitely. Regrant access and reopen it.
 - [ ] GUI shows artwork, title, artist, album for the playing track.
+- [ ] Artwork downloads slower than a position sample still finish. Changing
+      tracks or switching to a cached cover never displays an older result.
+- [ ] **Run probes** completes and **Download report** saves readable JSON in
+      Firefox/Zen. Record the actual artwork host before granting image access.
+- [ ] After Flatpak installation, run the bundled host-side installer. Verify
+      both GUI-first and browser-first startup share the same control socket.
+- [ ] Native mode reports a missing host or sandbox permission in the options
+      rather than implying the desktop connection is healthy.
+- [ ] Launch from Discover and the desktop menu, then launch again. The second
+      launch raises the existing window only after an activation acknowledgement.
+- [ ] Native app opened during paused playback shows the snapshot immediately;
+      play/pause requests carry the current session and binding token.
 - [ ] Play, pause, previous, next each act exactly once per click and report
       honest failures (no silent double-fire, no fake success).
 - [ ] Seek clamps to the seekable interval; a seek issued for a previous

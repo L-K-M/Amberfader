@@ -15,8 +15,8 @@ finish-args:
   - --socket=fallback-x11
   - --device=dri
   # The control socket lives in the host's per-user runtime dir; the GUI must
-  # see exactly this subtree to reach the helper channel. Nothing broader.
-  - --filesystem=xdg-run/amberfader
+  # see the same subtree even when it did not exist before first launch.
+  - --filesystem=xdg-run/amberfader:create
 modules:
   - name: amberfader
     buildsystem: simple

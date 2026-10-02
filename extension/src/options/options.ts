@@ -2,6 +2,8 @@
 // a user gesture — all permission UI is button-driven. Diagnostic output is
 // redacted: versions, states, error codes — never page content or queries.
 import { PROTOCOL_VERSION } from "../protocol/types";
+import type { ConnectionEventData } from "../protocol/types";
+import { PROBE_REPORT_VERSION } from "../protocol/internal";
 
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -35,13 +37,19 @@ async function refreshPermissions(): Promise<void> {
   markBtn($<HTMLButtonElement>("btn-native"), native, "nativeMessaging (desktop app)");
   markBtn($<HTMLButtonElement>("btn-hideperm"), hide, "tabHide (hide tabs)");
 
-  const { nativeEnabled } = (await browser.storage.local.get("nativeEnabled")) as {
+  const { nativeEnabled, nativeConnection } = (await browser.storage.local.get(
+    ["nativeEnabled", "nativeConnection"],
+  )) as {
     nativeEnabled?: boolean;
+    nativeConnection?: ConnectionEventData;
   };
   const status = $("native-status");
   const toggle = $<HTMLButtonElement>("btn-native-toggle");
   if (native && nativeEnabled) {
-    status.textContent = "Native mode is ON — a hidden controller tab owns the desktop connection.";
+    const connection = nativeConnection
+      ? `${nativeConnection.component}: ${nativeConnection.status}${nativeConnection.reason ? `. ${nativeConnection.reason}` : ""}`
+      : "Waiting for the native helper.";
+    status.textContent = `Native mode is ON. ${connection}`;
     toggle.textContent = "Disable native mode";
   } else if (native && !nativeEnabled) {
     status.textContent = "Permission granted; native mode is off.";
@@ -151,10 +159,13 @@ $("btn-reconnect").addEventListener("click", () => {
 // ---- probes ----------------------------------------------------------------
 
 let lastReport: string | null = null;
+const REPORT_DOWNLOAD_LIFETIME_MS = 60000;
 
 $("btn-probes").addEventListener("click", () => {
   void (async () => {
     const out = $("probe-out");
+    lastReport = null;
+    $<HTMLButtonElement>("btn-probes-dl").disabled = true;
     out.textContent = "running…";
     const resp = await sendInternal({
       protocolVersion: PROTOCOL_VERSION,
@@ -176,6 +187,12 @@ $("btn-probes").addEventListener("click", () => {
         type: "probe.run",
         suites: ["dom", "searchInput", "artwork", "mediaOps"],
       });
+      if (typeof report !== "object" || report === null ||
+          !("probeVersion" in report) || report.probeVersion !== PROBE_REPORT_VERSION ||
+          !("suites" in report) || typeof report.suites !== "object" ||
+          report.suites === null || Array.isArray(report.suites)) {
+        throw new Error("The content script did not return a report. Reopen the extension options and retry.");
+      }
       lastReport = JSON.stringify(report, null, 2);
       out.textContent = lastReport;
       $<HTMLButtonElement>("btn-probes-dl").disabled = false;
@@ -192,8 +209,11 @@ $("btn-probes-dl").addEventListener("click", () => {
   const a = document.createElement("a");
   a.href = url;
   a.download = `amberfader-probes-${new Date().toISOString().slice(0, 19)}.json`;
+  document.body.append(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  // Firefox consumes the URL asynchronously after the click handler returns.
+  window.setTimeout(() => URL.revokeObjectURL(url), REPORT_DOWNLOAD_LIFETIME_MS);
 });
 
 // ---- dev toggle + diagnostics ----------------------------------------------
@@ -233,5 +253,10 @@ async function diagnostics(): Promise<void> {
 }
 
 void refreshPermissions();
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && (changes.nativeEnabled || changes.nativeConnection)) {
+    void refreshPermissions();
+  }
+});
 void initDev();
 void diagnostics();

@@ -302,11 +302,11 @@ export class YouTubeMusicAdapter implements SiteAdapter {
     const artworkImg = document.querySelector(TRACK_INFO.artwork.join(", "));
     let artworkId: string | null = null;
     this.proposedArtworkUrl = null;
-    if (artworkImg instanceof HTMLImageElement && artworkImg.src) {
+    if (artworkImg instanceof HTMLImageElement && (artworkImg.currentSrc || artworkImg.src)) {
       // Only HTTPS URLs are proposed; the artwork service re-validates
       // protocol + origin before fetching.
       try {
-        const u = new URL(artworkImg.src);
+        const u = new URL(artworkImg.currentSrc || artworkImg.src);
         if (u.protocol === "https:") {
           this.proposedArtworkUrl = u.href;
           artworkId = cleanId(u.href.slice(-64)) || null;

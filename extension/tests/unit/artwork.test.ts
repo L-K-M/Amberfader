@@ -1,5 +1,5 @@
 // ArtworkService: allowlist, size caps, cache bound, superseded discard.
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   allowedArtworkUrl,
   ArtworkService,
@@ -43,6 +43,83 @@ describe("allowedArtworkUrl", () => {
 });
 
 describe("ArtworkService", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shares a slow download across repeated state samples", async () => {
+    let finish!: () => void;
+    const ready = new Promise<void>((resolve) => { finish = resolve; });
+    const response = fakeFetch(new Uint8Array(100));
+    const fetch = vi.fn(async (...args: Parameters<typeof globalThis.fetch>) => {
+      await ready;
+      return response(...args);
+    });
+    const service = new ArtworkService(tinyDecode, fetch);
+    const request = { artworkId: "cover", occurrenceId: "track", url: "https://lh3.googleusercontent.com/img" };
+    const pending = [service.fetchAsset(request), service.fetchAsset(request), service.fetchAsset(request)];
+    await Promise.resolve();
+    finish();
+    const assets = await Promise.all(pending);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(assets.every((asset) => asset !== null)).toBe(true);
+  });
+
+  it("binds cached artwork to the current track occurrence", async () => {
+    const service = new ArtworkService(tinyDecode, fakeFetch(new Uint8Array(100)));
+    const request = { artworkId: "cover", occurrenceId: "first", url: "https://lh3.googleusercontent.com/img" };
+    await service.fetchAsset(request);
+    const asset = await service.fetchAsset({ ...request, occurrenceId: "second" });
+    expect(asset?.occurrenceId).toBe("second");
+  });
+
+  it("discards an older download after switching to a cached cover", async () => {
+    let finish!: () => void;
+    const ready = new Promise<void>((resolve) => { finish = resolve; });
+    const response = fakeFetch(new Uint8Array(100));
+    const fetch = vi.fn(async (...args: Parameters<typeof globalThis.fetch>) => {
+      if (typeof args[0] === "string" && args[0].endsWith("slow")) await ready;
+      return response(...args);
+    });
+    const service = new ArtworkService(tinyDecode, fetch);
+    const cached = { artworkId: "cached", occurrenceId: "cached-track", url: "https://lh3.googleusercontent.com/cached" };
+    await service.fetchAsset(cached);
+    const old = service.fetchAsset({ artworkId: "old", occurrenceId: "old-track", url: "https://lh3.googleusercontent.com/slow" });
+    expect(await service.fetchAsset(cached)).not.toBeNull();
+    const repeatedCached = service.fetchAsset(cached);
+    finish();
+    expect(await old).toBeNull();
+    expect(await repeatedCached).toMatchObject({ artworkId: "cached", occurrenceId: "cached-track" });
+  });
+
+  it("downscales a full-size cover with the default browser decoder", async () => {
+    vi.stubGlobal("createImageBitmap", async () => ({ width: 600, height: 600 }));
+    const drawImage = vi.fn();
+    vi.stubGlobal("document", {
+      createElement: () => ({
+        getContext: () => ({ drawImage }),
+        toBlob: (callback: (blob: Blob) => void) => callback(new Blob([new Uint8Array(100)], { type: "image/jpeg" })),
+      }),
+    });
+    const service = new ArtworkService(undefined, fakeFetch(new Uint8Array(100)));
+    const asset = await service.fetchAsset({ artworkId: "cover", occurrenceId: "track", url: "https://lh3.googleusercontent.com/img" });
+    expect(asset).toMatchObject({ width: 256, height: 256, mime: "image/jpeg" });
+    expect(drawImage).toHaveBeenCalledOnce();
+  });
+
+  it("invalidates old artwork when the new track proposes a disallowed origin", async () => {
+    let finish!: () => void;
+    const ready = new Promise<void>((resolve) => { finish = resolve; });
+    const response = fakeFetch(new Uint8Array(100));
+    const fetch = vi.fn(async (...args: Parameters<typeof globalThis.fetch>) => {
+      await ready;
+      return response(...args);
+    });
+    const service = new ArtworkService(tinyDecode, fetch);
+    const old = service.fetchAsset({ artworkId: "old", occurrenceId: "old-track", url: "https://lh3.googleusercontent.com/img" });
+    expect(await service.fetchAsset({ artworkId: "new", occurrenceId: "new-track", url: "https://unapproved.example/cover" })).toBeNull();
+    finish();
+    expect(await old).toBeNull();
+  });
+
   it("fetches, normalizes within caps, and caches by artworkId", async () => {
     const svc = new ArtworkService(
       tinyDecode,

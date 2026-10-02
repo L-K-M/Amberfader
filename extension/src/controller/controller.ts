@@ -6,7 +6,7 @@
 // music client or expose arbitrary execution.
 import { ArtworkService } from "./artwork";
 import { PROTOCOL_VERSION } from "../protocol/types";
-import type { ProtocolMessage } from "../protocol/types";
+import type { ConnectionEventData, ProtocolMessage } from "../protocol/types";
 import { validateMessage } from "../protocol/validate";
 
 
@@ -20,6 +20,7 @@ function say(text: string): void {
 }
 
 interface NativePort {
+  error?: { message?: string } | undefined;
   onMessage: { addListener(cb: (m: unknown) => void): void };
   onDisconnect: { addListener(cb: () => void): void };
   postMessage(m: unknown): void;
@@ -32,34 +33,56 @@ function main(): void {
   const artwork = new ArtworkService();
 
   let nativePort: NativePort | null = null;
+  let lastNotice: ConnectionEventData | null = null;
 
-  const nativeStatus = (status: "connected" | "disconnected" | "degraded", reason?: string) => {
+  const nativeStatus = (
+    status: ConnectionEventData["status"], reason?: string,
+    component: "helper" | "gui" = "helper",
+  ) => {
+    if (lastNotice?.status === status && lastNotice.component === component &&
+        lastNotice.reason === reason) return;
+    lastNotice = { component, status };
+    if (reason) lastNotice.reason = reason.slice(0, 500);
     void browser.runtime
       .sendMessage({
         scope: "amberfader-internal",
         type: "native.status",
-        notice: { component: "helper", status, reason },
+        notice: lastNotice,
       })
       .catch(() => undefined);
   };
 
   const openNative = (): void => {
+    let port: NativePort;
     try {
-      nativePort = browser.runtime.connectNative(NATIVE_HOST);
+      port = browser.runtime.connectNative(NATIVE_HOST);
+      nativePort = port;
     } catch (err) {
       say(`connectNative failed: ${err instanceof Error ? err.message : "error"}`);
       nativeStatus("disconnected", "connectNative threw — native host not registered?");
       return;
     }
     say("native port open");
-    nativeStatus("connected");
+    nativeStatus("degraded", "Connecting to the native helper.");
+    let observedHelper = false;
 
-    nativePort.onMessage.addListener((m: unknown) => {
+    port.onMessage.addListener((m: unknown) => {
       // Validate the framed protocol message before forwarding; a hostile or
       // broken helper must not inject garbage into the router.
       if (!validateMessage(m)) {
         say("dropped invalid native message");
         return;
+      }
+      if (!observedHelper) {
+        observedHelper = true;
+        nativeStatus("connected");
+      }
+      if (m.kind === "event" && m.event === "connection") {
+        const notice = m.data as ConnectionEventData;
+        if (notice.component === "gui") {
+          nativeStatus(notice.status, notice.reason, "gui");
+          return;
+        }
       }
       void browser.runtime
         .sendMessage({
@@ -79,13 +102,24 @@ function main(): void {
         .catch(() => undefined);
     });
 
-    nativePort.onDisconnect.addListener(() => {
+    port.onDisconnect.addListener(() => {
       nativePort = null;
+      const reason = port.error?.message ?? "native port closed (helper exited or host terminated)";
       say("native port disconnected");
-      nativeStatus("disconnected", "native port closed (helper exited or host terminated)");
+      nativeStatus("disconnected", reason);
       // No reconnect loop: the router decides whether native mode is still
       // enabled; a dead helper is a real disconnect, not a polling target.
     });
+    // A Port object only proves a launch was requested. The helper's reply
+    // confirms it started, even when the desktop socket is still unavailable.
+    try {
+      port.postMessage({
+        protocolVersion: PROTOCOL_VERSION, kind: "hello", component: "controller",
+        componentVersion: browser.runtime.getManifest().version,
+      });
+    } catch {
+      nativeStatus("disconnected", port.error?.message ?? "Native helper could not be started.");
+    }
   };
 
   routerPort.onMessage.addListener((m: unknown) => {

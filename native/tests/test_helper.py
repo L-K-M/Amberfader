@@ -7,11 +7,14 @@ import os
 import selectors
 import socket
 import struct
+import subprocess
+import sys
 import threading
 import time
 
 import pytest
 
+from amberfader import PROTOCOL_VERSION
 from amberfader.helper import BoundedBus, Helper
 from amberfader.protocol import FrameFeed, encode_frame
 
@@ -21,6 +24,30 @@ HELLO_FROM_BROWSER = {
     "component": "controller",
     "componentVersion": "0.1.0",
 }
+
+
+@pytest.mark.parametrize("launch_mode", ["manual", "firefox"])
+def test_helper_entry_point_accepts_firefox_startup_arguments(tmp_path, launch_mode):
+    command = [
+        sys.executable, "-m", "amberfader.helper", "--socket", str(tmp_path / "control.sock"),
+    ]
+    if launch_mode == "firefox":
+        command += [str(tmp_path / "amberfader.json"), "amberfader@ch.lkmc"]
+    result = subprocess.run(command, input=b"", capture_output=True, timeout=5)
+    assert result.returncode == 0, result.stderr.decode()
+    assert result.stdout == b""
+
+
+def test_invalid_protocol_diagnostics_do_not_include_queries(tmp_path, caplog):
+    query = "private query " + "x" * 501
+    helper = Helper(str(tmp_path / "control.sock"))
+    helper._from_browser({
+        "protocolVersion": PROTOCOL_VERSION, "kind": "request", "id": "invalid-query",
+        "sessionId": "session", "bindingToken": "binding",
+        "method": "search.songs", "params": {"query": query},
+    })
+    assert caplog.records
+    assert "private query" not in caplog.text
 
 
 def _read_frame(fd, timeout=5.0):

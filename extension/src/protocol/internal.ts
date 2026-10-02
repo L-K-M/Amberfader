@@ -12,6 +12,7 @@ import type {
 } from "./types";
 
 export type InternalRole = "router" | "adapter" | "controller" | "ui" | "probe";
+export const PROBE_REPORT_VERSION = 1;
 
 // Content script -> router: registration + state/event pushes.
 export interface AdapterRegister {

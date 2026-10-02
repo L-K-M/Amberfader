@@ -185,7 +185,8 @@ class Helper:
     def _from_browser(self, msg: dict[str, Any]) -> None:
         problems = validate_message(msg)
         if problems:
-            LOG.warning("invalid message from browser: %s", problems[0])
+            # Schema errors can embed queries or track metadata.
+            LOG.warning("invalid browser message (protocol validation failed)")
             return
         if msg.get("kind") == "hello":
             self.to_browser.put(
@@ -240,7 +241,7 @@ class Helper:
                 for msg in feed.feed(data):
                     problems = validate_message(msg)
                     if problems:
-                        LOG.warning("invalid message from GUI: %s", problems[0])
+                        LOG.warning("invalid GUI message (protocol validation failed)")
                         continue
                     self.to_browser.put(msg)
         except (OSError, FrameError) as exc:
@@ -348,12 +349,18 @@ def main(argv: list[str] | None = None) -> int:
         format="%(name)s: %(levelname)s %(message)s",
     )
     parser = argparse.ArgumentParser(prog="amberfader-helper")
+    # Firefox appends the manifest path and add-on ID to the launch command.
+    # They are metadata only; the helper neither opens nor executes them.
+    parser.add_argument("browser_manifest", nargs="?", help=argparse.SUPPRESS)
+    parser.add_argument("browser_extension", nargs="?", help=argparse.SUPPRESS)
     parser.add_argument(
         "--socket",
         default=os.environ.get("AMBERFADER_SOCKET"),
         help="path to the GUI control socket (default: $XDG_RUNTIME_DIR/amberfader/control.sock)",
     )
     args = parser.parse_args(argv)
+    if bool(args.browser_manifest) != bool(args.browser_extension):
+        parser.error("Firefox launch metadata requires both manifest path and add-on ID")
     path = args.socket or default_socket_path()
     return Helper(path).run()
 
