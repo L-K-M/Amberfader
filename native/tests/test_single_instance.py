@@ -347,6 +347,23 @@ def test_old_search_response_cannot_settle_a_new_search_after_rebinding(app, qap
     assert search._token == "new-search"
 
 
+@pytest.mark.parametrize("method,params,deadline", [
+    ("search.songs", {"query": "query"}, 15000),
+    ("search.startRadio", {"searchToken": "search", "resultId": "row"}, 5000),
+])
+def test_mix_requests_use_the_control_deadline(app, qapp, method, params, deadline):
+    sent = []
+    app._send = lambda value: sent.append(value) or True
+    app._on_message({
+        "protocolVersion": 1, "kind": "event", "event": "binding",
+        "sessionId": "session", "bindingToken": "binding", "data": {"status": "bound"},
+    })
+    app.request(method, params)
+    request_id = sent[-1]["id"]
+    assert app._pending[request_id]["timer"].interval() == deadline
+    app._settle(request_id, False, {"message": "test finished"})
+
+
 def test_foreign_first_frame_rejected(app, qapp):
     """A peer that opens with something that is not a hello is dropped."""
     conn = pysock.socket(pysock.AF_UNIX)

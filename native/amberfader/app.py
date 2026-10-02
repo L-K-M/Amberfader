@@ -119,7 +119,7 @@ class AmberfaderApp:
             msg["bindingToken"] = self._binding_token
         from PySide6.QtCore import QTimer
 
-        deadline = SEARCH_DEADLINE_MS if method.startswith("search.") else CONTROL_DEADLINE_MS
+        deadline = SEARCH_DEADLINE_MS if method == "search.songs" else CONTROL_DEADLINE_MS
         timer: QTimer = QTimer(self.app)
         timer.setSingleShot(True)
         timer.timeout.connect(lambda r=rid, m=method: self._on_timeout(r, m))
