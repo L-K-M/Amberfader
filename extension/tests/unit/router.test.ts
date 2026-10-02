@@ -277,4 +277,78 @@ describe("Router", () => {
     }); // Only the selected adapter's snapshot, never the other tab's push.
     void pageSender;
   });
+
+  it("shares persistent recent queries with native and UI clients without a bound tab", async () => {
+    const { router, fake } = await makeRouter();
+    fake.storage.searchHistory = { queries: ["previous query"], artists: ["previous artist"] };
+    const message = {
+      scope: "amberfader-internal", type: "native.message",
+      payload: req({ method: "search.history" }),
+    };
+    expect(await router.onInternalMessage(message, pageSender)).toMatchObject({
+      ok: true, result: { queries: ["previous query"], artists: ["previous artist"] },
+    });
+    expect(await router.handleClientMessage(req({ method: "search.clearHistory" }))).toMatchObject({
+      ok: true, result: { queries: [], artists: [] },
+    });
+    expect(fake.storage.searchHistory).toEqual({ queries: [], artists: [] });
+    expect(fake.sentToTab).toEqual([]);
+  });
+
+  it("records artists only once per playing occurrence on the selected document", async () => {
+    const { router, fake } = await makeRouter();
+    fake.tabsList = [{ id: 7, url: "https://music.youtube.com/" }];
+    await router.handleClientMessage(req({ method: "targets.select", params: { targetKey: "tab:7" } }));
+    const message = {
+      scope: "amberfader-internal", type: "adapter.state", documentNonce: "nonce-1", artworkUrl: null,
+      state: {
+        revision: 2, status: "paused", contentKind: "track", positionSeconds: 1,
+        durationSeconds: 200, playbackRate: 1, volume: 1, muted: false, capabilities: [],
+        track: { occurrenceId: "occ-1", providerId: "song", title: "Song", artists: ["Artist"], album: null, artworkId: null },
+      },
+    };
+    await router.onInternalMessage(message, contentSender(7));
+    expect(await router.handleClientMessage(req({ method: "search.history" }))).toMatchObject({
+      result: { artists: [] },
+    });
+    message.state.status = "playing";
+    await router.onInternalMessage(message, contentSender(9));
+    expect(await router.handleClientMessage(req({ method: "search.history" }))).toMatchObject({
+      result: { artists: [] },
+    });
+    await router.onInternalMessage(message, contentSender(7));
+    expect(await router.handleClientMessage(req({ method: "search.history" }))).toMatchObject({
+      result: { artists: ["Artist"] },
+    });
+    await router.handleClientMessage(req({ method: "search.clearHistory" }));
+    await router.onInternalMessage(message, contentSender(7));
+    expect(await router.handleClientMessage(req({ method: "search.history" }))).toMatchObject({
+      result: { artists: [] },
+    });
+    message.state.track.occurrenceId = "occ-2";
+    message.state.contentKind = "advertisement";
+    await router.onInternalMessage(message, contentSender(7));
+    expect(await router.handleClientMessage(req({ method: "search.history" }))).toMatchObject({
+      result: { artists: [] },
+    });
+  });
+
+  it("records successful searches but rejects malformed result payloads", async () => {
+    const { router, fake } = await makeRouter();
+    fake.tabsList = [{ id: 7, url: "https://music.youtube.com/" }];
+    const selected = await router.handleClientMessage(req({ method: "targets.select", params: { targetKey: "tab:7" } }));
+    const request = req({ method: "search.songs", sessionId: router.sessionId,
+      bindingToken: selected.bindingToken, params: { query: "Example" } });
+    fake.tabSendImpl = async () => ({ result: { searchToken: "s1", complete: true, results: [] }, replayed: false });
+    expect(await router.handleClientMessage(request)).toMatchObject({ ok: true });
+    expect(await router.handleClientMessage(req({ method: "search.history" }))).toMatchObject({
+      result: { queries: ["Example"] },
+    });
+    fake.tabSendImpl = async () => ({ result: { results: "invalid" }, replayed: false });
+    request.params.query = "Invalid";
+    expect(await router.handleClientMessage(request)).toMatchObject({ ok: false });
+    expect(await router.handleClientMessage(req({ method: "search.history" }))).toMatchObject({
+      result: { queries: ["Example"] },
+    });
+  });
 });

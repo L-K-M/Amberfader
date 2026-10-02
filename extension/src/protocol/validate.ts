@@ -6,12 +6,14 @@ import {
   validateMessage as vMessage,
   validatePlayerState as vPlayerState,
   validateSearchSongsResult as vSearchSongsResult,
+  validateSearchHistory as vSearchHistory,
   validateTargetsListResult as vTargetsListResult,
 } from "./validators.gen.js";
 import type {
   PlayerState,
   ProtocolMessage,
   SearchSongsResult,
+  SearchHistory,
   TargetsListResult,
 } from "./types";
 
@@ -43,6 +45,10 @@ export function validateTargetsListResult(
   data: unknown,
 ): data is TargetsListResult {
   return (vTargetsListResult as Validator<TargetsListResult>)(data);
+}
+
+export function validateSearchHistory(data: unknown): data is SearchHistory {
+  return (vSearchHistory as Validator<SearchHistory>)(data);
 }
 
 // Validation failure description for log lines — never log the message body

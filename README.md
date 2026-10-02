@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > LLM disclosure: This codebase was written with substantial help from large language models: AI coding agents working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
 
-**Latest release:** v<!-- version -->0.1.6<!-- /version --> · [Download](https://github.com/L-K-M/Amberfader/releases/latest)
+**Latest release:** v<!-- version -->0.1.7<!-- /version --> · [Download](https://github.com/L-K-M/Amberfader/releases/latest)
 
 A compact classic-style remote control for YouTube Music running in Firefox,
 inspired by the small focused interfaces of Audion and classic Winamp.
@@ -56,6 +56,21 @@ scripts/uninstall-user          # remove app files (keeps preferences unless --p
 
 See [`AGENTS.md`](AGENTS.md) for conventions and [`docs/compatibility.md`](docs/compatibility.md)
 for the tested-environment record.
+
+## Likes, recents and mixes
+
+Upgrade the extension and desktop app together for these protocol additions.
+Restart the browser and desktop app after updating.
+
+- Click the heart to like or unlike the current song. **♥** means liked,
+  **♡** means unliked, and **♡?** means unknown. It changes only after the
+  site confirms the state.
+- Open **Search** to reuse recent queries or played artists. These lists are
+  shared by both windows, saved locally, and limited to 20 entries each.
+  **Clear recents** removes both lists.
+- Search, then use **Start mix** for a result. Amberfader opens that row's
+  YouTube Music action menu and activates its **Start mix** link. An unavailable
+  control or unconfirmed outcome is reported instead of retried.
 
 ## Connect an installed Flatpak app
 

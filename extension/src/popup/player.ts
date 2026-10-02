@@ -26,6 +26,7 @@ const statusEl = $("status");
 const btnPlay = $<HTMLButtonElement>("btn-play");
 const btnPrev = $<HTMLButtonElement>("btn-prev");
 const btnNext = $<HTMLButtonElement>("btn-next");
+const btnLike = $<HTMLButtonElement>("btn-like");
 const btnSearch = $<HTMLButtonElement>("btn-search");
 const btnShow = $<HTMLButtonElement>("btn-show");
 const btnHide = $<HTMLButtonElement>("btn-hide");
@@ -37,6 +38,7 @@ let state: PlayerState | null = null;
 let stateAt = 0; // monotonic receipt time for interpolation
 let seeking = false;
 let pendingTransport = false;
+let pendingLike = false;
 let connectionError: string | null = null;
 
 const client = new ProtocolClient({
@@ -146,6 +148,16 @@ function render(): void {
   btnPlay.disabled = pendingTransport || !(hasCap(playing ? "pause" : "play"));
   btnPrev.disabled = !hasCap("previous");
   btnNext.disabled = !hasCap("next");
+  const liked = state?.liked;
+  const likeLabel = typeof liked !== "boolean" ? "Liked state unknown"
+    : liked ? "Unlike this song" : "Like this song";
+  btnLike.textContent = typeof liked !== "boolean" ? "♡?" : liked ? "♥" : "♡";
+  btnLike.title = likeLabel;
+  btnLike.setAttribute("aria-label", likeLabel);
+  if (typeof liked === "boolean") btnLike.setAttribute("aria-pressed", String(liked));
+  else btnLike.removeAttribute("aria-pressed");
+  btnLike.disabled = pendingLike || !t || typeof liked !== "boolean" || !hasCap("setLiked");
+  btnLike.classList.toggle("pending", pendingLike);
   seekEl.disabled = !hasCap("seek") || state?.durationSeconds == null;
   volEl.disabled = !hasCap("volume") && !hasCap("seek");
   btnHide.disabled = !state;
@@ -184,6 +196,20 @@ btnPrev.addEventListener("click", () => {
 btnNext.addEventListener("click", () => {
   void client.request("player.next", {}).then((r) => {
     if (!r.ok) showStatus(r.error.message, true);
+  });
+});
+
+btnLike.addEventListener("click", () => {
+  const occurrenceId = state?.track?.occurrenceId;
+  if (pendingLike || !occurrenceId || typeof state?.liked !== "boolean" || !hasCap("setLiked")) return;
+
+  pendingLike = true;
+  render();
+  // Send the desired state, never replay a blind toggle or preview success.
+  void client.request("player.setLiked", { occurrenceId, liked: !state.liked }).then((response) => {
+    pendingLike = false;
+    if (!response.ok) showStatus(response.error.message, true);
+    render();
   });
 });
 

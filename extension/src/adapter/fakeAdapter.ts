@@ -20,8 +20,10 @@ const ALL_CAPS: Capability[] = [
   "next",
   "seek",
   "volume",
+  "setLiked",
   "searchSongs",
   "playSearchResult",
+  "startRadio",
 ];
 
 const SCRIPT = [
@@ -78,6 +80,7 @@ export class FakeAdapter implements SiteAdapter {
   private timer: ReturnType<typeof setInterval> | null = null;
   private running = false;
   private searchSeq = 0;
+  private readonly likedTracks = new Set<string>();
 
   constructor(opts: FakeAdapterOptions = {}) {
     this.tickMs = opts.tickMs ?? 1000;
@@ -147,6 +150,7 @@ export class FakeAdapter implements SiteAdapter {
       playbackRate: this.rate,
       volume: this.volume,
       muted: this.muted,
+      liked: this.likedTracks.has(t.providerId),
       capabilities: [...this.capabilities],
     };
   }
@@ -243,6 +247,21 @@ export class FakeAdapter implements SiteAdapter {
         this.muted = params.muted === true;
         this.emit();
         return this.outcome();
+      case "player.setLiked": {
+        if (params.occurrenceId !== `fake-occ-${this.occurrence}`) {
+          return { ok: false, error: { code: "stale_target", message: "occurrence mismatch" } };
+        }
+        if (typeof params.liked !== "boolean") {
+          return { ok: false, error: { code: "internal_error", message: "bad liked state" } };
+        }
+        const providerId = SCRIPT[this.trackIndex]!.providerId;
+        if (params.liked) this.likedTracks.add(providerId);
+        else this.likedTracks.delete(providerId);
+        this.emit();
+        return this.outcome();
+      }
+      case "search.startRadio":
+        return this.runPlayResultSync(String(params.searchToken), String(params.resultId));
       default:
         return {
           ok: false,
@@ -265,6 +284,7 @@ export class FakeAdapter implements SiteAdapter {
         album: t.album,
         durationSeconds: t.durationSeconds,
         supported: true,
+        radioSupported: true,
         artworkId: null,
       })),
     };

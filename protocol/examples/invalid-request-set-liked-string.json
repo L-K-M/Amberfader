@@ -1,0 +1,1 @@
+{"protocolVersion":1,"kind":"request","id":"like-1","sessionId":"session","bindingToken":"binding","method":"player.setLiked","params":{"occurrenceId":"occ-1","liked":"true"}}

@@ -18,8 +18,10 @@ export type Capability =
   | "next"
   | "seek"
   | "volume"
+  | "setLiked"
   | "searchSongs"
-  | "playSearchResult";
+  | "playSearchResult"
+  | "startRadio";
 
 export interface TrackInfo {
   occurrenceId: string;
@@ -41,6 +43,8 @@ export interface PlayerState {
   playbackRate: number | null;
   volume: number | null;
   muted: boolean | null;
+  // Missing on older peers; null means the site exposes no reliable state.
+  liked?: boolean | null;
   capabilities: Capability[];
 }
 
@@ -52,7 +56,13 @@ export interface SearchResultRow {
   album: string | null;
   durationSeconds: number | null;
   supported: boolean;
+  radioSupported?: boolean;
   artworkId: string | null;
+}
+
+export interface SearchHistory {
+  queries: string[];
+  artists: string[];
 }
 
 export interface SearchSongsResult {
@@ -86,8 +96,12 @@ export type Method =
   | "player.seek"
   | "player.setVolume"
   | "player.setMuted"
+  | "player.setLiked"
   | "search.songs"
   | "search.playResult"
+  | "search.startRadio"
+  | "search.history"
+  | "search.clearHistory"
   | "browser.showPlayer"
   | "browser.hidePlayer";
 
@@ -102,8 +116,10 @@ export const BINDING_METHODS: ReadonlySet<Method> = new Set([
   "player.seek",
   "player.setVolume",
   "player.setMuted",
+  "player.setLiked",
   "search.songs",
   "search.playResult",
+  "search.startRadio",
   "browser.showPlayer",
   "browser.hidePlayer",
 ]);

@@ -243,6 +243,17 @@ def test_request_ids_do_not_repeat_when_the_gui_reopens(app, qapp):
         second._settle(messages[1]["id"], True, {})
 
 
+@pytest.mark.parametrize("method", ["search.history", "search.clearHistory"])
+def test_search_history_is_accessible_without_a_playback_binding(app, qapp, method):
+    sent = []
+    app._send = lambda message: sent.append(message) or True
+    app.request(method, {})
+    assert sent[-1]["method"] == method
+    assert "bindingToken" not in sent[-1]
+    assert not validate_message(sent[-1])
+    app._settle(sent[-1]["id"], True, {"queries": [], "artists": []})
+
+
 def test_invalid_snapshot_is_reported_as_failure(app, qapp):
     sent = []
     app._send = lambda value: sent.append(value) or True
@@ -276,6 +287,81 @@ def test_late_response_does_not_restore_an_old_binding(app, qapp):
     app.request("player.pause", {})
     assert sent[-1]["sessionId"] == "new-session"
     assert sent[-1]["bindingToken"] == "new-token"
+
+
+def test_late_search_results_do_not_restore_radio_actions_on_a_new_binding(app, qapp):
+    sent = []
+    app._send = lambda value: sent.append(value) or True
+    def bind(token):
+        app._on_message({
+            "protocolVersion": 1, "kind": "event", "event": "binding",
+            "sessionId": "session", "bindingToken": token, "data": {"status": "bound"},
+        })
+    bind("old-token")
+    app.request("search.songs", {"query": "query"})
+    request_id = sent[-1]["id"]
+    responses = []
+    app.window.route_response = lambda method, ok, payload: responses.append((method, ok, payload))
+    bind("new-token")
+    app._on_message({
+        "protocolVersion": 1, "kind": "response", "id": request_id, "ok": True,
+        "sessionId": "session", "bindingToken": "old-token",
+        "result": {"searchToken": "old-search", "results": [], "complete": True},
+    })
+    assert responses[0][1] is False
+    assert "binding changed" in responses[0][2]["message"].lower()
+    assert len(responses) == 1
+
+
+def test_old_search_response_cannot_settle_a_new_search_after_rebinding(app, qapp):
+    sent = []
+    app._send = lambda value: sent.append(value) or True
+    def bind(token):
+        app._on_message({
+            "protocolVersion": 1, "kind": "event", "event": "binding",
+            "sessionId": "session", "bindingToken": token, "data": {"status": "bound"},
+        })
+    bind("old-token")
+    app.window.open_search()
+    search = app.window._search
+    search._q.setText("old query")
+    search._submit()
+    old_id = sent[-1]["id"]
+    bind("new-token")
+    search._q.setText("new query")
+    search._submit()
+    new_id = sent[-1]["id"]
+    app._on_message({
+        "protocolVersion": 1, "kind": "response", "id": old_id, "ok": True,
+        "sessionId": "session", "bindingToken": "old-token",
+        "result": {"searchToken": "old-search", "results": [], "complete": True},
+    })
+    assert search._busy
+    assert search._status.text() == "Searching…"
+    app._on_message({
+        "protocolVersion": 1, "kind": "response", "id": new_id, "ok": True,
+        "sessionId": "session", "bindingToken": "new-token",
+        "result": {"searchToken": "new-search", "results": [], "complete": True},
+    })
+    assert not search._busy
+    assert search._token == "new-search"
+
+
+@pytest.mark.parametrize("method,params,deadline", [
+    ("search.songs", {"query": "query"}, 15000),
+    ("search.startRadio", {"searchToken": "search", "resultId": "row"}, 5000),
+])
+def test_mix_requests_use_the_control_deadline(app, qapp, method, params, deadline):
+    sent = []
+    app._send = lambda value: sent.append(value) or True
+    app._on_message({
+        "protocolVersion": 1, "kind": "event", "event": "binding",
+        "sessionId": "session", "bindingToken": "binding", "data": {"status": "bound"},
+    })
+    app.request(method, params)
+    request_id = sent[-1]["id"]
+    assert app._pending[request_id]["timer"].interval() == deadline
+    app._settle(request_id, False, {"message": "test finished"})
 
 
 def test_foreign_first_frame_rejected(app, qapp):

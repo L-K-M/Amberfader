@@ -34,6 +34,7 @@ const validators = {
   validateMessage: "envelope",
   validatePlayerState: "envelope#/$defs/playerState",
   validateSearchSongsResult: "envelope#/$defs/searchSongsResult",
+  validateSearchHistory: "envelope#/$defs/searchHistory",
   validateTargetsListResult: "envelope#/$defs/targetsListResult",
 };
 for (const [name, id] of Object.entries(validators)) {
@@ -59,6 +60,7 @@ type ValidateFn = ((data: unknown, ctx?: object) => boolean) & {
 export declare const validateMessage: ValidateFn;
 export declare const validatePlayerState: ValidateFn;
 export declare const validateSearchSongsResult: ValidateFn;
+export declare const validateSearchHistory: ValidateFn;
 export declare const validateTargetsListResult: ValidateFn;
 `;
 

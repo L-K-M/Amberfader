@@ -17,6 +17,16 @@ on 2026-10-02; remaining acceptance gates are *expected* unless noted.
 - The extension now grants access to that exact HTTPS host. The probe proves
   site-side image presence, not successful extension fetching or rendering;
   those remain a live acceptance gate.
+- A console capture found the current-song Like button under both
+  `ytmusic-player-bar` instances, inside `ytmusic-like-button-renderer` and
+  `#button-shape-like`. It exposes `aria-label="Like"` and
+  `aria-pressed="false"`. Liked/unliked click outcomes remain unverified.
+- The user reports the radio action is labeled **Start mix**. Its captured
+  `ytmusic-menu-navigation-item-renderer` has `role="menuitem"`,
+  `aria-label="Start mix"`, `aria-disabled="false"`, and an
+  `a#navigation-endpoint` pointing to `watch?playlist=...`. The menu includes
+  album actions; song-result activation and playback remain unverified.
+  The sanitized menu is in `extension/tests/fixtures/mix-menu-2026-10-02.html`.
 
 ## Browsers
 

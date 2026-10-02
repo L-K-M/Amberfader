@@ -17,6 +17,7 @@ extension collects nothing Mozilla's categories would require declaring.
 | Track metadata (title/artist/album) | page DOM → adapter → background → GUI socket |
 | Artwork | HTTPS fetch on an allowlisted image host, **no credentials**, normalized and downscaled before reaching any client |
 | Search queries | typed by the user → socket → content script → site search field |
+| Recent searches and artists | extension-local storage → background → either search window |
 | Playback commands | socket → background → bound tab only |
 
 - The Unix control socket lives in `$XDG_RUNTIME_DIR/amberfader` (mode 0700,
@@ -28,6 +29,9 @@ extension collects nothing Mozilla's categories would require declaring.
   thumbnail bytes do.
 - Search and track text may be logged nowhere; protocol logs name error
   codes and message kinds, never payloads.
+- Recent searches and played artists are saved in this browser profile, with
+  20 entries per list. Both windows share these lists. **Clear recents** in
+  the search window removes them; the current track is not immediately re-added.
 
 ## Permissions audit
 
