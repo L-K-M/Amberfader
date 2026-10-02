@@ -1,5 +1,7 @@
 // ArtworkService: allowlist, size caps, cache bound, superseded discard.
 import { afterEach, describe, expect, it, vi } from "vitest";
+import manifest from "../../manifest.json";
+import capturedProbe from "../fixtures/artwork-probe-2026-10-02.json";
 import {
   allowedArtworkUrl,
   ArtworkService,
@@ -32,6 +34,23 @@ const tinyDecode = (_bytes: Uint8Array, _mime: string) =>
   });
 
 describe("allowedArtworkUrl", () => {
+  it("allows and declares access to the cover origin observed in the live probe", async () => {
+    const origin = capturedProbe.artwork.playerArtwork[0]!.sourceOrigin!;
+    expect(allowedArtworkUrl(`${origin}/captured-cover`)).toBe(true);
+    expect(manifest.host_permissions).toContain(`${origin}/*`);
+    const fetch = fakeFetch(new Uint8Array(100), "image/png", {
+      redirectedTo: `${origin}/captured-cover`,
+    });
+    const service = new ArtworkService(tinyDecode, fetch);
+    expect(await service.fetchAsset({
+      artworkId: "captured-cover", occurrenceId: "current-track", url: `${origin}/captured-cover`,
+    })).toMatchObject({ artworkId: "captured-cover", occurrenceId: "current-track" });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(allowedArtworkUrl("http://yt3.googleusercontent.com/cover")).toBe(false);
+    expect(allowedArtworkUrl("https://yt3.googleusercontent.com.attacker.example/cover")).toBe(false);
+    expect(allowedArtworkUrl("https://yt3.googleusercontent.com:444/cover")).toBe(false);
+  });
+
   it("accepts allowlisted https image hosts only", () => {
     expect(allowedArtworkUrl("https://lh3.googleusercontent.com/a=b")).toBe(true);
     expect(allowedArtworkUrl("https://i.ytimg.com/vi/x/hq.jpg")).toBe(true);

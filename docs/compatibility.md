@@ -2,8 +2,21 @@
 
 Status legend: **verified** = exercised on a real target; **expected** =
 implemented to a documented API contract, awaiting live confirmation;
-**unsupported** = known not to work. Phase 0 probing has not yet run — assume
-*expected* unless marked otherwise.
+**unsupported** = known not to work. A partial live Phase 0 report was received
+on 2026-10-02; remaining acceptance gates are *expected* unless noted.
+
+## Live observations (2026-10-02)
+
+- The user confirmed the Amberfader Flatpak connects to Flatpak Zen
+  (`app.zen_browser.zen`) after native-host registration and the documented
+  `.mozilla` persistence/talk permissions. Browser version and session type
+  were not recorded; other packaging combinations remain unverified.
+- The probe found `ytmusic-player-bar img.image`: a complete 60×60 cover from
+  `https://yt3.googleusercontent.com`. The sanitized artwork section is stored
+  in `extension/tests/fixtures/artwork-probe-2026-10-02.json`.
+- The extension now grants access to that exact HTTPS host. The probe proves
+  site-side image presence, not successful extension fetching or rendering;
+  those remain a live acceptance gate.
 
 ## Browsers
 
@@ -46,8 +59,8 @@ uses `flatpak-spawn --host` to invoke that launcher.
 
 Gecko's native-host directory is `.mozilla`, independent of Zen's `.zen`
 profile directory. The installer prints the required `.mozilla` persistence
-and talk-permission command for Flatpak Zen. These combinations remain
-unverified on a live desktop.
+and talk-permission command for Flatpak Zen. The user-reported connection above
+covers `app.zen_browser.zen`; the other combinations remain unverified.
 
 ## Known environment gaps
 
