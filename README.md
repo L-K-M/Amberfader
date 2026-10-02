@@ -72,6 +72,17 @@ Restart the browser and desktop app after updating.
   YouTube Music action menu and activates its **Start mix** link. An unavailable
   control or unconfirmed outcome is reported instead of retried.
 
+## Linux Faces
+
+In the native app, choose **☰ → Faces…** or press **Ctrl+,**. Five original
+retro faces change the player's shape, layout and textures while keeping
+artwork, likes, playback, search, recents and mixes. Your choice is saved locally.
+Click the cover for **Cover view**.
+
+Install additional JSON/PNG face plugins with **Install face folder…**.
+See [Faces](docs/faces.md) for previews, installation paths and the versioned
+plugin format.
+
 ## Connect an installed Flatpak app
 
 Installing the app does not register its helper with your browser. Run the

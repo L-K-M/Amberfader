@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "id": "moonstone",
+  "name": "Moonstone",
+  "author": "Amberfader",
+  "description": "A Y2K silver capsule with blue LCD glass, a cover porthole, and a floating utility dock.",
+  "size": [600, 306],
+  "background": "background.png",
+  "drag": [60, 18, 386, 24],
+  "font": "sans", "timeSize": 32, "radius": 18,
+  "palette": {
+    "window": "#c7ccd0", "panel": "#d9e0e5", "display": "#143749",
+    "text": "#172e40", "muted": "#3c5968", "readout": "#ccf3ff",
+    "accent": "#337b9c", "border": "#81949e",
+    "buttonTop": "#ffffff", "buttonBottom": "#abb9c3", "danger": "#8b231e"
+  },
+  "controls": {
+    "art": [40, 68, 120, 120], "title": [188, 62, 340, 26],
+    "artists": [188, 96, 340, 22], "time": [188, 122, 186, 44],
+    "playback": [394, 140, 116, 20],
+    "previous": [186, 184, 48, 42], "play": [242, 180, 58, 50],
+    "next": [308, 184, 48, 42], "like": [376, 184, 46, 42],
+    "volume": [438, 194, 102, 22], "seek": [72, 238, 456, 20],
+    "search": [104, 264, 82, 28], "show": [198, 264, 100, 28], "hide": [310, 264, 68, 28],
+    "menu": [456, 16, 36, 28], "minimize": [504, 18, 22, 26], "close": [532, 18, 22, 26],
+    "status": [394, 268, 146, 18]
+  }
+}

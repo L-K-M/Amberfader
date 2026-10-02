@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "id": "copper-reel",
+  "name": "Copper Reel",
+  "author": "Amberfader",
+  "description": "A pocket-space-age remote: copper shell, honey LCD, and a circular transport pod.",
+  "size": [612, 322],
+  "background": "background.png",
+  "drag": [38, 38, 322, 24],
+  "font": "mono", "timeSize": 30, "radius": 16,
+  "palette": {
+    "window": "#8a4826", "panel": "#502f21", "display": "#ffbe50",
+    "text": "#fff0d0", "muted": "#e6bc83", "readout": "#38200e",
+    "accent": "#ffcb70", "border": "#8e633c",
+    "buttonTop": "#af744c", "buttonBottom": "#4b2d22", "danger": "#ffd0b6"
+  },
+  "controls": {
+    "art": [40, 86, 112, 112], "title": [172, 84, 230, 26],
+    "artists": [172, 116, 230, 22], "time": [172, 148, 174, 42],
+    "playback": [174, 204, 160, 18], "seek": [40, 232, 352, 18],
+    "previous": [410, 164, 42, 40], "play": [468, 148, 62, 58],
+    "next": [546, 164, 42, 40], "like": [470, 218, 52, 38],
+    "volume": [442, 118, 108, 20],
+    "search": [80, 286, 94, 28], "show": [186, 286, 112, 28], "hide": [310, 286, 72, 28],
+    "menu": [366, 38, 36, 28], "minimize": [412, 48, 22, 28], "close": [444, 60, 22, 28],
+    "status": [394, 292, 152, 18]
+  }
+}

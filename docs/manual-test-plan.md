@@ -99,3 +99,24 @@ save the report. Verify:
 - [ ] `.flatpak` installs; per-user registration via `scripts/install-user`
       works against Flatpak Firefox.
 - [ ] `scripts/uninstall-user` removes only app-owned files.
+
+## Linux Faces
+
+Run these checks on both X11 and Wayland, including the Flatpak build. Offscreen
+tests verify rendering and state preservation, not compositor integration.
+
+- Open **☰ → Faces…**, or **Ctrl+,**. Preview and apply each bundled face.
+- Drag the engraved header. Check that transparent cutouts do not intercept
+  clicks, and that minimize, close, and second-instance activation work.
+- Repeat with `--scale 1.0`, `--scale 1.5`, and `--scale 2.0`, including a small
+  display. All controls must remain reachable.
+- Switch faces while playing, while a like request is pending, and with search
+  results open. Playback and queries must remain intact; the heart must wait
+  for reported state; recents, play-result, and **Start mix** must still work.
+- Click the cover. Change tracks and faces with Cover view open; check artwork
+  updates and absent-artwork placeholders.
+- Restart the app and verify the saved face. Remove its user-pack folder and
+  restart; expect Amber Classic and an explicit face error.
+- Install a local face folder through the native and Flatpak file choosers.
+  Check saved paths, reject duplicate IDs, and remove the installed folder.
+- Close the GUI and confirm YouTube Music keeps playing.

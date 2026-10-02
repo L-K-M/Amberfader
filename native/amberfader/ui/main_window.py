@@ -1,4 +1,4 @@
-"""Main player window — compact classic skin, ~360x150 logical px at 1x.
+"""Main player window with interchangeable, data-only faces.
 
 Renders PlayerState and never decides what is playing on its own. Slider
 gestures preview locally and commit one command on release; the gesture is
@@ -8,46 +8,35 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QByteArray, QElapsedTimer, Qt, QTimer
+from PySide6.QtCore import QByteArray, QElapsedTimer, QPoint, Qt, QTimer
 from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
-    QHBoxLayout,
+    QDialog,
     QLabel,
     QMainWindow,
-    QPushButton,
+    QMenu,
     QSlider,
     QVBoxLayout,
-    QWidget,
 )
 
+from ..face_library import BUNDLED_FACE_ERROR, DEFAULT_FACE_ID, Face, FaceError, FaceLibrary
+from .face_surface import (
+    CoverLabel,
+    ElidedLabel,
+    FaceArtwork,
+    FaceButton,
+    FaceSurface,
+    ReadoutLabel,
+    face_stylesheet,
+    prepare_face,
+)
 from .placeholder import placeholder_png
 from .search_window import SearchWindow
 
-AMBER_QSS = """
-QWidget { background: #241a10; color: #e8ddc8; font-size: 12px; }
-QLabel#title { font-weight: 600; }
-QLabel#dim, QLabel#status { color: #a89984; }
-QLabel#status[error="true"] { color: #e86a5a; }
-QLabel#art { background: #2f2314; border: 1px solid #8a5a20; }
-QPushButton {
-  background: #2f2314; border: 1px solid #8a5a20; border-radius: 3px;
-  padding: 3px 10px; min-width: 34px;
-}
-QPushButton:hover:!disabled { border-color: #e8a33d; color: #f5cf8a; }
-QPushButton:pressed, QPushButton[pending="true"] { background: #e8a33d; color: #241a10; }
-QPushButton:disabled { opacity: 0.45; }
-QSlider::groove:horizontal { height: 4px; background: #3a2c18; }
-QSlider::handle:horizontal { width: 12px; margin: -5px 0; background: #e8a33d; border-radius: 6px; }
-QSlider::sub-page:horizontal { background: #8a5a20; }
-QLineEdit, QListWidget {
-  background: #2f2314; color: #e8ddc8; border: 1px solid #8a5a20;
-}
-QListWidget::item { padding: 4px; border-bottom: 1px solid #3a2c18; }
-QListWidget::item:selected { background: #4a3a20; }
-QToolTip { background: #2f2314; color: #e8ddc8; border: 1px solid #8a5a20; }
-"""
+if TYPE_CHECKING:
+    from .faces_window import FacesWindow
 
 
 def _fmt(sec: Any) -> str:
@@ -62,6 +51,7 @@ class MainWindow(QMainWindow):
         self,
         request: Callable[[str, dict], None],
         scale: float = 1.0,
+        faces: FaceLibrary | None = None,
     ) -> None:
         super().__init__()
         self._request = request
@@ -73,81 +63,87 @@ class MainWindow(QMainWindow):
         self._pending_like = False
         self._bound_token: str | None = None
         self._search: SearchWindow | None = None
+        self._cover_window: QDialog | None = None
+        self._cover_label: QLabel | None = None
+        self._faces_window: FacesWindow | None = None
+        self._faces = faces or FaceLibrary()
+        self._scale = scale
 
         self.setWindowTitle("Amberfader")
-        self.setStyleSheet(AMBER_QSS)
-        self.setMinimumSize(int(360 * scale), int(150 * scale))
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self._surface = FaceSurface(self)
+        self.setCentralWidget(self._surface)
 
-        central = QWidget(self)
-        self.setCentralWidget(central)
-        root = QVBoxLayout(central)
-        root.setContentsMargins(10, 8, 10, 6)
-        root.setSpacing(6)
-
-        top = QHBoxLayout()
-        self._art = QLabel()
+        self._art = CoverLabel(self._surface)
         self._art.setObjectName("art")
-        self._art.setFixedSize(int(64 * scale), int(64 * scale))
         self._placeholder = QPixmap()
         self._placeholder.loadFromData(QByteArray(placeholder_png()))
-        self._art.setPixmap(self._placeholder)
-        top.addWidget(self._art)
-
-        meta = QVBoxLayout()
-        meta.setSpacing(1)
-        self._title = QLabel("Nothing selected")
+        self._cover = self._placeholder
+        self._title = ElidedLabel("Nothing selected", self._surface)
         self._title.setObjectName("title")
-        self._artists = QLabel("Waiting for Firefox…")
-        self._artists.setObjectName("dim")
-        self._time = QLabel("–:–– / –:––")
-        self._time.setObjectName("dim")
-        for w in (self._title, self._artists, self._time):
-            meta.addWidget(w)
+        self._artists = ElidedLabel("Waiting for Firefox…", self._surface)
+        self._artists.setObjectName("artists")
+        self._time = ReadoutLabel("–:–– / –:––", self._surface)
+        self._time.setObjectName("time")
+        self._playback = ElidedLabel("OFFLINE", self._surface)
+        self._playback.setObjectName("playback")
 
-        transport = QHBoxLayout()
-        transport.setSpacing(6)
-        self._prev = QPushButton("⏮")
-        self._prev.setToolTip("Previous")
-        self._play = QPushButton("▶")
-        self._play.setToolTip("Play/Pause (Space)")
-        self._next = QPushButton("⏭")
-        self._next.setToolTip("Next")
-        self._like = QPushButton("♡?")
+        self._prev = self._button("⏮", "Previous")
+        self._play = self._button("▶", "Play/Pause (Space)")
+        self._next = self._button("⏭", "Next")
+        self._like = self._button("♡?", "Like or unlike this song")
         self._like.setToolTip("Liked state unknown")
         self._like.setEnabled(False)
-        for w in (self._prev, self._play, self._next, self._like):
-            transport.addWidget(w)
-        transport.addStretch(1)
-        meta.addLayout(transport)
-        top.addLayout(meta, 1)
-        root.addLayout(top)
 
-        self._seek = QSlider(Qt.Orientation.Horizontal)
+        self._seek = QSlider(Qt.Orientation.Horizontal, self._surface)
         self._seek.setRange(0, 1000)
         self._seek.setToolTip("Seek")
-        root.addWidget(self._seek)
-
-        bottom = QHBoxLayout()
-        self._vol = QSlider(Qt.Orientation.Horizontal)
+        self._seek.setAccessibleName("Seek")
+        self._vol = QSlider(Qt.Orientation.Horizontal, self._surface)
         self._vol.setRange(0, 100)
         self._vol.setValue(80)
         self._vol.setToolTip("Volume")
-        bottom.addWidget(self._vol, 1)
-        self._btn_search = QPushButton("Search")
-        self._btn_search.setToolTip("Search songs (Ctrl+F)")
-        self._btn_show = QPushButton("Show YT")
-        self._btn_show.setToolTip("Show the YouTube Music tab")
-        self._btn_hide = QPushButton("Hide")
-        self._btn_hide.setToolTip("Hide the playback tab (opt-in)")
-        self._btn_menu = QPushButton("☰")
-        self._btn_menu.setToolTip("Menu")
-        for w in (self._btn_search, self._btn_show, self._btn_hide, self._btn_menu):
-            bottom.addWidget(w)
-        root.addLayout(bottom)
+        self._vol.setAccessibleName("Volume")
+        self._btn_search = self._button("Search", "Search songs (Ctrl+F)")
+        self._btn_show = self._button("Show YT", "Show the YouTube Music tab")
+        self._btn_hide = self._button("Hide", "Hide the playback tab (opt-in)")
+        self._btn_menu = self._button("☰", "Menu and Faces (Ctrl+,)")
+        self._btn_minimize = self._button("\u2212", "Minimize")
+        self._btn_close = self._button("\u00d7", "Close Amberfader; music keeps playing")
 
-        self._status = QLabel("")
+        self._status = ElidedLabel("", self._surface)
         self._status.setObjectName("status")
-        root.addWidget(self._status)
+        self._controls = {
+            "art": self._art, "title": self._title, "artists": self._artists,
+            "time": self._time, "playback": self._playback,
+            "previous": self._prev, "play": self._play, "next": self._next, "like": self._like,
+            "seek": self._seek, "volume": self._vol, "search": self._btn_search,
+            "show": self._btn_show, "hide": self._btn_hide, "menu": self._btn_menu,
+            "status": self._status, "minimize": self._btn_minimize, "close": self._btn_close,
+        }
+        for name, widget in self._controls.items():
+            widget.setObjectName(name)
+            if isinstance(widget, QLabel):
+                widget.setTextFormat(Qt.TextFormat.PlainText)
+        self._menu = QMenu(self)
+        self._menu.addAction("Faces…", self.open_faces)
+        self._menu.addAction("Cover view", self.open_cover)
+        self._menu.addAction("Search", self.open_search)
+        self._menu.addSeparator()
+        self._menu.addAction("Close Amberfader", self.close)
+        initial_error = ""
+        try:
+            face = self._faces.load(self._faces.preferred_id())
+            artwork = prepare_face(face)
+        except FaceError as exc:
+            initial_error = f"Saved face could not load: {exc}. Using Amber Classic."
+            try:
+                face = self._faces.load(DEFAULT_FACE_ID)
+                artwork = prepare_face(face)
+            except FaceError as default_error:
+                raise FaceError(BUNDLED_FACE_ERROR) from default_error
+        self._apply_face(face, artwork)
 
         # wiring
         self._play.clicked.connect(self._toggle_play)
@@ -157,6 +153,12 @@ class MainWindow(QMainWindow):
         self._btn_show.clicked.connect(lambda: self._request("browser.showPlayer", {}))
         self._btn_hide.clicked.connect(lambda: self._request("browser.hidePlayer", {}))
         self._btn_search.clicked.connect(self.open_search)
+        self._btn_menu.clicked.connect(lambda: self._menu.popup(
+            self._btn_menu.mapToGlobal(QPoint(0, self._btn_menu.height()))
+        ))
+        self._btn_minimize.clicked.connect(self.showMinimized)
+        self._btn_close.clicked.connect(self.close)
+        self._art.activated.connect(self.open_cover)
         self._seek.sliderPressed.connect(self._seek_press)
         self._seek.sliderReleased.connect(self._seek_release)
         self._seek.sliderMoved.connect(self._seek_preview)
@@ -164,6 +166,7 @@ class MainWindow(QMainWindow):
 
         QShortcut(QKeySequence(Qt.Key.Key_Space), self, self._toggle_play)
         QShortcut(QKeySequence("Ctrl+F"), self, self.open_search)
+        QShortcut(QKeySequence("Ctrl+,"), self, self.open_faces)
 
         self._tick = QTimer(self)
         self._tick.setInterval(500)
@@ -174,6 +177,92 @@ class MainWindow(QMainWindow):
         self._status_timer.setSingleShot(True)
         self._status_timer.setInterval(4000)
         self._status_timer.timeout.connect(lambda: self._status.setText(""))
+        if initial_error:
+            self.show_status(initial_error, error=True)
+        elif self._faces.problems:
+            self.show_status("Some faces could not load. Open Faces for details.", error=True)
+        else:
+            self.show_status("Waiting for Firefox…")
+
+    def _button(self, text: str, description: str) -> FaceButton:
+        button = FaceButton(text, self._surface)
+        button.setToolTip(description)
+        button.setAccessibleName(description)
+        return button
+
+    def closeEvent(self, event) -> None:
+        # Auxiliary top-level windows would otherwise keep the GUI alive after
+        # its player closes. Closing presentation must never send playback work.
+        for window in (self._faces_window, self._cover_window, self._search):
+            if window is not None:
+                window.close()
+        super().closeEvent(event)
+
+    # ---- appearance ------------------------------------------------------
+
+    def _apply_face(self, face: Face, artwork: FaceArtwork) -> None:
+        effective_scale = self._scale
+        if self.screen() is not None:
+            available = self.screen().availableGeometry()
+            effective_scale = min(
+                effective_scale, available.width() / face.size[0], available.height() / face.size[1]
+            )
+        size = tuple(round(value * effective_scale) for value in face.size)
+        self.setStyleSheet(face_stylesheet(face, effective_scale))
+        self.setFixedSize(*size)
+        self._surface.apply_face(face, artwork, effective_scale)
+        self.setMask(artwork.scaled_mask(size))
+        # Move the same widgets, preserving focus, pending commands and gestures.
+        for name, widget in self._controls.items():
+            widget.setGeometry(*(round(value * effective_scale) for value in face.controls[name]))
+            if isinstance(widget, FaceButton):
+                widget.set_sprites(artwork.buttons.get(name, {}))
+        self._face_id = face.info.id
+        self._render_cover()
+        if self._search is not None:
+            self._search.setStyleSheet(self.styleSheet())
+        if self._cover_window is not None:
+            self._cover_window.setStyleSheet(self.styleSheet())
+
+    def select_face(self, face_id: str) -> None:
+        """Apply and persist a face without issuing a player command."""
+        # Validate/decode before saving so a broken pack cannot poison startup.
+        face = self._faces.load(face_id)
+        artwork = prepare_face(face)
+        self._faces.remember(face_id)
+        self._apply_face(face, artwork)
+
+    def open_faces(self) -> None:
+        from .faces_window import FacesWindow
+
+        if self._faces_window is None:
+            self._faces_window = FacesWindow(self._faces, self.select_face, self)
+        self._faces_window.refresh(self._face_id)
+        self._faces_window.show()
+        self._faces_window.raise_()
+        self._faces_window.activateWindow()
+
+    def open_cover(self) -> None:
+        if self._cover_window is None:
+            self._cover_window = QDialog(self)
+            self._cover_window.setWindowTitle("Amberfader · Cover view")
+            self._cover_label = QLabel(self._cover_window)
+            self._cover_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self._cover_label.setFixedSize(384, 384)
+            layout = QVBoxLayout(self._cover_window)
+            layout.addWidget(self._cover_label)
+        self._render_cover()
+        self._cover_window.show()
+        self._cover_window.raise_()
+        self._cover_window.activateWindow()
+
+    def _render_cover(self) -> None:
+        for label in (self._art, self._cover_label):
+            if label is not None:
+                label.setPixmap(self._cover.scaled(
+                    label.size(), Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                ))
 
     # ---- state -----------------------------------------------------------
 
@@ -206,9 +295,13 @@ class MainWindow(QMainWindow):
             self._artists.setText("Waiting for Firefox…")
             self._artists.setToolTip("")
         if not track or not track.get("artworkId"):
-            self._art.setPixmap(self._placeholder)
+            self._cover = self._placeholder
+            self._render_cover()
 
         playing = state.get("status") == "playing"
+        status = state.get("status", "unknown")
+        self._playback.setText(str(status).upper())
+        self._playback.setToolTip(f"Playback: {status}")
         self._play.setText("⏸" if playing else "▶")
         self._play.setProperty("pending", self._pending_transport)
         self._play.style().unpolish(self._play)
@@ -246,6 +339,7 @@ class MainWindow(QMainWindow):
         st = self._state or {}
         pos = self._interpolated()
         self._time.setText(f"{_fmt(pos)} / {_fmt(st.get('durationSeconds'))}")
+        self._time.setToolTip(self._time.text())
         dur = st.get("durationSeconds")
         if not self._seeking and isinstance(dur, int | float) and dur > 0 and pos is not None:
             self._seek.setValue(int(min(max(pos / dur, 0), 1) * 1000))
@@ -261,17 +355,13 @@ class MainWindow(QMainWindow):
             return
         if pix.isNull():
             return
-        self._art.setPixmap(
-            pix.scaled(
-                self._art.size(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-        )
+        self._cover = pix
+        self._render_cover()
 
     def set_connection(self, component: str, status: str, reason: str = "") -> None:
         if component in ("gui", "target", "adapter") and status != "connected":
             self._state = None
+            self._playback.setText("OFFLINE")
             self._render_like()
             if self._search:
                 self._search.mark_stale()
@@ -296,6 +386,7 @@ class MainWindow(QMainWindow):
 
     def show_status(self, text: str, error: bool = False) -> None:
         self._status.setText(text)
+        self._status.setToolTip(text)
         self._status.setProperty("error", "true" if error else "false")
         self._status.style().unpolish(self._status)
         self._status.style().polish(self._status)
@@ -397,6 +488,7 @@ class MainWindow(QMainWindow):
     def open_search(self) -> None:
         if self._search is None:
             self._search = SearchWindow(self._request, self)
+            self._search.setStyleSheet(self.styleSheet())
         self._search.show()
         self._search.raise_()
         self._search.activateWindow()
