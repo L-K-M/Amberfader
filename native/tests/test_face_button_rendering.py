@@ -9,6 +9,12 @@ from PySide6.QtWidgets import QWidget
 from amberfader.ui.face_surface import FaceButton
 
 
+def logical_pixel(image: QImage, x: int, y: int) -> QColor:
+    # QWidget.grab() returns physical pixels; assertions use widget coordinates.
+    ratio = image.devicePixelRatio()
+    return image.pixelColor(round(x * ratio), round(y * ratio))
+
+
 @pytest.fixture()
 def button(qapp):
     parent = QWidget()
@@ -35,7 +41,7 @@ def test_scaled_button_surface_is_interpolated(button):
     image = button.grab().toImage()
     # An enlarged two-pixel boundary should blend across its center rather
     # than produce a visibly jagged edge at fractional face scales.
-    assert any(20 < image.pixelColor(x, 12).red() < 235 for x in range(10, 20))
+    assert any(20 < logical_pixel(image, x, 12).red() < 235 for x in range(10, 20))
 
 
 def test_disabled_sprite_fallback_keeps_transport_icon_legible(button):
@@ -44,8 +50,8 @@ def test_disabled_sprite_fallback_keeps_transport_icon_legible(button):
     button.set_sprites({"normal": surface})
     button.setEnabled(False)
     image = button.grab().toImage()
-    assert image.pixelColor(1, 12).red() < 32
-    assert image.pixelColor(15, 12).red() == 255
+    assert logical_pixel(image, 1, 12).red() < 32
+    assert logical_pixel(image, 15, 12).red() == 255
 
 
 def test_disabled_sprite_fallback_keeps_pending_indicator_visible(button):
@@ -59,7 +65,7 @@ def test_disabled_sprite_fallback_keeps_pending_indicator_visible(button):
     button.setEnabled(False)
     image = button.grab().toImage()
     assert any(
-        image.pixelColor(x, 2).red() == 255 and image.pixelColor(x, 2).green() == 0
+        logical_pixel(image, x, 2).red() == 255 and logical_pixel(image, x, 2).green() == 0
         for x in range(2, 27)
     )
 
