@@ -23,6 +23,7 @@ FACE_ORDER = (
     "amber-classic", "midnight-rack", "moonstone", "copper-reel", "paper-signal",
     "memphis-93", "arcade-clear", "rave-grid",
     "orbit-99", "manta-ray", "jellyfish-fm", "boom-bot",
+    "tangent", "keystone", "switchback", "vane",
 )
 PREVIEW_DIRECTORY = ROOT / "build" / "face-previews"
 MARGIN = 48

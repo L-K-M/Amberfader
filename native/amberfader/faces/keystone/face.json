@@ -1,0 +1,108 @@
+{
+  "formatVersion": 1,
+  "id": "keystone",
+  "name": "Keystone",
+  "author": "Amberfader",
+  "description": "A clipped and stepped steel badge with a warm amber readout and two precise control rows.",
+  "background": "background.png",
+  "font": "sans",
+  "size": [540, 360],
+  "drag": [198, 50, 140, 18],
+  "timeSize": 26,
+  "radius": 6,
+  "palette": {
+    "window": "#25282a",
+    "panel": "#323639",
+    "display": "#151c21",
+    "text": "#f6ead9",
+    "muted": "#c2b49a",
+    "readout": "#ffdc91",
+    "accent": "#ffb347",
+    "border": "#8b8273",
+    "buttonTop": "#656664",
+    "buttonBottom": "#262b2e",
+    "danger": "#ffbba5"
+  },
+  "controls": {
+    "art": [64, 96, 80, 80],
+    "title": [194, 78, 278, 24],
+    "artists": [194, 108, 278, 22],
+    "time": [194, 136, 202, 34],
+    "playback": [408, 143, 64, 20],
+    "status": [194, 174, 278, 18],
+    "seek": [194, 200, 278, 18],
+    "previous": [56, 228, 40, 30],
+    "play": [104, 222, 52, 40],
+    "next": [164, 228, 40, 30],
+    "like": [212, 228, 44, 30],
+    "volume": [268, 234, 120, 18],
+    "search": [76, 266, 84, 26],
+    "show": [170, 266, 94, 26],
+    "hide": [274, 266, 64, 26],
+    "menu": [160, 90, 26, 22],
+    "minimize": [160, 122, 22, 22],
+    "close": [160, 154, 22, 22]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
+  }
+}

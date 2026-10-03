@@ -45,6 +45,8 @@ BUTTON_GROUPS = {
     "close": "chrome",
 }
 SCULPTURAL_FACES = frozenset({"orbit-99", "manta-ray", "jellyfish-fm", "boom-bot"})
+UTILITARIAN_FACES = frozenset({"tangent", "keystone", "switchback", "vane"})
+READOUT_CONTROLS = frozenset({"title", "artists", "time", "playback", "status"})
 
 
 def _rounded(rect: QRectF, radius: float) -> QPainterPath:
@@ -138,6 +140,13 @@ def _render_sculptural_background(face: dict, source: QImage) -> QImage:
         } else palette["panel"]
         _well(painter, _surround(rectangle, 5), color, palette["border"], radius)
 
+    _draw_identification(painter, face)
+    painter.end()
+    return image
+
+
+def _draw_identification(painter: QPainter, face: dict) -> None:
+    palette = face["palette"]
     drag = QRectF(*face["drag"])
     _well(painter, drag.adjusted(-4, -4, 4, 4), palette["window"], palette["border"], 8)
     font = QFont("sans-serif")
@@ -155,6 +164,34 @@ def _render_sculptural_background(face: dict, source: QImage) -> QImage:
             drag.adjusted(110, 0, -6, 0), Qt.AlignmentFlag.AlignVCenter,
             face["name"].upper(),
         )
+
+
+def _render_utilitarian_background(face: dict, source: QImage) -> QImage:
+    """Use one display well so compact instruments keep a coherent readout."""
+    width, height = face["size"]
+    if source.width() * height != source.height() * width:
+        raise RuntimeError(f"{face['id']}: generated material does not match the canvas aspect")
+    image, painter = _canvas(width, height)
+    painter.drawImage(QRectF(0, 0, width, height), source)
+    palette = face["palette"]
+    controls = face["controls"]
+    readout = QRectF()
+    for name in sorted(READOUT_CONTROLS):
+        readout = readout.united(QRectF(*controls[name]))
+    _well(
+        painter, readout.adjusted(-6, -6, 6, 6), palette["display"], palette["border"], 14,
+    )
+    for name, rectangle in controls.items():
+        if name in READOUT_CONTROLS:
+            continue
+        if name in BUTTON_GROUPS:
+            # Sprites supply their own bevel. A quiet backing keeps the full
+            # hit rectangle opaque without adding a second frame per button.
+            painter.fillPath(_rounded(_surround(rectangle, 2), 4), QColor(palette["panel"]))
+            continue
+        color = palette["display"] if name == "art" else palette["panel"]
+        _well(painter, _surround(rectangle, 5), color, palette["border"], min(face["radius"], 8))
+    _draw_identification(painter, face)
     painter.end()
     return image
 
@@ -164,9 +201,11 @@ def render_background(face: dict) -> QImage:
     source = QImage(str(ROOT / "generated" / f"{face['id']}.png"))
     if source.isNull():
         raise RuntimeError(f"Missing generated material for {face['id']}")
-    if face["id"] in SCULPTURAL_FACES:
+    if face["id"] in SCULPTURAL_FACES | UTILITARIAN_FACES:
         if not source.hasAlphaChannel():
-            raise RuntimeError(f"{face['id']}: sculptural material needs an alpha channel")
+            raise RuntimeError(f"{face['id']}: shaped material needs an alpha channel")
+        if face["id"] in UTILITARIAN_FACES:
+            return _render_utilitarian_background(face, source)
         return _render_sculptural_background(face, source)
     image, painter = _canvas(width, height)
     shape = _silhouette(face)
@@ -245,6 +284,10 @@ def render_button(face: dict, group: str, state: str) -> QImage:
         top, bottom, edge = bottom.darker(115), top.darker(115), QColor(p["accent"])
     elif state == "disabled":
         top, bottom = QColor(p["panel"]), QColor(p["window"])
+        if face["id"] in ("switchback", "vane"):
+            # These light readouts use dark muted labels, including disabled
+            # host glyphs. Keep their matte button surface equally legible.
+            top = bottom = QColor(p["display"])
     radius = min(face["radius"], (height - 4) / 2)
     rect = QRectF(1, 1, width - 2, height - 3)
     shadow = rect.translated(0, 1)
