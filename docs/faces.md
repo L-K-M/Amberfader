@@ -11,7 +11,7 @@ choose **Cover view** from the menu, for a larger artwork window.
 
 ## Included faces
 
-![Eight player faces rendered with sample metadata](faces-preview.png)
+![Twelve player faces rendered with sample metadata](faces-preview.png)
 
 | Face | Character |
 | --- | --- |
@@ -23,6 +23,15 @@ choose **Cover view** from the menu, for a larger artwork window.
 | Memphis ’93 | Radical 90s squiggles, checkerboards, pink and turquoise screen print |
 | Arcade Clear | Translucent grape plastic, circuitry, cyan accents |
 | Rave Grid | Acid lime, ultraviolet, halftones, laser cyan and clipped corners |
+| Orbit 99 | An orbital chrome instrument with curved rails and satellite controls |
+| Manta Ray | Swept silver wings, deep blue glass and a curling tail |
+| Jellyfish FM | A pearlescent purple jellyfish with controls on its floating pods |
+| Boom Bot | An orange and purple headphone robot with controls on its body and limbs |
+
+The four experimental sculptural faces place the player controls in curved
+instruments and characters, with transparent gaps between parts of the shell.
+
+![Four sculptural player faces rendered with sample metadata](faces-sculptural-preview.png)
 
 These are original designs inspired by [Audion Faces](https://panic.com/blog/facing-forward/),
 SoundJam MP, and late-1990s desktop players. They do not contain those apps'
@@ -150,7 +159,7 @@ versions can add presentation features without giving plugins player access.
 
 ## Artwork source and verification
 
-The eight original material artworks were generated with OpenAI’s built-in image
+The twelve original artworks were generated with OpenAI’s built-in image
 generator. The source PNGs live in [`artwork/generated`](../artwork/generated);
 the exact generation and edit prompts are recorded in
 [`artwork/face-prompts.json`](../artwork/face-prompts.json). The sources are
@@ -166,13 +175,17 @@ with the GUI extra installed:
 ```sh
 QT_QPA_PLATFORM=offscreen uv run python artwork/render_faces.py
 QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py --states
+QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
+  --face orbit-99 --face manta-ray --face jellyfish-fm --face boom-bot \
+  --output docs/faces-sculptural-preview.png
 ```
 
 The preview script renders the actual player widgets with synthetic metadata,
 and saves individual renders plus long-metadata, offline/unknown, and pending
 contact sheets in `build/face-previews/`. It does not connect to Firefox or send
-playback commands. The face chooser also honors the selected fonts and fits
-the complete time readout.
+playback commands. Repeat `--face ID` to select a subset and use `--output PATH`
+to save its sample poster separately. The face chooser also honors the selected
+fonts and fits the complete time readout.
 
 Automated tests cover pack validation, bounded installation, selection recovery,
 all bundled layouts and scales, artwork resizing, optional sprites, and pending

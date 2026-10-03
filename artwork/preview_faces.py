@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FACE_ORDER = (
     "amber-classic", "midnight-rack", "moonstone", "copper-reel", "paper-signal",
     "memphis-93", "arcade-clear", "rave-grid",
+    "orbit-99", "manta-ray", "jellyfish-fm", "boom-bot",
 )
 PREVIEW_DIRECTORY = ROOT / "build" / "face-previews"
 MARGIN = 48
@@ -182,6 +183,14 @@ def main() -> None:
     parser.add_argument(
         "--states", action="store_true", help="Render additional state contact sheets",
     )
+    parser.add_argument(
+        "--face", action="append", dest="face_ids", metavar="ID",
+        help="Render only this face; repeat to select several faces",
+    )
+    parser.add_argument(
+        "--output", type=Path, default=ROOT / "docs" / "faces-preview.png", metavar="PATH",
+        help="Write the sample contact sheet to this path",
+    )
     options = parser.parse_args()
     app = QApplication([])
     PREVIEW_DIRECTORY.mkdir(parents=True, exist_ok=True)
@@ -190,16 +199,23 @@ def main() -> None:
         library = FaceLibrary(Path(directory) / "faces", Path(directory) / "appearance.json")
         if library.problems:
             raise RuntimeError("Cannot render every bundled face: " + "; ".join(library.problems))
+        selected_ids = set(options.face_ids or [])
+        unknown_ids = selected_ids - {info.id for info in library.faces}
+        if unknown_ids:
+            parser.error("Unknown face IDs: " + ", ".join(sorted(unknown_ids)))
         order = {face_id: index for index, face_id in enumerate(FACE_ORDER)}
         infos = sorted(library.faces, key=lambda info: (order.get(info.id, len(order)), info.id))
+        if selected_ids:
+            infos = [info for info in infos if info.id in selected_ids]
         faces = [library.load(info.id) for info in infos]
         window = MainWindow(_reject_command, faces=library)
         window.show()
         cover = _sample_cover()
         try:
             poster = _contact_sheet(app, window, faces, "sample", cover)
-            if not poster.save(str(ROOT / "docs" / "faces-preview.png")):
-                raise RuntimeError("Could not save face preview")
+            options.output.parent.mkdir(parents=True, exist_ok=True)
+            if not poster.save(str(options.output)):
+                raise RuntimeError(f"Could not save {options.output}")
             if options.states:
                 for state_name in ("long-metadata", "offline", "pending"):
                     sheet = _contact_sheet(app, window, faces, state_name, cover)

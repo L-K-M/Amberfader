@@ -1,0 +1,108 @@
+{
+  "formatVersion": 1,
+  "id": "boom-bot",
+  "name": "Boom Bot",
+  "author": "Amberfader",
+  "description": "An orange and purple toy DJ robot with oversized headphones, a cover porthole, and hand and foot controls.",
+  "background": "background.png",
+  "font": "sans",
+  "size": [620, 620],
+  "drag": [242, 226, 122, 24],
+  "timeSize": 26,
+  "radius": 20,
+  "palette": {
+    "window": "#432247",
+    "panel": "#352449",
+    "display": "#172a39",
+    "text": "#fff8e9",
+    "muted": "#e7c8e8",
+    "readout": "#ddffff",
+    "accent": "#37d2cd",
+    "border": "#ae7c99",
+    "buttonTop": "#86503c",
+    "buttonBottom": "#49233f",
+    "danger": "#ffd09b"
+  },
+  "controls": {
+    "art": [200, 294, 96, 96],
+    "title": [324, 282, 122, 24],
+    "artists": [324, 312, 122, 22],
+    "time": [322, 344, 132, 34],
+    "playback": [324, 386, 122, 18],
+    "seek": [226, 414, 192, 20],
+    "previous": [44, 388, 44, 36],
+    "play": [515, 404, 62, 50],
+    "next": [94, 388, 44, 36],
+    "like": [68, 432, 44, 36],
+    "volume": [270, 535, 94, 18],
+    "search": [124, 534, 90, 30],
+    "show": [402, 538, 100, 30],
+    "hide": [390, 166, 66, 28],
+    "menu": [194, 100, 28, 24],
+    "minimize": [196, 134, 24, 24],
+    "close": [196, 168, 24, 24],
+    "status": [220, 446, 188, 18]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
+  }
+}
