@@ -90,6 +90,7 @@ def face_stylesheet(face: Face, scale: float) -> str:
       border: 1px solid {p['border']}; border-radius: {radius}px;
       padding: 0px {round(2 * scale)}px;
     }}
+    QPushButton#like {{ font-size: {round(18 * scale)}px; }}
     QPushButton:hover:!disabled, QPushButton:focus {{ border-color: {p['accent']}; }}
     QPushButton:pressed, QPushButton[pending="true"] {{
       background: {p['accent']}; color: {p['window']};
@@ -224,9 +225,13 @@ class FaceButton(QPushButton):
             state = "hover"
         painter = QPainter(self)
         if self._sprites:
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
             if state == "disabled" and state not in self._sprites:
                 painter.setOpacity(0.5)
             painter.drawPixmap(self.rect(), self._sprites.get(state, self._sprites["normal"]))
+            # Dimming belongs to the artist surface; host labels and state
+            # indicators keep the contrast chosen by the disabled palette.
+            painter.setOpacity(1.0)
         else:
             option = QStyleOptionButton()
             self.initStyleOption(option)

@@ -74,7 +74,7 @@ Restart the browser and desktop app after updating.
 
 ## Linux Faces
 
-In the native app, choose **☰ → Faces…** or press **Ctrl+,**. Five original
+In the native app, choose **☰ → Faces…** or press **Ctrl+,**. Eight original
 retro faces change the player's shape, layout and textures while keeping
 artwork, likes, playback, search, recents and mixes. Your choice is saved locally.
 Click the cover for **Cover view**.

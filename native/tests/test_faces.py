@@ -19,7 +19,10 @@ from amberfader.face_library import (
     load_face,
 )
 
-BUNDLED_IDS = {"amber-classic", "midnight-rack", "moonstone", "copper-reel", "paper-signal"}
+BUNDLED_IDS = {
+    "amber-classic", "midnight-rack", "moonstone", "copper-reel", "paper-signal",
+    "memphis-93", "arcade-clear", "rave-grid",
+}
 
 
 def png(width, height, rgba=b"\x70\x60\x50\xff"):
@@ -40,6 +43,8 @@ def make_pack(tmp_path):
     directory.mkdir()
     data = json.loads((BUILTIN_DIRECTORY / DEFAULT_FACE_ID / "face.json").read_text())
     data.update(id="my-face", name="My Face")
+    # This fixture exercises a minimal pack; sprite tests add their own assets.
+    data.pop("buttons", None)
     (directory / "face.json").write_text(json.dumps(data))
     (directory / "background.png").write_bytes(png(*data["size"]))
     return directory, data
