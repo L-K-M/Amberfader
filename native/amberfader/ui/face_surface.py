@@ -65,6 +65,11 @@ def prepare_face(face: Face) -> FaceArtwork:
     })
 
 
+def like_font_size(face: Face) -> int:
+    # A narrow v1 plugin button must still display the unknown-state question mark.
+    return 18 if face.controls["like"][2] >= 40 else 12
+
+
 def face_stylesheet(face: Face, scale: float) -> str:
     """Generate styles from constrained tokens; packs cannot inject QSS."""
     p = face.palette
@@ -90,7 +95,7 @@ def face_stylesheet(face: Face, scale: float) -> str:
       border: 1px solid {p['border']}; border-radius: {radius}px;
       padding: 0px {round(2 * scale)}px;
     }}
-    QPushButton#like {{ font-size: {round(18 * scale)}px; }}
+    QPushButton#like {{ font-size: {round(like_font_size(face) * scale)}px; }}
     QPushButton:hover:!disabled, QPushButton:focus {{ border-color: {p['accent']}; }}
     QPushButton:pressed, QPushButton[pending="true"] {{
       background: {p['accent']}; color: {p['window']};

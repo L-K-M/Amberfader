@@ -24,6 +24,7 @@ from .face_surface import (
     TRANSPORT_CONTROLS,
     FaceArtwork,
     draw_transport_icon,
+    like_font_size,
     prepare_face,
 )
 
@@ -67,7 +68,10 @@ class FacePreview(QWidget):
             font = painter.font()
             font.setFamily(FONT_FAMILIES["mono" if name == "time" else face.font])
             font.setBold(name == "title")
-            font.setPixelSize(face.time_size if name == "time" else 18 if name == "like" else 12)
+            size = face.time_size if name == "time" else 12
+            if name == "like":
+                size = like_font_size(face)
+            font.setPixelSize(size)
             if name == "time":
                 font.setPixelSize(min(font.pixelSize(), rect.height() - 2))
                 width = QFontMetrics(font).horizontalAdvance(PREVIEW_LABELS["time"])

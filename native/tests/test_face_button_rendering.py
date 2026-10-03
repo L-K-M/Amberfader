@@ -62,3 +62,22 @@ def test_disabled_sprite_fallback_keeps_pending_indicator_visible(button):
         image.pixelColor(x, 2).red() == 255 and image.pixelColor(x, 2).green() == 0
         for x in range(2, 27)
     )
+
+
+def test_minimum_width_like_keeps_unknown_marker(button):
+    from dataclasses import replace
+    from types import MappingProxyType
+
+    from amberfader.face_library import BUILTIN_DIRECTORY, DEFAULT_FACE_ID, load_face
+    from amberfader.ui.face_surface import face_stylesheet
+
+    face = load_face(BUILTIN_DIRECTORY / DEFAULT_FACE_ID)
+    controls = dict(face.controls)
+    controls["like"] = (212, 198, 22, 22)
+    face = replace(face, controls=MappingProxyType(controls))
+    button.setObjectName("like")
+    button.setText("♡?")
+    button.resize(22, 22)
+    button.setStyleSheet(face_stylesheet(face, 1))
+    button.ensurePolished()
+    assert button.fontMetrics().horizontalAdvance(button.text()) + 4 <= button.width()
