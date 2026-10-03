@@ -46,6 +46,7 @@ BUTTON_GROUPS = {
 }
 SCULPTURAL_FACES = frozenset({"orbit-99", "manta-ray", "jellyfish-fm", "boom-bot"})
 UTILITARIAN_FACES = frozenset({"tangent", "keystone", "switchback", "vane"})
+LENS_FACES = frozenset({"aureole", "viridian"})
 READOUT_CONTROLS = frozenset({"title", "artists", "time", "playback", "status"})
 
 
@@ -196,16 +197,41 @@ def _render_utilitarian_background(face: dict, source: QImage) -> QImage:
     return image
 
 
+def _render_lens_background(face: dict, source: QImage) -> QImage:
+    """Keep the oval/circular glass intact, with host text directly on the lens."""
+    width, height = face["size"]
+    if source.width() * height != source.height() * width:
+        raise RuntimeError(f"{face['id']}: generated material does not match the canvas aspect")
+    image, painter = _canvas(width, height)
+    painter.drawImage(QRectF(0, 0, width, height), source)
+    palette = face["palette"]
+    for name, rectangle in face["controls"].items():
+        if name in READOUT_CONTROLS:
+            continue
+        if name in BUTTON_GROUPS:
+            painter.fillPath(_rounded(_surround(rectangle, 2), 4), QColor(palette["panel"]))
+            continue
+        _well(
+            painter, _surround(rectangle, 3), palette["panel"], palette["border"],
+            min(face["radius"], 8),
+        )
+    _draw_identification(painter, face)
+    painter.end()
+    return image
+
+
 def render_background(face: dict) -> QImage:
     width, height = face["size"]
     source = QImage(str(ROOT / "generated" / f"{face['id']}.png"))
     if source.isNull():
         raise RuntimeError(f"Missing generated material for {face['id']}")
-    if face["id"] in SCULPTURAL_FACES | UTILITARIAN_FACES:
+    if face["id"] in SCULPTURAL_FACES | UTILITARIAN_FACES | LENS_FACES:
         if not source.hasAlphaChannel():
             raise RuntimeError(f"{face['id']}: shaped material needs an alpha channel")
         if face["id"] in UTILITARIAN_FACES:
             return _render_utilitarian_background(face, source)
+        if face["id"] in LENS_FACES:
+            return _render_lens_background(face, source)
         return _render_sculptural_background(face, source)
     image, painter = _canvas(width, height)
     shape = _silhouette(face)
@@ -284,7 +310,7 @@ def render_button(face: dict, group: str, state: str) -> QImage:
         top, bottom, edge = bottom.darker(115), top.darker(115), QColor(p["accent"])
     elif state == "disabled":
         top, bottom = QColor(p["panel"]), QColor(p["window"])
-        if face["id"] in ("switchback", "vane"):
+        if face["id"] in ("switchback", "vane") or face["id"] in LENS_FACES:
             # These light readouts use dark muted labels, including disabled
             # host glyphs. Keep their matte button surface equally legible.
             top = bottom = QColor(p["display"])

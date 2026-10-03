@@ -1,0 +1,108 @@
+{
+  "formatVersion": 1,
+  "id": "viridian",
+  "name": "Viridian",
+  "author": "Amberfader",
+  "description": "A luminous green circular lens wrapped by an open brushed-silver crescent and rim controls.",
+  "background": "background.png",
+  "font": "sans",
+  "size": [440, 440],
+  "drag": [190, 49, 124, 18],
+  "timeSize": 26,
+  "radius": 10,
+  "palette": {
+    "window": "#dfe5df",
+    "panel": "#bdcbc2",
+    "display": "#84e88b",
+    "text": "#173028",
+    "muted": "#1a3a24",
+    "readout": "#103a1b",
+    "accent": "#238740",
+    "border": "#667c71",
+    "buttonTop": "#f2f6f1",
+    "buttonBottom": "#abbfb0",
+    "danger": "#7d201d"
+  },
+  "controls": {
+    "art": [35, 194, 64, 64],
+    "title": [146, 144, 206, 24],
+    "artists": [132, 174, 238, 20],
+    "time": [132, 204, 234, 36],
+    "playback": [214, 244, 112, 18],
+    "status": [168, 270, 178, 18],
+    "seek": [158, 294, 186, 18],
+    "volume": [63, 275, 80, 18],
+    "previous": [90, 304, 36, 30],
+    "play": [138, 350, 52, 38],
+    "next": [204, 368, 36, 30],
+    "like": [254, 357, 40, 30],
+    "search": [147, 318, 58, 26],
+    "show": [215, 321, 76, 26],
+    "hide": [299, 315, 54, 26],
+    "menu": [86, 124, 26, 22],
+    "minimize": [64, 153, 22, 22],
+    "close": [100, 179, 22, 22]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
+  }
+}

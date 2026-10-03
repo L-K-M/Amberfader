@@ -24,6 +24,7 @@ BUNDLED_IDS = {
     "memphis-93", "arcade-clear", "rave-grid",
     "orbit-99", "manta-ray", "jellyfish-fm", "boom-bot",
     "tangent", "keystone", "switchback", "vane",
+    "aureole", "viridian",
 }
 
 
