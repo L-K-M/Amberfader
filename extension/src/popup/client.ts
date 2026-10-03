@@ -154,11 +154,13 @@ export class ProtocolClient {
     if (needsBinding && this.bindingToken) req.bindingToken = this.bindingToken;
     const bindingAtDispatch = this.bindingToken;
     const sessionAtDispatch = this.sessionId;
+    const stateEpochAtDispatch = this.stateEpoch;
     const resp = await this.rawSend(req);
     // Learn binding tokens from responses too (select, state.get).
     const bt = (resp as { bindingToken?: unknown }).bindingToken;
     if (typeof bt === "string" && this.bindingToken === bindingAtDispatch &&
-        this.sessionId === sessionAtDispatch) this.bindingToken = bt;
+        this.sessionId === sessionAtDispatch &&
+        this.stateEpoch === stateEpochAtDispatch) this.bindingToken = bt;
     return resp;
   }
 
