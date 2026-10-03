@@ -1,0 +1,108 @@
+{
+  "formatVersion": 1,
+  "id": "aureole",
+  "name": "Aureole",
+  "author": "Amberfader",
+  "description": "A gold oval lens held by an asymmetrical silver and navy crescent, with a left transport pod.",
+  "background": "background.png",
+  "font": "sans",
+  "size": [600, 400],
+  "drag": [278, 53, 128, 18],
+  "timeSize": 26,
+  "radius": 10,
+  "palette": {
+    "window": "#e1ded3",
+    "panel": "#c2c7ca",
+    "display": "#f0ca60",
+    "text": "#25303d",
+    "muted": "#372a0b",
+    "readout": "#2c2106",
+    "accent": "#98672b",
+    "border": "#697578",
+    "buttonTop": "#f0f3f4",
+    "buttonBottom": "#aeb7bf",
+    "danger": "#782510"
+  },
+  "controls": {
+    "art": [162, 143, 64, 64],
+    "title": [230, 106, 274, 24],
+    "artists": [230, 136, 274, 20],
+    "time": [230, 164, 222, 34],
+    "playback": [460, 172, 94, 18],
+    "status": [230, 204, 272, 18],
+    "seek": [243, 230, 220, 18],
+    "volume": [64, 232, 92, 18],
+    "previous": [42, 252, 34, 28],
+    "play": [49, 166, 46, 40],
+    "next": [78, 270, 34, 28],
+    "like": [123, 274, 40, 28],
+    "search": [225, 264, 64, 28],
+    "show": [301, 271, 80, 28],
+    "hide": [394, 280, 56, 28],
+    "menu": [74, 101, 26, 24],
+    "minimize": [44, 114, 22, 22],
+    "close": [22, 139, 22, 22]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
+  }
+}

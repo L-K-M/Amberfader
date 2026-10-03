@@ -11,7 +11,7 @@ choose **Cover view** from the menu, for a larger artwork window.
 
 ## Included faces
 
-![Sixteen player faces rendered with sample metadata](faces-preview.png)
+![Eighteen player faces rendered with sample metadata](faces-preview.png)
 
 | Face | Character |
 | --- | --- |
@@ -31,6 +31,8 @@ choose **Cover view** from the menu, for a larger artwork window.
 | Keystone | A clipped steel badge with an amber display |
 | Switchback | A swept graphite shell with lime accents and an LCD |
 | Vane | A dark aerodynamic fin with ice blue glass |
+| Aureole | A gold oval display in a silver and navy shell |
+| Viridian | A green round lens framed by a silver crescent |
 
 The four experimental sculptural faces place the player controls in curved
 instruments and characters, with transparent gaps between parts of the shell.
@@ -41,6 +43,11 @@ Tangent, Keystone, Switchback and Vane use compact abstract instrument forms,
 with shaped metal and plastic shells around the readout and controls.
 
 ![Four utilitarian player faces rendered with sample metadata](faces-utilitarian-preview.png)
+
+Aureole and Viridian place oval and round glass displays inside curved silver
+shells, with gold, navy and green instrument materials.
+
+![Two lens player faces rendered with sample metadata](faces-lens-preview.png)
 
 These are original designs inspired by [Audion Faces](https://panic.com/blog/facing-forward/),
 SoundJam MP, and late-1990s desktop players. They do not contain those apps'
@@ -168,7 +175,7 @@ versions can add presentation features without giving plugins player access.
 
 ## Artwork source and verification
 
-The sixteen original artworks were generated with OpenAI’s built-in image
+The eighteen original artworks were generated with OpenAI’s built-in image
 generator. The source PNGs live in [`artwork/generated`](../artwork/generated);
 the exact generation and edit prompts are recorded in
 [`artwork/face-prompts.json`](../artwork/face-prompts.json). The sources are
@@ -190,6 +197,8 @@ QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
 QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
   --face tangent --face keystone --face switchback --face vane \
   --output docs/faces-utilitarian-preview.png
+QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
+  --face aureole --face viridian --output docs/faces-lens-preview.png
 ```
 
 The preview script renders the actual player widgets with synthetic metadata,
