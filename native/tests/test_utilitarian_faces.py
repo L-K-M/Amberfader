@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QWidget
 
 from amberfader.face_library import BUILTIN_DIRECTORY, load_face
 from amberfader.ui.face_surface import FaceButton, face_stylesheet, prepare_face
+from amberfader.ui.search_window import SearchWindow
 
 # The first three probes sit inside real rail/vent openings. Keystone is a
 # solid badge, so its probe checks the intentionally clipped exterior corner.
@@ -49,6 +50,11 @@ def _luminance(color):
     )
 
 
+def _contrast(first, second):
+    bright, dark = sorted((_luminance(first), _luminance(second)), reverse=True)
+    return (bright + 0.05) / (dark + 0.05)
+
+
 @pytest.mark.parametrize("face_id", [face_id for face_id, _ in CONTOUR_PROBES])
 def test_disabled_labels_contrast_with_their_artist_surfaces(qapp, face_id):
     face = load_face(BUILTIN_DIRECTORY / face_id)
@@ -64,8 +70,37 @@ def test_disabled_labels_contrast_with_their_artist_surfaces(qapp, face_id):
         for name, states in artwork.buttons.items():
             image = states["disabled"].toImage()
             background = image.pixelColor(image.width() // 2, image.height() // 2)
-            bright, dark = sorted((_luminance(foreground), _luminance(background)), reverse=True)
-            assert (bright + 0.05) / (dark + 0.05) >= 4.5, (face_id, name)
+            assert _contrast(foreground, background) >= 4.5, (face_id, name)
     finally:
         parent.deleteLater()
+        qapp.processEvents()
+
+
+@pytest.mark.parametrize("face_id", ("switchback", "vane"))
+def test_light_readout_faces_keep_search_labels_legible(qapp, face_id):
+    face = load_face(BUILTIN_DIRECTORY / face_id)
+    dialog = SearchWindow(lambda *_: None)
+    dialog.setStyleSheet(face_stylesheet(face, 1))
+    dialog.apply_response("search.history", True, {"queries": ["Test query"]})
+    dialog.show()
+    qapp.processEvents()
+    try:
+        recent = dialog.findChild(QWidget, "dim")
+        assert recent is not None
+        assert _contrast(
+            recent.palette().color(QPalette.ColorRole.WindowText),
+            dialog.palette().color(QPalette.ColorRole.Window),
+        ) >= 4.5
+        button = dialog._btn_radio
+        assert not button.isEnabled()
+        foreground = button.palette().color(
+            QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText,
+        )
+        button.setText("")
+        image = button.grab().toImage()
+        background = image.pixelColor(image.width() // 2, image.height() // 2)
+        assert _contrast(foreground, background) >= 4.5
+    finally:
+        dialog.close()
+        dialog.deleteLater()
         qapp.processEvents()
