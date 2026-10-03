@@ -17,6 +17,8 @@ def test_drag_region_is_the_original_shell_without_a_branding_plaque(qapp, face_
     face = load_face(BUILTIN_DIRECTORY / face_id)
     background = QImage.fromData(face.background)
     source = QImage(str(BUILTIN_DIRECTORY.parents[2] / "artwork" / "generated" / f"{face_id}.png"))
+    assert not background.isNull(), "Bundled background failed to decode"
+    assert not source.isNull(), "Generated source artwork is missing or cannot decode"
     # QImage.scaled uses a different resampler around sharp metal reflections.
     # Compare the shell with a direct, unadorned painting of its source instead.
     original_shell = QImage(background.size(), QImage.Format.Format_ARGB32)

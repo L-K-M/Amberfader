@@ -73,6 +73,7 @@ def test_switch_preserves_pending_guards_search_session_and_art(themed, qapp):
         "dataBase64": base64.b64encode(png(256, 256)).decode(),
     })
     cover_key = window._cover.cacheKey()
+    assert cover_key != window._placeholder.cacheKey()
     window.open_search()
     search = window._search
     _load_results(search)
@@ -112,6 +113,7 @@ def test_cover_view_follows_assets_and_survives_theme_change(themed):
         "occurrenceId": "occ-1", "artworkId": "cover",
         "dataBase64": base64.b64encode(png(128, 128, b"\xff\0\0\xff")).decode(),
     })
+    assert window._cover.cacheKey() != window._placeholder.cacheKey()
     assert window._cover_label.pixmap().toImage().pixelColor(100, 100).red() == 255
     window.select_face("moonstone")
     assert window._cover_window is dialog

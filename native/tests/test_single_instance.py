@@ -283,6 +283,7 @@ def test_late_snapshot_cannot_restore_an_old_track_and_cover_on_the_same_binding
     })
     app.request("state.get", {})
     request_id = sent[-1]["id"]
+    assert request_id in app._pending
     app._on_message({**envelope, "kind": "event", "event": "state", "data": current})
     app._on_message({
         **envelope, "kind": "event", "event": "asset",
@@ -308,6 +309,7 @@ def test_late_snapshot_cannot_revive_state_after_connection_reset(app, qapp, res
     app._on_message({**envelope, "kind": "event", "event": "state", "data": old})
     app.request("state.get", {})
     request_id = sent[-1]["id"]
+    assert request_id in app._pending
     if reset == "helper":
         app._on_helper_gone()
     else:
