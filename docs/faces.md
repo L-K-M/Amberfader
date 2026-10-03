@@ -11,7 +11,7 @@ choose **Cover view** from the menu, for a larger artwork window.
 
 ## Included faces
 
-![Twelve player faces rendered with sample metadata](faces-preview.png)
+![Sixteen player faces rendered with sample metadata](faces-preview.png)
 
 | Face | Character |
 | --- | --- |
@@ -27,11 +27,20 @@ choose **Cover view** from the menu, for a larger artwork window.
 | Manta Ray | Swept silver wings, deep blue glass and a curling tail |
 | Jellyfish FM | A pearlescent purple jellyfish with controls on its floating pods |
 | Boom Bot | An orange and purple headphone robot with controls on its body and limbs |
+| Tangent | A silver and navy crescent with compact instrument controls |
+| Keystone | A clipped steel badge with an amber display |
+| Switchback | A swept graphite shell with lime accents and an LCD |
+| Vane | A dark aerodynamic fin with ice blue glass |
 
 The four experimental sculptural faces place the player controls in curved
 instruments and characters, with transparent gaps between parts of the shell.
 
 ![Four sculptural player faces rendered with sample metadata](faces-sculptural-preview.png)
+
+Tangent, Keystone, Switchback and Vane use compact abstract instrument forms,
+with shaped metal and plastic shells around the readout and controls.
+
+![Four utilitarian player faces rendered with sample metadata](faces-utilitarian-preview.png)
 
 These are original designs inspired by [Audion Faces](https://panic.com/blog/facing-forward/),
 SoundJam MP, and late-1990s desktop players. They do not contain those apps'
@@ -159,7 +168,7 @@ versions can add presentation features without giving plugins player access.
 
 ## Artwork source and verification
 
-The twelve original artworks were generated with OpenAI’s built-in image
+The sixteen original artworks were generated with OpenAI’s built-in image
 generator. The source PNGs live in [`artwork/generated`](../artwork/generated);
 the exact generation and edit prompts are recorded in
 [`artwork/face-prompts.json`](../artwork/face-prompts.json). The sources are
@@ -178,6 +187,9 @@ QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py --states
 QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
   --face orbit-99 --face manta-ray --face jellyfish-fm --face boom-bot \
   --output docs/faces-sculptural-preview.png
+QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
+  --face tangent --face keystone --face switchback --face vane \
+  --output docs/faces-utilitarian-preview.png
 ```
 
 The preview script renders the actual player widgets with synthetic metadata,

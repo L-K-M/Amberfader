@@ -1,0 +1,108 @@
+{
+  "formatVersion": 1,
+  "id": "tangent",
+  "name": "Tangent",
+  "author": "Amberfader",
+  "description": "A satin-silver crescent around navy glass, with a slim open rail and compact transport shelf.",
+  "background": "background.png",
+  "font": "sans",
+  "size": [640, 320],
+  "drag": [68, 52, 100, 20],
+  "timeSize": 26,
+  "radius": 6,
+  "palette": {
+    "window": "#1b3043",
+    "panel": "#223a4d",
+    "display": "#06182e",
+    "text": "#edf6ff",
+    "muted": "#aac7d9",
+    "readout": "#d9f0ff",
+    "accent": "#36d7f0",
+    "border": "#718e9f",
+    "buttonTop": "#415a6c",
+    "buttonBottom": "#1b2b39",
+    "danger": "#ffb59a"
+  },
+  "controls": {
+    "art": [78, 104, 88, 88],
+    "title": [230, 90, 326, 24],
+    "artists": [230, 120, 326, 20],
+    "time": [230, 144, 220, 32],
+    "playback": [470, 151, 86, 20],
+    "status": [230, 180, 326, 18],
+    "seek": [232, 208, 344, 18],
+    "previous": [58, 224, 34, 28],
+    "play": [104, 218, 48, 38],
+    "next": [164, 224, 34, 28],
+    "like": [210, 228, 42, 26],
+    "volume": [266, 227, 80, 18],
+    "search": [358, 226, 58, 28],
+    "show": [428, 226, 78, 28],
+    "hide": [518, 226, 52, 24],
+    "menu": [594, 106, 24, 24],
+    "minimize": [594, 138, 22, 22],
+    "close": [594, 170, 22, 22]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
+  }
+}

@@ -101,6 +101,8 @@ def face_stylesheet(face: Face, scale: float) -> str:
       background: {p['accent']}; color: {p['window']};
     }}
     QPushButton:disabled {{ color: {p['muted']}; background: {p['panel']}; }}
+    QDialog QLabel#dim {{ color: {p['text']}; }}
+    QDialog QPushButton:disabled {{ color: {p['text']}; background: {p['panel']}; }}
     QSlider {{ background: transparent; }}
     QSlider::groove:horizontal {{ height: {round(4 * scale)}px; background: {p['display']}; }}
     QSlider::handle:horizontal {{

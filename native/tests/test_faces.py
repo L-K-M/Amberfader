@@ -23,6 +23,7 @@ BUNDLED_IDS = {
     "amber-classic", "midnight-rack", "moonstone", "copper-reel", "paper-signal",
     "memphis-93", "arcade-clear", "rave-grid",
     "orbit-99", "manta-ray", "jellyfish-fm", "boom-bot",
+    "tangent", "keystone", "switchback", "vane",
 }
 
 

@@ -1,0 +1,108 @@
+{
+  "formatVersion": 1,
+  "id": "switchback",
+  "name": "Switchback",
+  "author": "Amberfader",
+  "description": "A graphite sweep around lime LCD glass, with a circular art port and compact lower controls.",
+  "background": "background.png",
+  "font": "sans",
+  "size": [640, 320],
+  "drag": [52, 60, 100, 20],
+  "timeSize": 26,
+  "radius": 6,
+  "palette": {
+    "window": "#20281d",
+    "panel": "#293324",
+    "display": "#9aca43",
+    "text": "#edf6dc",
+    "muted": "#314919",
+    "readout": "#16270e",
+    "accent": "#d9fc79",
+    "border": "#5d753c",
+    "buttonTop": "#46583a",
+    "buttonBottom": "#202a1b",
+    "danger": "#80221d"
+  },
+  "controls": {
+    "art": [60, 103, 80, 80],
+    "title": [230, 106, 326, 22],
+    "artists": [230, 132, 326, 18],
+    "time": [230, 154, 220, 32],
+    "playback": [466, 160, 90, 18],
+    "status": [230, 190, 326, 18],
+    "seek": [224, 218, 336, 18],
+    "previous": [122, 248, 36, 28],
+    "play": [166, 242, 48, 36],
+    "next": [222, 248, 36, 28],
+    "like": [266, 248, 40, 28],
+    "volume": [314, 252, 80, 18],
+    "search": [404, 248, 66, 28],
+    "show": [478, 248, 74, 28],
+    "hide": [560, 248, 50, 28],
+    "menu": [180, 108, 28, 22],
+    "minimize": [184, 140, 22, 22],
+    "close": [190, 172, 22, 22]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
+  }
+}

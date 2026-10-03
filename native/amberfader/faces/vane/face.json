@@ -1,0 +1,108 @@
+{
+  "formatVersion": 1,
+  "id": "vane",
+  "name": "Vane",
+  "author": "Amberfader",
+  "description": "A swept graphite fin with ice-blue glass, open vents and controls along its lower keel.",
+  "background": "background.png",
+  "font": "sans",
+  "size": [640, 320],
+  "drag": [320, 202, 128, 18],
+  "timeSize": 26,
+  "radius": 6,
+  "palette": {
+    "window": "#1b2933",
+    "panel": "#263947",
+    "display": "#b4d7ed",
+    "text": "#e8f4fc",
+    "muted": "#31526a",
+    "readout": "#142b3c",
+    "accent": "#63d8ff",
+    "border": "#6c8fa3",
+    "buttonTop": "#415d70",
+    "buttonBottom": "#1a2d3a",
+    "danger": "#8d2b23"
+  },
+  "controls": {
+    "art": [30, 155, 64, 64],
+    "title": [166, 124, 204, 22],
+    "artists": [380, 124, 120, 22],
+    "time": [166, 154, 222, 34],
+    "playback": [402, 150, 94, 18],
+    "status": [402, 174, 94, 18],
+    "seek": [164, 192, 132, 18],
+    "previous": [112, 220, 36, 26],
+    "play": [156, 212, 48, 36],
+    "next": [212, 220, 36, 26],
+    "like": [256, 220, 40, 26],
+    "volume": [304, 226, 80, 18],
+    "search": [394, 220, 66, 26],
+    "show": [468, 214, 74, 26],
+    "hide": [550, 210, 50, 26],
+    "menu": [118, 130, 26, 22],
+    "minimize": [122, 160, 22, 22],
+    "close": [128, 190, 22, 22]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
+  }
+}
