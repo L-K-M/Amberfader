@@ -3,26 +3,106 @@
   "id": "copper-reel",
   "name": "Copper Reel",
   "author": "Amberfader",
-  "description": "A pocket-space-age remote: copper shell, honey LCD, and a circular transport pod.",
-  "size": [612, 322],
+  "description": "Brushed copper and amber glass with a complete circular platter and warm machined controls.",
+  "size": [640, 344],
   "background": "background.png",
-  "drag": [38, 38, 322, 24],
-  "font": "mono", "timeSize": 30, "radius": 16,
+  "drag": [28, 18, 270, 28],
+  "font": "sans",
+  "timeSize": 30,
+  "radius": 14,
   "palette": {
-    "window": "#8a4826", "panel": "#502f21", "display": "#ffbe50",
-    "text": "#fff0d0", "muted": "#e6bc83", "readout": "#38200e",
-    "accent": "#ffcb70", "border": "#8e633c",
-    "buttonTop": "#af744c", "buttonBottom": "#4b2d22", "danger": "#ffd0b6"
+    "window": "#332018",
+    "panel": "#543325",
+    "display": "#27190f",
+    "text": "#fff0d0",
+    "muted": "#ffe0b5",
+    "readout": "#ffda90",
+    "accent": "#ffc86e",
+    "border": "#a87846",
+    "buttonTop": "#b27b4e",
+    "buttonBottom": "#5c3923",
+    "danger": "#ffd0b6"
   },
   "controls": {
-    "art": [40, 86, 112, 112], "title": [172, 84, 230, 26],
-    "artists": [172, 116, 230, 22], "time": [172, 148, 174, 42],
-    "playback": [174, 204, 160, 18], "seek": [40, 232, 352, 18],
-    "previous": [410, 164, 42, 40], "play": [468, 148, 62, 58],
-    "next": [546, 164, 42, 40], "like": [470, 218, 52, 38],
-    "volume": [442, 118, 108, 20],
-    "search": [80, 286, 94, 28], "show": [186, 286, 112, 28], "hide": [310, 286, 72, 28],
-    "menu": [366, 38, 36, 28], "minimize": [412, 48, 22, 28], "close": [444, 60, 22, 28],
-    "status": [394, 292, 152, 18]
+    "art": [28, 74, 112, 112],
+    "title": [168, 72, 252, 26],
+    "artists": [168, 104, 252, 22],
+    "time": [168, 134, 252, 36],
+    "playback": [168, 174, 252, 18],
+    "previous": [442, 160, 42, 36],
+    "play": [492, 144, 60, 64],
+    "next": [560, 160, 42, 36],
+    "like": [500, 218, 44, 36],
+    "volume": [460, 110, 132, 22],
+    "seek": [28, 220, 392, 22],
+    "search": [28, 274, 86, 28],
+    "show": [124, 274, 100, 28],
+    "hide": [234, 274, 74, 28],
+    "menu": [314, 18, 34, 28],
+    "minimize": [356, 18, 24, 28],
+    "close": [390, 18, 24, 28],
+    "status": [28, 314, 578, 18]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
   }
 }

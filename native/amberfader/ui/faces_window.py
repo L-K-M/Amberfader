@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QRect, Qt, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QLinearGradient, QPainter, QPen
+from PySide6.QtGui import QColor, QDesktopServices, QFontMetrics, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -19,7 +19,14 @@ from PySide6.QtWidgets import (
 )
 
 from ..face_library import Face, FaceError, FaceLibrary, load_face
-from .face_surface import TRANSPORT_CONTROLS, FaceArtwork, draw_transport_icon, prepare_face
+from .face_surface import (
+    FONT_FAMILIES,
+    TRANSPORT_CONTROLS,
+    FaceArtwork,
+    draw_transport_icon,
+    like_font_size,
+    prepare_face,
+)
 
 PREVIEW_LABELS = {
     "title": "A face for your music", "artists": "Amberfader · Face preview",
@@ -59,7 +66,17 @@ class FacePreview(QWidget):
             rect = QRect(*coordinates)
             painter.setPen(QColor(p["readout"]))
             font = painter.font()
-            font.setPixelSize(face.time_size if name == "time" else 12)
+            font.setFamily(FONT_FAMILIES["mono" if name == "time" else face.font])
+            font.setBold(name == "title")
+            size = face.time_size if name == "time" else 12
+            if name == "like":
+                size = like_font_size(face)
+            font.setPixelSize(size)
+            if name == "time":
+                font.setPixelSize(min(font.pixelSize(), rect.height() - 2))
+                width = QFontMetrics(font).horizontalAdvance(PREVIEW_LABELS["time"])
+                if width > rect.width():
+                    font.setPixelSize(max(10, int(font.pixelSize() * rect.width() / width)))
             painter.setFont(font)
             if name == "art":
                 gradient = QLinearGradient(rect.topLeft(), rect.bottomRight())
@@ -96,9 +113,11 @@ class FacePreview(QWidget):
             if name in TRANSPORT_CONTROLS:
                 draw_transport_icon(painter, name, PREVIEW_LABELS[name], rect, QColor(p["text"]))
                 continue
-            text = painter.fontMetrics().elidedText(
-                PREVIEW_LABELS.get(name, ""), Qt.TextElideMode.ElideRight, rect.width()
-            )
+            text = PREVIEW_LABELS.get(name, "")
+            if name != "time":
+                text = painter.fontMetrics().elidedText(
+                    text, Qt.TextElideMode.ElideRight, rect.width()
+                )
             alignment = Qt.AlignmentFlag.AlignCenter if button else Qt.AlignmentFlag.AlignVCenter
             painter.drawText(rect, alignment, text)
 

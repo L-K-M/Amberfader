@@ -64,7 +64,7 @@ def test_each_face_keeps_all_controls_usable(themed, qapp, face_id):
 
 
 def test_switch_preserves_pending_guards_search_session_and_art(themed, qapp):
-    window, _, sent = themed
+    window, library, sent = themed
     state = _state()
     state["track"]["artworkId"] = "cover"
     window.apply_state(state)
@@ -90,7 +90,7 @@ def test_switch_preserves_pending_guards_search_session_and_art(themed, qapp):
     assert search._btn_radio.isEnabled()
     assert search.styleSheet() == window.styleSheet()
     assert window._cover.cacheKey() == cover_key
-    assert window._art.pixmap().width() == 180
+    assert window._art.pixmap().width() == library.load("paper-signal").controls["art"][2]
     window.route_response("player.setLiked", True, {})
     assert window._like.isEnabled()
     assert not window._play.isEnabled()

@@ -4,25 +4,105 @@
   "name": "Amber Classic",
   "author": "Amberfader",
   "description": "An amber hi-fi remote: warm glass, dark walnut, and a compact cover display.",
-  "size": [440, 274],
+  "size": [560, 344],
   "background": "background.png",
-  "drag": [18, 8, 300, 28],
-  "font": "sans", "timeSize": 24, "radius": 4,
+  "drag": [28, 18, 378, 28],
+  "font": "sans",
+  "timeSize": 30,
+  "radius": 7,
   "palette": {
-    "window": "#241a10", "panel": "#2f2314", "display": "#17110b",
-    "text": "#e8ddc8", "muted": "#b9a589", "readout": "#f4c56e",
-    "accent": "#e8a33d", "border": "#8a5a20",
-    "buttonTop": "#493721", "buttonBottom": "#251a0e", "danger": "#ff8b79"
+    "window": "#20150f",
+    "panel": "#352316",
+    "display": "#140f09",
+    "text": "#fff1d2",
+    "muted": "#e2c6a2",
+    "readout": "#ffd184",
+    "accent": "#e8a33d",
+    "border": "#a07b46",
+    "buttonTop": "#755635",
+    "buttonBottom": "#352316",
+    "danger": "#ff8b79"
   },
   "controls": {
-    "art": [18, 52, 100, 100], "title": [134, 50, 288, 26],
-    "artists": [134, 80, 288, 22], "time": [134, 108, 192, 32],
-    "playback": [332, 116, 90, 18],
-    "previous": [134, 152, 44, 32], "play": [184, 152, 44, 32],
-    "next": [234, 152, 44, 32], "like": [284, 152, 44, 32],
-    "seek": [18, 192, 404, 20], "volume": [18, 222, 112, 24],
-    "search": [142, 220, 74, 28], "show": [226, 220, 84, 28], "hide": [320, 220, 54, 28],
-    "menu": [332, 8, 36, 28], "minimize": [374, 8, 22, 28], "close": [402, 8, 22, 28],
-    "status": [18, 252, 404, 18]
+    "art": [28, 64, 120, 120],
+    "title": [180, 66, 338, 26],
+    "artists": [180, 98, 338, 22],
+    "time": [180, 128, 224, 44],
+    "playback": [414, 146, 104, 20],
+    "previous": [28, 198, 48, 36],
+    "play": [84, 192, 60, 48],
+    "next": [152, 198, 48, 36],
+    "like": [212, 198, 48, 36],
+    "volume": [378, 204, 140, 22],
+    "seek": [28, 244, 490, 20],
+    "search": [28, 278, 86, 28],
+    "show": [124, 278, 100, 28],
+    "hide": [234, 278, 74, 28],
+    "menu": [424, 18, 34, 28],
+    "minimize": [466, 18, 24, 28],
+    "close": [498, 18, 24, 28],
+    "status": [28, 314, 490, 18]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
   }
 }

@@ -3,26 +3,106 @@
   "id": "moonstone",
   "name": "Moonstone",
   "author": "Amberfader",
-  "description": "A Y2K silver capsule with blue LCD glass, a cover porthole, and a floating utility dock.",
-  "size": [600, 306],
+  "description": "Flowing chrome and satin aluminum with blue glass and sculpted silver controls.",
+  "size": [600, 344],
   "background": "background.png",
-  "drag": [60, 18, 386, 24],
-  "font": "sans", "timeSize": 32, "radius": 18,
+  "drag": [44, 18, 378, 28],
+  "font": "sans",
+  "timeSize": 30,
+  "radius": 16,
   "palette": {
-    "window": "#c7ccd0", "panel": "#d9e0e5", "display": "#143749",
-    "text": "#172e40", "muted": "#3c5968", "readout": "#ccf3ff",
-    "accent": "#337b9c", "border": "#81949e",
-    "buttonTop": "#ffffff", "buttonBottom": "#abb9c3", "danger": "#8b231e"
+    "window": "#c7ccd0",
+    "panel": "#d9e0e5",
+    "display": "#143749",
+    "text": "#172e40",
+    "muted": "#3c5968",
+    "readout": "#ccf3ff",
+    "accent": "#337b9c",
+    "border": "#81949e",
+    "buttonTop": "#ffffff",
+    "buttonBottom": "#abb9c3",
+    "danger": "#8b231e"
   },
   "controls": {
-    "art": [40, 68, 120, 120], "title": [188, 62, 340, 26],
-    "artists": [188, 96, 340, 22], "time": [188, 122, 186, 44],
-    "playback": [394, 140, 116, 20],
-    "previous": [186, 184, 48, 42], "play": [242, 180, 58, 50],
-    "next": [308, 184, 48, 42], "like": [376, 184, 46, 42],
-    "volume": [438, 194, 102, 22], "seek": [72, 238, 456, 20],
-    "search": [104, 264, 82, 28], "show": [198, 264, 100, 28], "hide": [310, 264, 68, 28],
-    "menu": [456, 16, 36, 28], "minimize": [504, 18, 22, 26], "close": [532, 18, 22, 26],
-    "status": [394, 268, 146, 18]
+    "art": [44, 64, 128, 128],
+    "title": [204, 66, 342, 26],
+    "artists": [204, 98, 342, 22],
+    "time": [204, 126, 224, 44],
+    "playback": [438, 146, 108, 20],
+    "previous": [44, 208, 48, 36],
+    "play": [100, 202, 60, 48],
+    "next": [168, 208, 48, 36],
+    "like": [228, 208, 48, 36],
+    "volume": [404, 214, 142, 22],
+    "seek": [44, 258, 510, 20],
+    "search": [44, 288, 90, 28],
+    "show": [144, 288, 100, 28],
+    "hide": [254, 288, 74, 28],
+    "menu": [438, 18, 34, 28],
+    "minimize": [480, 18, 24, 28],
+    "close": [512, 18, 24, 28],
+    "status": [44, 320, 510, 18]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
   }
 }

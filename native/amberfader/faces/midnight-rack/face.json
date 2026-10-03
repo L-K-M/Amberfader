@@ -4,25 +4,105 @@
   "name": "Midnight Rack",
   "author": "Amberfader",
   "description": "1997 desktop hi-fi: graphite rack rails, machined buttons, and a green phosphor readout.",
-  "size": [480, 274],
+  "size": [560, 344],
   "background": "background.png",
-  "drag": [16, 8, 346, 28],
-  "font": "mono", "timeSize": 30, "radius": 2,
+  "drag": [28, 18, 378, 28],
+  "font": "mono",
+  "timeSize": 30,
+  "radius": 3,
   "palette": {
-    "window": "#242533", "panel": "#181b23", "display": "#08150d",
-    "text": "#e5e7ee", "muted": "#a1abb6", "readout": "#a4ff8a",
-    "accent": "#88dd70", "border": "#606878",
-    "buttonTop": "#606875", "buttonBottom": "#2b2e3a", "danger": "#ff998b"
+    "window": "#181b20",
+    "panel": "#21262d",
+    "display": "#071510",
+    "text": "#e5e7ee",
+    "muted": "#bdc8ce",
+    "readout": "#b4ff95",
+    "accent": "#88dd70",
+    "border": "#56646d",
+    "buttonTop": "#4d5761",
+    "buttonBottom": "#232a32",
+    "danger": "#ff998b"
   },
   "controls": {
-    "art": [18, 56, 112, 112], "title": [160, 56, 290, 26],
-    "artists": [160, 86, 290, 22], "time": [160, 112, 192, 40],
-    "playback": [364, 128, 86, 18],
-    "previous": [18, 178, 40, 32], "play": [64, 178, 48, 32],
-    "next": [118, 178, 40, 32], "like": [164, 178, 40, 32],
-    "volume": [220, 178, 116, 30], "search": [348, 178, 114, 32],
-    "seek": [18, 214, 444, 18], "show": [18, 238, 100, 28], "hide": [124, 238, 64, 28],
-    "menu": [372, 8, 36, 28], "minimize": [414, 8, 22, 28], "close": [440, 8, 22, 28],
-    "status": [204, 242, 258, 20]
+    "art": [28, 64, 120, 120],
+    "title": [180, 66, 338, 26],
+    "artists": [180, 98, 338, 22],
+    "time": [180, 128, 224, 44],
+    "playback": [414, 146, 104, 20],
+    "previous": [28, 198, 48, 36],
+    "play": [84, 192, 60, 48],
+    "next": [152, 198, 48, 36],
+    "like": [212, 198, 48, 36],
+    "volume": [378, 204, 140, 22],
+    "seek": [28, 244, 490, 20],
+    "search": [28, 278, 86, 28],
+    "show": [124, 278, 100, 28],
+    "hide": [234, 278, 74, 28],
+    "menu": [424, 18, 34, 28],
+    "minimize": [466, 18, 24, 28],
+    "close": [498, 18, 24, 28],
+    "status": [28, 314, 490, 18]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
   }
 }
