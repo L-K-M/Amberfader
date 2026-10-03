@@ -44,6 +44,7 @@ BUTTON_GROUPS = {
     "minimize": "chrome",
     "close": "chrome",
 }
+SCULPTURAL_FACES = frozenset({"orbit-99", "manta-ray", "jellyfish-fm", "boom-bot"})
 
 
 def _rounded(rect: QRectF, radius: float) -> QPainterPath:
@@ -119,11 +120,54 @@ def _surround(rectangle: list[int], margin: int) -> QRectF:
     return QRectF(*rectangle).adjusted(-margin, -margin, margin, margin)
 
 
+def _render_sculptural_background(face: dict, source: QImage) -> QImage:
+    """Keep the generated object's alpha contour and its open interior spaces."""
+    width, height = face["size"]
+    image, painter = _canvas(width, height)
+    painter.drawImage(QRectF(0, 0, width, height), source)
+    palette = face["palette"]
+    controls = face["controls"]
+    radius = min(face["radius"], 12)
+
+    # Backings stay local to each live control instead of enclosing the object
+    # in a panel. Their padding covers every hit-rectangle corner, even where
+    # the generated material has a translucent highlight or a shallow curve.
+    for name, rectangle in controls.items():
+        color = palette["display"] if name in {
+            "art", "title", "artists", "time", "playback",
+        } else palette["panel"]
+        _well(painter, _surround(rectangle, 5), color, palette["border"], radius)
+
+    drag = QRectF(*face["drag"])
+    _well(painter, drag.adjusted(-4, -4, 4, 4), palette["window"], palette["border"], 8)
+    font = QFont("sans-serif")
+    font.setPixelSize(11)
+    font.setBold(True)
+    painter.setFont(font)
+    painter.setPen(QColor(palette["text"]))
+    painter.drawText(drag.adjusted(6, 0, -6, 0), Qt.AlignmentFlag.AlignVCenter, "AMBERFADER")
+    if drag.width() >= 224:
+        font.setPixelSize(9)
+        font.setBold(False)
+        painter.setFont(font)
+        painter.setPen(QColor(palette["muted"]))
+        painter.drawText(
+            drag.adjusted(110, 0, -6, 0), Qt.AlignmentFlag.AlignVCenter,
+            face["name"].upper(),
+        )
+    painter.end()
+    return image
+
+
 def render_background(face: dict) -> QImage:
     width, height = face["size"]
     source = QImage(str(ROOT / "generated" / f"{face['id']}.png"))
     if source.isNull():
         raise RuntimeError(f"Missing generated material for {face['id']}")
+    if face["id"] in SCULPTURAL_FACES:
+        if not source.hasAlphaChannel():
+            raise RuntimeError(f"{face['id']}: sculptural material needs an alpha channel")
+        return _render_sculptural_background(face, source)
     image, painter = _canvas(width, height)
     shape = _silhouette(face)
     painter.setClipPath(shape)

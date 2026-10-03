@@ -74,9 +74,11 @@ Restart the browser and desktop app after updating.
 
 ## Linux Faces
 
-In the native app, choose **☰ → Faces…** or press **Ctrl+,**. Eight original
+In the native app, choose **☰ → Faces…** or press **Ctrl+,**. Twelve original
 retro faces change the player's shape, layout and textures while keeping
 artwork, likes, playback, search, recents and mixes. Your choice is saved locally.
+Four of them are experimental sculptural faces: an orbital instrument, a manta ray,
+a jellyfish and a headphone robot with transparent gaps around their controls.
 Click the cover for **Cover view**.
 
 Install additional JSON/PNG face plugins with **Install face folder…**.

@@ -1,0 +1,108 @@
+{
+  "formatVersion": 1,
+  "id": "jellyfish-fm",
+  "name": "Jellyfish FM",
+  "author": "Amberfader",
+  "description": "A lavender jellyfish with a smiling dome, translucent tentacles, bubble controls, and glowing accents.",
+  "background": "background.png",
+  "font": "sans",
+  "size": [600, 600],
+  "drag": [206, 26, 100, 20],
+  "timeSize": 24,
+  "radius": 24,
+  "palette": {
+    "window": "#503580",
+    "panel": "#654398",
+    "display": "#382366",
+    "text": "#fff2ff",
+    "muted": "#e3c9f3",
+    "readout": "#f7e9ff",
+    "accent": "#91ecea",
+    "border": "#b89ade",
+    "buttonTop": "#926ab5",
+    "buttonBottom": "#5a347e",
+    "danger": "#ffd2b2"
+  },
+  "controls": {
+    "art": [140, 120, 76, 76],
+    "title": [234, 110, 230, 24],
+    "artists": [234, 140, 230, 22],
+    "time": [234, 168, 174, 30],
+    "playback": [420, 180, 64, 18],
+    "seek": [184, 208, 240, 18],
+    "previous": [90, 272, 40, 36],
+    "play": [398, 272, 52, 44],
+    "next": [114, 402, 42, 36],
+    "like": [416, 396, 48, 40],
+    "volume": [246, 522, 116, 18],
+    "search": [138, 276, 78, 28],
+    "show": [458, 280, 72, 28],
+    "hide": [168, 406, 64, 28],
+    "menu": [182, 60, 26, 22],
+    "minimize": [218, 60, 22, 22],
+    "close": [374, 60, 22, 22],
+    "status": [214, 548, 188, 18]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
+  }
+}
