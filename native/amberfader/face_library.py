@@ -1,7 +1,7 @@
 """Versioned, data-only face plugins and local appearance preferences.
 
 Faces describe presentation, never commands. Only declared, bounded PNG files
-are installed; executable plugins and stylesheet imports are not part of v1.
+are installed; executable plugins and stylesheet imports are unsupported.
 This module has no Qt dependency.
 """
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import os
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -20,7 +20,7 @@ from jsonschema import Draft202012Validator
 
 DEFAULT_FACE_ID = "amber-classic"
 BUNDLED_FACE_ERROR = "Bundled faces are unavailable. Reinstall Amberfader."
-FACE_FORMAT_VERSION = 1
+FACE_FORMAT_VERSION = 2
 MAX_MANIFEST_BYTES = 64 * 1024
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_PACK_BYTES = 16 * 1024 * 1024
@@ -61,6 +61,8 @@ class Face:
     radius: int
     background: bytes
     buttons: MappingProxyType[str, MappingProxyType[str, bytes]]
+    control_shapes: MappingProxyType[str, str] = field(default_factory=lambda: MappingProxyType({}))
+    cover_glass: bool = False
 
 
 def _read_bounded(path: Path, limit: int) -> bytes:
@@ -131,8 +133,9 @@ def _check_layout(data: dict) -> None:
             raise FaceError(f"{name} must fit inside the face")
         minimum = (22, 22)
         if name == "art":
-            minimum = (64, 64)
-            if w != h:
+            curved = data.get("controlShapes", {}).get("art") == "ellipse"
+            minimum = (48, 48) if curved else (64, 64)
+            if w != h and not curved:
                 raise FaceError("art must be square")
         elif name in ("title", "artists", "time", "playback", "status", "drag"):
             minimum = (64, 18)
@@ -218,6 +221,8 @@ def load_face(directory: Path) -> Face:
                 })
                 for control, states in data.get("buttons", {}).items()
             }),
+            control_shapes=MappingProxyType(data.get("controlShapes", {})),
+            cover_glass=data.get("coverGlass", False),
         )
     except (OSError, ValueError, RecursionError, struct.error) as exc:
         raise FaceError(str(exc)) from exc

@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "jellyfish-fm",
   "name": "Jellyfish FM",
   "author": "Amberfader",
@@ -7,7 +7,7 @@
   "background": "background.png",
   "font": "sans",
   "size": [600, 600],
-  "drag": [206, 26, 100, 20],
+  "drag": [208, 30, 100, 20],
   "timeSize": 24,
   "radius": 24,
   "palette": {
@@ -23,13 +23,27 @@
     "buttonBottom": "#5a347e",
     "danger": "#ffd2b2"
   },
+  "coverGlass": true,
+  "controlShapes": {
+    "art": "ellipse",
+    "previous": "ellipse",
+    "play": "ellipse",
+    "next": "ellipse",
+    "like": "ellipse",
+    "search": "capsule",
+    "show": "capsule",
+    "hide": "capsule",
+    "menu": "ellipse",
+    "minimize": "ellipse",
+    "close": "ellipse"
+  },
   "controls": {
     "art": [140, 120, 76, 76],
-    "title": [234, 110, 230, 24],
-    "artists": [234, 140, 230, 22],
-    "time": [234, 168, 174, 30],
-    "playback": [420, 180, 64, 18],
-    "seek": [184, 208, 240, 18],
+    "title": [234, 110, 210, 24],
+    "artists": [234, 140, 210, 22],
+    "time": [234, 168, 144, 30],
+    "playback": [384, 180, 64, 18],
+    "seek": [184, 200, 240, 18],
     "previous": [90, 272, 40, 36],
     "play": [398, 272, 52, 44],
     "next": [114, 402, 42, 36],

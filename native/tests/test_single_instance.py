@@ -268,6 +268,72 @@ def test_invalid_snapshot_is_reported_as_failure(app, qapp):
     assert "invalid" in responses[0][2]["message"]
 
 
+def test_late_snapshot_cannot_restore_an_old_track_and_cover_on_the_same_binding(app, qapp):
+    from test_gui_artwork import _asset, _track_state
+
+    sent = []
+    app._send = lambda message: sent.append(message) or True
+    old = _track_state("occ-old", "cover-old")
+    current = _track_state("occ-new", "cover-new")
+    current["revision"] = old["revision"] + 1
+    envelope = {"protocolVersion": 1, "sessionId": "session", "bindingToken": old["bindingToken"]}
+    app._on_message({**envelope, "kind": "event", "event": "state", "data": old})
+    app._on_message({
+        **envelope, "kind": "event", "event": "asset", "data": _asset("occ-old", "cover-old"),
+    })
+    app.request("state.get", {})
+    request_id = sent[-1]["id"]
+    app._on_message({**envelope, "kind": "event", "event": "state", "data": current})
+    app._on_message({
+        **envelope, "kind": "event", "event": "asset",
+        "data": _asset("occ-new", "cover-new", b"\0\0\xff\xff"),
+    })
+    app._on_message({**envelope, "kind": "response", "id": request_id, "ok": True, "result": old})
+    assert app.window._state == current
+    assert app.window._cover.toImage().pixelColor(32, 32).name() == "#0000ff"
+    assert request_id not in app._pending
+    app.request("player.pause", {})
+    assert sent[-1]["bindingToken"] == current["bindingToken"]
+    app._settle(sent[-1]["id"], True, {})
+
+
+@pytest.mark.parametrize("reset", ["target", "adapter", "gui", "binding", "helper"])
+def test_late_snapshot_cannot_revive_state_after_connection_reset(app, qapp, reset):
+    from test_gui_artwork import _track_state
+
+    sent = []
+    app._send = lambda message: sent.append(message) or True
+    old = _track_state()
+    envelope = {"protocolVersion": 1, "sessionId": "session", "bindingToken": old["bindingToken"]}
+    app._on_message({**envelope, "kind": "event", "event": "state", "data": old})
+    app.request("state.get", {})
+    request_id = sent[-1]["id"]
+    if reset == "helper":
+        app._on_helper_gone()
+    else:
+        data = {"status": "revoked"} if reset == "binding" else {
+            "component": reset, "status": "disconnected",
+        }
+        app._on_message({
+            **envelope, "kind": "event", "event": "binding" if reset == "binding" else "connection",
+            "data": data,
+        })
+    assert app.window._state is None
+    app._on_message({**envelope, "kind": "response", "id": request_id, "ok": True, "result": old})
+    assert app.window._state is None
+    assert request_id not in app._pending
+    # A subsequent resync can establish the new connection normally.
+    app.request("state.get", {})
+    fresh = _track_state("occ-fresh", "cover-fresh")
+    fresh["bindingToken"] = "fresh-binding"
+    app._on_message({
+        "protocolVersion": 1, "kind": "response", "id": sent[-1]["id"], "ok": True,
+        "sessionId": "fresh-session", "bindingToken": "fresh-binding", "result": fresh,
+    })
+    assert app.window._state == fresh
+    assert app._binding_token == "fresh-binding"
+
+
 def test_late_response_does_not_restore_an_old_binding(app, qapp):
     sent = []
     app._send = lambda value: sent.append(value) or True

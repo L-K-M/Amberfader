@@ -28,6 +28,12 @@ on 2026-10-02; remaining acceptance gates are *expected* unless noted.
   album actions; song-result activation and playback remain unverified.
   The sanitized menu is in `extension/tests/fixtures/mix-menu-2026-10-02.html`.
 
+The 2026-10-03 screenshots show artwork missing in both Amberfader players
+while YouTube Music displays its cover. Automated regressions now cover
+empty image sources, delayed image loading, paused cover replay, and stale
+snapshot responses. Successful fetching and rendering in that live Zen
+session still require the artwork checks in `docs/manual-test-plan.md`.
+
 ## Browsers
 
 | Browser | Install type | Native messaging | Status |

@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/L-K-M/Amberfader/blob/main/native/amberfader/faces/schema.json",
-  "title": "Amberfader Face v1",
+  "title": "Amberfader Face",
   "type": "object",
   "additionalProperties": false,
   "required": ["formatVersion", "id", "name", "author", "description", "size", "background", "drag", "palette", "controls"],
   "properties": {
     "$schema": {"type": "string", "maxLength": 256},
-    "formatVersion": {"const": 1},
+    "formatVersion": {"enum": [1, 2]},
     "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,47}$"},
     "name": {"type": "string", "minLength": 1, "maxLength": 64},
     "author": {"type": "string", "minLength": 1, "maxLength": 96},
@@ -21,6 +21,12 @@
     "font": {"enum": ["sans", "mono", "serif"]},
     "timeSize": {"type": "integer", "minimum": 16, "maximum": 36},
     "radius": {"type": "integer", "minimum": 0, "maximum": 24},
+    "coverGlass": {"type": "boolean"},
+    "controlShapes": {
+      "type": "object",
+      "propertyNames": {"enum": ["art", "previous", "play", "next", "like", "search", "show", "hide", "menu", "minimize", "close"]},
+      "additionalProperties": {"enum": ["rectangle", "rounded", "capsule", "ellipse"]}
+    },
     "palette": {
       "type": "object", "additionalProperties": false,
       "required": ["window", "panel", "display", "text", "muted", "readout", "accent", "border", "buttonTop", "buttonBottom", "danger"],
@@ -59,6 +65,10 @@
       }
     }
   },
+  "allOf": [{
+    "if": {"properties": {"formatVersion": {"const": 1}}},
+    "then": {"not": {"anyOf": [{"required": ["controlShapes"]}, {"required": ["coverGlass"]}]}}
+  }],
   "$defs": {
     "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
     "image": {"type": "string", "pattern": "^[a-zA-Z0-9_-]+\\.png$", "maxLength": 96},

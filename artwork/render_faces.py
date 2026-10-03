@@ -1,4 +1,4 @@
-"""Compose generated materials and precise host-control surfaces into Face v1 packs.
+"""Compose generated materials and precise host-control surfaces into Face packs.
 
 The OpenAI-generated originals and exact prompts live in artwork/generated and
 face-prompts.json. This offline exporter resamples those materials, applies the
@@ -16,6 +16,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QBuffer, QPointF, QRectF, Qt
 from PySide6.QtGui import (
+    QBrush,
     QColor,
     QFont,
     QGuiApplication,
@@ -47,12 +48,27 @@ BUTTON_GROUPS = {
 SCULPTURAL_FACES = frozenset({"orbit-99", "manta-ray", "jellyfish-fm", "boom-bot"})
 UTILITARIAN_FACES = frozenset({"tangent", "keystone", "switchback", "vane"})
 LENS_FACES = frozenset({"aureole", "viridian"})
+SHAPED_FACES = SCULPTURAL_FACES | UTILITARIAN_FACES | LENS_FACES
 READOUT_CONTROLS = frozenset({"title", "artists", "time", "playback", "status"})
 
 
 def _rounded(rect: QRectF, radius: float) -> QPainterPath:
     path = QPainterPath()
     path.addRoundedRect(rect, radius, radius)
+    return path
+
+
+def _control_path(rect: QRectF, shape: str, radius: float) -> QPainterPath:
+    path = QPainterPath()
+    if shape == "ellipse":
+        path.addEllipse(rect)
+    elif shape in {"rounded", "capsule"}:
+        corner = min(rect.width(), rect.height()) / 2 if shape == "capsule" else radius
+        path.addRoundedRect(rect, corner, corner)
+    elif shape == "rectangle":
+        path.addRect(rect)
+    else:
+        raise ValueError(f"Unknown control shape: {shape}")
     return path
 
 
@@ -132,39 +148,20 @@ def _render_sculptural_background(face: dict, source: QImage) -> QImage:
     controls = face["controls"]
     radius = min(face["radius"], 12)
 
-    # Backings stay local to each live control instead of enclosing the object
-    # in a panel. Their padding covers every hit-rectangle corner, even where
-    # the generated material has a translucent highlight or a shallow curve.
-    for name, rectangle in controls.items():
-        color = palette["display"] if name in {
-            "art", "title", "artists", "time", "playback",
-        } else palette["panel"]
-        _well(painter, _surround(rectangle, 5), color, palette["border"], radius)
+    # Wells change the material color without extending the original contour
+    # or filling the character's transparent interior spaces.
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceAtop)
+    readout = QRectF()
+    for name in sorted(READOUT_CONTROLS - {"status"}):
+        readout = readout.united(QRectF(*controls[name]))
+    _well(
+        painter, readout.adjusted(-5, -5, 5, 5), palette["display"],
+        palette["border"], radius,
+    )
+    _well(painter, _surround(controls["status"], 5), palette["panel"], palette["border"], radius)
 
-    _draw_identification(painter, face)
     painter.end()
     return image
-
-
-def _draw_identification(painter: QPainter, face: dict) -> None:
-    palette = face["palette"]
-    drag = QRectF(*face["drag"])
-    _well(painter, drag.adjusted(-4, -4, 4, 4), palette["window"], palette["border"], 8)
-    font = QFont("sans-serif")
-    font.setPixelSize(11)
-    font.setBold(True)
-    painter.setFont(font)
-    painter.setPen(QColor(palette["text"]))
-    painter.drawText(drag.adjusted(6, 0, -6, 0), Qt.AlignmentFlag.AlignVCenter, "AMBERFADER")
-    if drag.width() >= 224:
-        font.setPixelSize(9)
-        font.setBold(False)
-        painter.setFont(font)
-        painter.setPen(QColor(palette["muted"]))
-        painter.drawText(
-            drag.adjusted(110, 0, -6, 0), Qt.AlignmentFlag.AlignVCenter,
-            face["name"].upper(),
-        )
 
 
 def _render_utilitarian_background(face: dict, source: QImage) -> QImage:
@@ -179,20 +176,10 @@ def _render_utilitarian_background(face: dict, source: QImage) -> QImage:
     readout = QRectF()
     for name in sorted(READOUT_CONTROLS):
         readout = readout.united(QRectF(*controls[name]))
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceAtop)
     _well(
         painter, readout.adjusted(-6, -6, 6, 6), palette["display"], palette["border"], 14,
     )
-    for name, rectangle in controls.items():
-        if name in READOUT_CONTROLS:
-            continue
-        if name in BUTTON_GROUPS:
-            # Sprites supply their own bevel. A quiet backing keeps the full
-            # hit rectangle opaque without adding a second frame per button.
-            painter.fillPath(_rounded(_surround(rectangle, 2), 4), QColor(palette["panel"]))
-            continue
-        color = palette["display"] if name == "art" else palette["panel"]
-        _well(painter, _surround(rectangle, 5), color, palette["border"], min(face["radius"], 8))
-    _draw_identification(painter, face)
     painter.end()
     return image
 
@@ -204,18 +191,6 @@ def _render_lens_background(face: dict, source: QImage) -> QImage:
         raise RuntimeError(f"{face['id']}: generated material does not match the canvas aspect")
     image, painter = _canvas(width, height)
     painter.drawImage(QRectF(0, 0, width, height), source)
-    palette = face["palette"]
-    for name, rectangle in face["controls"].items():
-        if name in READOUT_CONTROLS:
-            continue
-        if name in BUTTON_GROUPS:
-            painter.fillPath(_rounded(_surround(rectangle, 2), 4), QColor(palette["panel"]))
-            continue
-        _well(
-            painter, _surround(rectangle, 3), palette["panel"], palette["border"],
-            min(face["radius"], 8),
-        )
-    _draw_identification(painter, face)
     painter.end()
     return image
 
@@ -225,7 +200,7 @@ def render_background(face: dict) -> QImage:
     source = QImage(str(ROOT / "generated" / f"{face['id']}.png"))
     if source.isNull():
         raise RuntimeError(f"Missing generated material for {face['id']}")
-    if face["id"] in SCULPTURAL_FACES | UTILITARIAN_FACES | LENS_FACES:
+    if face["id"] in SHAPED_FACES:
         if not source.hasAlphaChannel():
             raise RuntimeError(f"{face['id']}: shaped material needs an alpha channel")
         if face["id"] in UTILITARIAN_FACES:
@@ -289,10 +264,56 @@ def render_background(face: dict) -> QImage:
     return image
 
 
+def _render_shaped_button(face: dict, control: str, state: str) -> QImage:
+    _, _, width, height = face["controls"][control]
+    image, painter = _canvas(width, height)
+    palette = face["palette"]
+    top, bottom = QColor(palette["buttonTop"]), QColor(palette["buttonBottom"])
+    edge = QColor(palette["border"])
+    if state == "hover":
+        top, bottom, edge = top.lighter(106), bottom.lighter(106), edge.lighter(115)
+    elif state == "pressed":
+        top, bottom, edge = bottom.darker(105), top.darker(105), edge.darker(115)
+    elif state == "disabled":
+        if face["id"] in {"switchback", "vane"}:
+            # Their dark disabled glyphs need quiet metal, not luminous glass.
+            top, bottom = QColor("#d0d6da"), QColor("#b8c1c7")
+        else:
+            matte = QColor(
+                (top.red() + bottom.red()) // 2,
+                (top.green() + bottom.green()) // 2,
+                (top.blue() + bottom.blue()) // 2,
+            )
+            top, bottom = matte.lighter(103), matte.darker(103)
+
+    shape = face.get("controlShapes", {}).get(control, "rounded")
+    radius = min(face["radius"], (height - 4) / 2)
+    rect = QRectF(1.25, 1.25, width - 2.5, height - 3)
+    path = _control_path(rect, shape, radius)
+    shadow = QColor("#0b1015")
+    shadow.setAlpha(70 if state == "pressed" else 45)
+    painter.fillPath(_control_path(rect.translated(0, 0.75), shape, radius), shadow)
+    painter.setPen(QPen(edge, 0.9))
+    painter.setBrush(_gradient(rect, top, bottom))
+    painter.drawPath(path)
+
+    light, shade = QColor("#ffffff"), QColor("#0b1015")
+    light.setAlpha(35 if state == "disabled" else 85)
+    shade.setAlpha(85 if state == "pressed" else 45)
+    rim_top, rim_bottom = (shade, light) if state == "pressed" else (light, shade)
+    painter.setPen(QPen(QBrush(_gradient(rect, rim_top, rim_bottom)), 0.75))
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.drawPath(_control_path(rect.adjusted(1.2, 1.2, -1.2, -1.2), shape, radius))
+    painter.end()
+    return image
+
+
 def render_button(face: dict, group: str, state: str) -> QImage:
     representative = {"transport": "previous", "play": "play", "utility": "show", "chrome": "menu"}[
         group
     ]
+    if face["id"] in SHAPED_FACES:
+        return _render_shaped_button(face, representative, state)
     _, _, width, height = face["controls"][representative]
     image, painter = _canvas(width, height)
     p = face["palette"]

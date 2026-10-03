@@ -4,8 +4,16 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QRect, Qt, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QFontMetrics, QLinearGradient, QPainter, QPen
+from PySide6.QtCore import QRect, QRectF, Qt, QUrl
+from PySide6.QtGui import (
+    QColor,
+    QDesktopServices,
+    QFontMetrics,
+    QLinearGradient,
+    QPainter,
+    QPen,
+    QPixmap,
+)
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -23,6 +31,8 @@ from .face_surface import (
     FONT_FAMILIES,
     TRANSPORT_CONTROLS,
     FaceArtwork,
+    control_path,
+    draw_cover,
     draw_transport_icon,
     like_font_size,
     prepare_face,
@@ -42,6 +52,17 @@ class FacePreview(QWidget):
         self.setMinimumSize(420, 280)
         self._face: Face | None = None
         self._artwork: FaceArtwork | None = None
+        self._cover = QPixmap(128, 128)
+        painter = QPainter(self._cover)
+        gradient = QLinearGradient(0, 0, 128, 128)
+        gradient.setColorAt(0, QColor("#efac64"))
+        gradient.setColorAt(1, QColor("#24334b"))
+        painter.fillRect(self._cover.rect(), gradient)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(QColor("#ffe6b2"), 2))
+        for inset in (16, 32, 48):
+            painter.drawEllipse(self._cover.rect().adjusted(inset, inset, -inset, -inset))
+        painter.end()
 
     def set_face(self, face: Face, artwork: FaceArtwork) -> None:
         self._face, self._artwork = face, artwork
@@ -79,13 +100,10 @@ class FacePreview(QWidget):
                     font.setPixelSize(max(10, int(font.pixelSize() * rect.width() / width)))
             painter.setFont(font)
             if name == "art":
-                gradient = QLinearGradient(rect.topLeft(), rect.bottomRight())
-                gradient.setColorAt(0, QColor("#efac64"))
-                gradient.setColorAt(1, QColor("#24334b"))
-                painter.fillRect(rect, gradient)
-                painter.setPen(QPen(QColor("#ffe6b2"), 2))
-                painter.drawEllipse(rect.adjusted(16, 16, -16, -16))
-                painter.drawEllipse(rect.adjusted(32, 32, -32, -32))
+                draw_cover(
+                    painter, self._cover, QRectF(rect), face.control_shapes.get("art", "rectangle"),
+                    face.radius, face.cover_glass,
+                )
                 continue
             if name in ("seek", "volume"):
                 groove = rect.adjusted(4, rect.height() // 2 - 2, -4, -(rect.height() // 2 - 2))
@@ -98,6 +116,12 @@ class FacePreview(QWidget):
                 "minimize", "close",
             )
             if button:
+                painter.save()
+                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                path = control_path(
+                    QRectF(rect), face.control_shapes.get(name, "rectangle"), face.radius,
+                )
+                painter.setClipPath(path, Qt.ClipOperation.IntersectClip)
                 if name in artwork.buttons:
                     painter.drawPixmap(rect, artwork.buttons[name]["normal"])
                 else:
@@ -106,7 +130,8 @@ class FacePreview(QWidget):
                     gradient.setColorAt(1, QColor(p["buttonBottom"]))
                     painter.setBrush(gradient)
                     painter.setPen(QColor(p["border"]))
-                    painter.drawRoundedRect(rect.adjusted(0, 0, -1, -1), face.radius, face.radius)
+                    painter.drawPath(path)
+                painter.restore()
                 painter.setPen(QColor(p["text"]))
             elif name == "status":
                 painter.setPen(QColor(p["muted"]))

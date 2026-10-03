@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "orbit-99",
   "name": "Orbit 99",
   "author": "Amberfader",
@@ -22,6 +22,20 @@
     "buttonTop": "#365a79",
     "buttonBottom": "#10283e",
     "danger": "#ffc3ad"
+  },
+  "coverGlass": true,
+  "controlShapes": {
+    "art": "ellipse",
+    "previous": "ellipse",
+    "play": "ellipse",
+    "next": "ellipse",
+    "like": "ellipse",
+    "search": "capsule",
+    "show": "capsule",
+    "hide": "capsule",
+    "menu": "ellipse",
+    "minimize": "ellipse",
+    "close": "ellipse"
   },
   "controls": {
     "art": [108, 96, 80, 80],

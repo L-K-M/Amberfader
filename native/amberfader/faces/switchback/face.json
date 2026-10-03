@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "switchback",
   "name": "Switchback",
   "author": "Amberfader",
@@ -23,8 +23,22 @@
     "buttonBottom": "#202a1b",
     "danger": "#80221d"
   },
+  "coverGlass": true,
+  "controlShapes": {
+    "art": "ellipse",
+    "previous": "ellipse",
+    "play": "ellipse",
+    "next": "ellipse",
+    "like": "ellipse",
+    "search": "capsule",
+    "show": "capsule",
+    "hide": "capsule",
+    "menu": "ellipse",
+    "minimize": "ellipse",
+    "close": "ellipse"
+  },
   "controls": {
-    "art": [60, 103, 80, 80],
+    "art": [42, 84, 112, 112],
     "title": [230, 106, 326, 22],
     "artists": [230, 132, 326, 18],
     "time": [230, 154, 220, 32],
@@ -38,7 +52,7 @@
     "volume": [314, 252, 80, 18],
     "search": [404, 248, 66, 28],
     "show": [478, 248, 74, 28],
-    "hide": [560, 248, 50, 28],
+    "hide": [554, 243, 50, 28],
     "menu": [180, 108, 28, 22],
     "minimize": [184, 140, 22, 22],
     "close": [190, 172, 22, 22]

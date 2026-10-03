@@ -147,6 +147,7 @@ export class YouTubeMusicAdapter implements SiteAdapter {
     this.running = true;
     this.bindMedia();
     this.observePlayer();
+    document.addEventListener("load", this.onArtworkLoad, true);
     this.startReconcile();
     this.emit();
     this.notice({ component: "adapter", status: "connected" });
@@ -157,6 +158,7 @@ export class YouTubeMusicAdapter implements SiteAdapter {
     this.running = false;
     this.observer?.disconnect();
     this.observer = null;
+    document.removeEventListener("load", this.onArtworkLoad, true);
     this.unbindMedia();
     if (this.positionTimer !== null) window.clearInterval(this.positionTimer);
     if (this.reconcileTimer !== null) window.clearInterval(this.reconcileTimer);
@@ -223,6 +225,11 @@ export class YouTubeMusicAdapter implements SiteAdapter {
     this.emit();
   };
 
+  private readonly onArtworkLoad = (event: Event): void => {
+    // currentSrc may resolve after the src/srcset mutation, while paused.
+    if (event.target instanceof HTMLImageElement && event.target.matches(TRACK_INFO.artwork.join(", "))) this.emit();
+  };
+
   private resetPositionTimer(): void {
     if (this.positionTimer !== null) {
       window.clearInterval(this.positionTimer);
@@ -255,7 +262,7 @@ export class YouTubeMusicAdapter implements SiteAdapter {
         characterData: true,
         attributes: true,
         // Animation styles are sampled by reconciliation, not every frame.
-        attributeFilter: ["aria-label", "aria-pressed", "aria-disabled", "aria-hidden", "disabled", "hidden", "title", "class", "value"],
+        attributeFilter: ["aria-label", "aria-pressed", "aria-disabled", "aria-hidden", "disabled", "hidden", "title", "class", "value", "src", "srcset"],
       });
     }
   }
@@ -323,17 +330,23 @@ export class YouTubeMusicAdapter implements SiteAdapter {
     }
     const occurrenceId = `occ-${this.occurrenceCounter.toString(36)}`;
 
-    const artworkImg = document.querySelector(TRACK_INFO.artwork.join(", "));
     let artworkId: string | null = null;
     this.proposedArtworkUrl = null;
-    if (artworkImg instanceof HTMLImageElement && (artworkImg.currentSrc || artworkImg.src)) {
+    for (const artworkImg of document.querySelectorAll(TRACK_INFO.artwork.join(", "))) {
+      if (!(artworkImg instanceof HTMLImageElement)) continue;
+      // An empty src resolves to the document URL; it is not a cover. Keep
+      // looking through the existing player-image selectors for a source.
+      const source = artworkImg.currentSrc ||
+        (artworkImg.getAttribute("src")?.trim() ? artworkImg.src : "");
+      if (!source) continue;
       // Only HTTPS URLs are proposed; the artwork service re-validates
       // protocol + origin before fetching.
       try {
-        const u = new URL(artworkImg.currentSrc || artworkImg.src);
+        const u = new URL(source);
         if (u.protocol === "https:") {
           this.proposedArtworkUrl = u.href;
           artworkId = cleanId(u.href.slice(-64)) || null;
+          break;
         }
       } catch {
         // not a usable URL

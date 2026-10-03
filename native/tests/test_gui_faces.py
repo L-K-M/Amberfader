@@ -68,7 +68,10 @@ def test_switch_preserves_pending_guards_search_session_and_art(themed, qapp):
     state = _state()
     state["track"]["artworkId"] = "cover"
     window.apply_state(state)
-    window.apply_asset({"dataBase64": base64.b64encode(png(256, 256)).decode()})
+    window.apply_asset({
+        "occurrenceId": "occ-1", "artworkId": "cover",
+        "dataBase64": base64.b64encode(png(256, 256)).decode(),
+    })
     cover_key = window._cover.cacheKey()
     window.open_search()
     search = window._search
@@ -100,9 +103,15 @@ def test_switch_preserves_pending_guards_search_session_and_art(themed, qapp):
 
 def test_cover_view_follows_assets_and_survives_theme_change(themed):
     window, _, _ = themed
+    state = _state()
+    state["track"]["artworkId"] = "cover"
+    window.apply_state(state)
     window.open_cover()
     dialog = window._cover_window
-    window.apply_asset({"dataBase64": base64.b64encode(png(128, 128, b"\xff\0\0\xff")).decode()})
+    window.apply_asset({
+        "occurrenceId": "occ-1", "artworkId": "cover",
+        "dataBase64": base64.b64encode(png(128, 128, b"\xff\0\0\xff")).decode(),
+    })
     assert window._cover_label.pixmap().toImage().pixelColor(100, 100).red() == 255
     window.select_face("moonstone")
     assert window._cover_window is dialog

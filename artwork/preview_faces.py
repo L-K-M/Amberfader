@@ -93,7 +93,10 @@ def _set_sample(window: MainWindow, state_name: str, cover: bytes) -> None:
             capabilities=[],
         )
     window.apply_state(state)
-    window.apply_asset({"dataBase64": base64.b64encode(cover).decode()})
+    window.apply_asset({
+        "occurrenceId": "preview", "artworkId": "sample",
+        "dataBase64": base64.b64encode(cover).decode(),
+    })
     if state_name == "offline":
         window.set_connection("gui", "disconnected")
         window._render_time()
@@ -106,6 +109,8 @@ def _set_sample(window: MainWindow, state_name: str, cover: bytes) -> None:
         window.show_status("Waiting for the observed player outcome…", error=True)
     else:
         window.show_status("Sample preview · Firefox remote")
+    # A contact sheet can outlast the transient status timer on a slower host.
+    window._status_timer.stop()
 
 
 def _contact_sheet(
