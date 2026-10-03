@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "boom-bot",
   "name": "Boom Bot",
   "author": "Amberfader",
@@ -23,8 +23,22 @@
     "buttonBottom": "#49233f",
     "danger": "#ffd09b"
   },
+  "coverGlass": true,
+  "controlShapes": {
+    "art": "ellipse",
+    "previous": "ellipse",
+    "play": "ellipse",
+    "next": "ellipse",
+    "like": "ellipse",
+    "search": "capsule",
+    "show": "capsule",
+    "hide": "capsule",
+    "menu": "ellipse",
+    "minimize": "ellipse",
+    "close": "ellipse"
+  },
   "controls": {
-    "art": [200, 294, 96, 96],
+    "art": [184, 274, 112, 112],
     "title": [324, 282, 122, 24],
     "artists": [324, 312, 122, 22],
     "time": [322, 344, 132, 34],
@@ -37,7 +51,7 @@
     "volume": [270, 535, 94, 18],
     "search": [124, 534, 90, 30],
     "show": [402, 538, 100, 30],
-    "hide": [390, 166, 66, 28],
+    "hide": [395, 156, 66, 28],
     "menu": [194, 100, 28, 24],
     "minimize": [196, 134, 24, 24],
     "close": [196, 168, 24, 24],

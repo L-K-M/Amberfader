@@ -45,9 +45,11 @@ def make_pack(tmp_path):
     directory = tmp_path / "source"
     directory.mkdir()
     data = json.loads((BUILTIN_DIRECTORY / DEFAULT_FACE_ID / "face.json").read_text())
-    data.update(id="my-face", name="My Face")
+    data.update(id="my-face", name="My Face", formatVersion=1)
     # This fixture exercises a minimal pack; sprite tests add their own assets.
     data.pop("buttons", None)
+    data.pop("controlShapes", None)
+    data.pop("coverGlass", None)
     (directory / "face.json").write_text(json.dumps(data))
     (directory / "background.png").write_bytes(png(*data["size"]))
     return directory, data
@@ -80,7 +82,7 @@ def test_bundled_catalog_is_complete_and_valid(library):
 
 
 @pytest.mark.parametrize("change", [
-    lambda d: d.update(formatVersion=2),
+    lambda d: d.update(formatVersion=3),
     lambda d: d.update(code="plugin.py"),
     lambda d: d.update(background="../outside.png"),
     lambda d: d["palette"].update(accent="red; background: url(https://example.org)"),
@@ -98,6 +100,88 @@ def test_invalid_pack_is_rejected(pack, change):
     write_manifest(pack)
     with pytest.raises(FaceError):
         load_face(pack[0])
+
+
+def test_legacy_manifest_retains_default_presentation(pack):
+    face = load_face(pack[0])
+    assert not face.control_shapes
+    assert face.cover_glass is False
+    assert face.controls["art"] == tuple(pack[1]["controls"]["art"])
+
+
+@pytest.mark.parametrize("metadata", [
+    {"controlShapes": {"art": "ellipse"}}, {"controlShapes": {}}, {"coverGlass": False},
+])
+def test_legacy_version_rejects_new_presentation_fields(pack, metadata):
+    pack[1].update(metadata)
+    write_manifest(pack)
+    with pytest.raises(FaceError):
+        load_face(pack[0])
+
+
+@pytest.mark.parametrize("width,height", [(48, 48), (48, 80), (96, 48)])
+def test_format_two_accepts_circular_and_oval_cover_apertures(pack, width, height):
+    pack[1].update(formatVersion=2, controlShapes={"art": "ellipse"})
+    pack[1]["controls"]["art"] = [28, 64, width, height]
+    write_manifest(pack)
+    face = load_face(pack[0])
+    assert face.controls["art"] == (28, 64, width, height)
+    assert face.control_shapes["art"] == "ellipse"
+
+
+@pytest.mark.parametrize("rectangle,error", [
+    ([28, 64, 47, 48], "too small"), ([28, 64, 48, 47], "too small"),
+    ([530, 64, 48, 48], "fit inside"), ([84, 192, 48, 48], "overlaps"),
+])
+def test_format_two_curved_cover_keeps_size_and_layout_bounds(pack, rectangle, error):
+    pack[1].update(formatVersion=2, controlShapes={"art": "ellipse"})
+    pack[1]["controls"]["art"] = rectangle
+    write_manifest(pack)
+    with pytest.raises(FaceError, match=error):
+        load_face(pack[0])
+
+
+@pytest.mark.parametrize("shape", ["rectangle", "rounded", "capsule"])
+def test_format_two_other_cover_shapes_keep_legacy_size_bounds(pack, shape):
+    pack[1].update(formatVersion=2, controlShapes={"art": shape})
+    pack[1]["controls"]["art"] = [28, 64, 64, 64]
+    write_manifest(pack)
+    assert load_face(pack[0]).control_shapes["art"] == shape
+    for width, height, error in [(48, 48, "too small"), (64, 80, "square")]:
+        pack[1]["controls"]["art"] = [28, 64, width, height]
+        write_manifest(pack)
+        with pytest.raises(FaceError, match=error):
+            load_face(pack[0])
+
+
+@pytest.mark.parametrize("metadata", [
+    {"controlShapes": {"seek": "ellipse"}},
+    {"controlShapes": {"play": "triangle"}},
+    {"controlShapes": {"play": {"path": "M0,0"}}},
+    {"coverGlass": "true"},
+])
+def test_format_two_presentation_remains_constrained_data(pack, metadata):
+    pack[1].update(formatVersion=2, **metadata)
+    write_manifest(pack)
+    with pytest.raises(FaceError):
+        load_face(pack[0])
+
+
+def test_install_and_restart_preserve_format_two_presentation(pack, library, tmp_path):
+    shapes = {"art": "ellipse", "play": "ellipse", "search": "capsule", "menu": "rounded"}
+    pack[1].update(formatVersion=2, controlShapes=shapes, coverGlass=True)
+    pack[1]["controls"]["art"] = [28, 64, 48, 80]
+    write_manifest(pack)
+    info = library.install(pack[0])
+    installed = json.loads((info.source / "face.json").read_text())
+    assert installed["formatVersion"] == 2
+    assert installed["controlShapes"] == shapes
+    assert installed["coverGlass"] is True
+    restarted = FaceLibrary(library.ensure_directory(), tmp_path / "appearance.json")
+    face = restarted.load(info.id)
+    assert dict(face.control_shapes) == shapes
+    assert face.cover_glass is True
+    assert face.controls["art"] == (28, 64, 48, 80)
 
 
 def test_manifest_size_is_bounded(pack):

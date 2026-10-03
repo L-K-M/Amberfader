@@ -28,6 +28,7 @@ import type {
 } from "../protocol/types";
 import { describeValidationError, validateMessage, validateSearchSongsResult } from "../protocol/validate";
 import { isInternalMessage } from "../protocol/internal";
+import type { ArtworkPropose } from "../protocol/internal";
 import { SearchHistoryService } from "./searchHistory";
 
 
@@ -64,6 +65,7 @@ export class Router {
 
   private selection: Selection | null = null;
   private lastState: PlayerState | null = null;
+  private lastArtwork: ArtworkPropose | null = null;
   private readonly ports: RouterPorts = { ui: new Set(), controller: null };
   private nativeAttached = false;
   private readonly history = new SearchHistoryService();
@@ -128,6 +130,7 @@ export class Router {
                 : crypto.randomUUID(),
             };
             this.lastState = null;
+            this.lastArtwork = null;
             this.broadcast({
               protocolVersion: PROTOCOL_VERSION,
               kind: "event",
@@ -150,6 +153,13 @@ export class Router {
           bindingToken: this.selection.bindingToken,
         };
         this.lastState = stamped;
+        this.lastArtwork = typeof msg.artworkUrl === "string" && msg.artworkUrl && stamped.track?.artworkId ? {
+          scope: "amberfader-internal",
+          type: "artwork.propose",
+          url: msg.artworkUrl,
+          artworkId: stamped.track.artworkId,
+          occurrenceId: stamped.track.occurrenceId,
+        } : null;
         const occurrence = stamped.track
           ? `${stamped.bindingToken}/${stamped.track.occurrenceId}` : null;
         if (occurrence && occurrence !== this.historyOccurrence &&
@@ -160,23 +170,7 @@ export class Router {
             console.warn("Could not save recent artists");
           });
         }
-        this.broadcast({
-          protocolVersion: PROTOCOL_VERSION,
-          kind: "event",
-          event: "state",
-          sessionId: this.sessionId,
-          bindingToken: this.selection.bindingToken,
-          data: stamped,
-        });
-        if (typeof msg.artworkUrl === "string" && msg.artworkUrl) {
-          this.broadcastInternal({
-            scope: "amberfader-internal",
-            type: "artwork.propose",
-            url: msg.artworkUrl,
-            artworkId: stamped.track?.artworkId ?? "",
-            occurrenceId: stamped.track?.occurrenceId ?? null,
-          });
-        }
+        this.broadcastSnapshot();
         return { ok: true };
       }
       case "adapter.notice": {
@@ -301,6 +295,10 @@ export class Router {
         if (this.selection && !this.lastState) {
           const error = await this.refreshAdapter(this.selection);
           if (error) return errResponse(req.id, error.code, error.message, extra);
+        } else {
+          // A reopened native app also needs bytes for the cached state. Send
+          // state first so even an immediate artwork-cache hit has an owner.
+          this.broadcastSnapshot();
         }
         return okResponse(
           req.id,
@@ -367,6 +365,7 @@ export class Router {
       bindingToken: crypto.randomUUID(),
     };
     this.lastState = null;
+    this.lastArtwork = null;
     this.broadcast({
       protocolVersion: PROTOCOL_VERSION,
       kind: "event",
@@ -472,6 +471,7 @@ export class Router {
     if (!this.selection) return;
     this.selection = null;
     this.lastState = null;
+    this.lastArtwork = null;
     this.broadcast({
       protocolVersion: PROTOCOL_VERSION,
       kind: "event",
@@ -648,16 +648,9 @@ export class Router {
     };
     p.onDisconnect?.addListener(() => this.ports.ui.delete(port));
     // Full snapshot on subscribe — clients resync from this, not from deltas.
-    if (this.lastState) {
-      p.postMessage({
-        protocolVersion: PROTOCOL_VERSION,
-        kind: "event",
-        event: "state",
-        sessionId: this.sessionId,
-        bindingToken: this.selection?.bindingToken,
-        data: this.lastState,
-      });
-    }
+    const state = this.stateEvent();
+    if (state) p.postMessage(state);
+    if (this.lastArtwork) p.postMessage(this.lastArtwork);
   }
 
   attachControllerPort(port: unknown): void {
@@ -691,10 +684,31 @@ export class Router {
         }
       });
     });
+    const state = this.stateEvent();
+    if (state) p.postMessage({ scope: "amberfader-internal", type: "native.send", payload: state });
+    if (this.lastArtwork) p.postMessage(this.lastArtwork);
   }
 
   get nativeIsAttached(): boolean {
     return this.nativeAttached;
+  }
+
+  private stateEvent(): EventMessage | null {
+    if (!this.lastState) return null;
+    return {
+      protocolVersion: PROTOCOL_VERSION,
+      kind: "event",
+      event: "state",
+      sessionId: this.sessionId,
+      bindingToken: this.selection?.bindingToken,
+      data: this.lastState,
+    };
+  }
+
+  private broadcastSnapshot(): void {
+    const state = this.stateEvent();
+    if (state) this.broadcast(state);
+    if (this.lastArtwork) this.broadcastInternal(this.lastArtwork);
   }
 
   private broadcast(msg: EventMessage): void {
@@ -720,7 +734,7 @@ export class Router {
 
   // Internal (non-protocol) traffic to extension pages: artwork proposals and
   // controller status plumbing travel on the same ports.
-  private broadcastInternal(msg: Record<string, unknown>): void {
+  private broadcastInternal(msg: ArtworkPropose): void {
     for (const port of this.ports.ui) {
       try {
         (port as { postMessage(m: unknown): void }).postMessage(msg);

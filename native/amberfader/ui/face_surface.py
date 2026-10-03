@@ -10,8 +10,10 @@ from PySide6.QtGui import (
     QFontMetrics,
     QImage,
     QKeyEvent,
+    QLinearGradient,
     QMouseEvent,
     QPainter,
+    QPainterPath,
     QPen,
     QPixmap,
     QPolygonF,
@@ -23,6 +25,51 @@ from ..face_library import Face, FaceError
 
 FONT_FAMILIES = {"sans": "sans-serif", "mono": "monospace", "serif": "serif"}
 TRANSPORT_CONTROLS = frozenset(("previous", "play", "next"))
+
+
+def control_path(rect: QRectF, shape: str, radius: float) -> QPainterPath:
+    """A constrained contour shared by painting, focus and pointer hits."""
+    path = QPainterPath()
+    if shape == "ellipse":
+        path.addEllipse(rect)
+    elif shape in ("rounded", "capsule"):
+        corner = min(rect.width(), rect.height()) / 2 if shape == "capsule" else radius
+        path.addRoundedRect(rect, corner, corner)
+    else:
+        path.addRect(rect)
+    return path
+
+
+def draw_cover(
+    painter: QPainter, pixmap: QPixmap, rect: QRectF, shape: str, radius: float, glass: bool,
+) -> None:
+    """Fill a physical aperture without stretching or drawing over its bezel."""
+    if pixmap.isNull() or rect.isEmpty():
+        return
+    path = control_path(rect, shape, radius)
+    source = QRectF(pixmap.rect())
+    ratio = rect.width() / rect.height()
+    if source.width() / source.height() > ratio:
+        width = source.height() * ratio
+        source.setLeft((source.width() - width) / 2)
+        source.setWidth(width)
+    else:
+        height = source.width() / ratio
+        source.setTop((source.height() - height) / 2)
+        source.setHeight(height)
+    painter.save()
+    painter.setRenderHints(
+        QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform,
+    )
+    painter.setClipPath(path, Qt.ClipOperation.IntersectClip)
+    painter.drawPixmap(rect, pixmap, source)
+    if glass:
+        reflection = QLinearGradient(rect.topLeft(), rect.bottomRight())
+        reflection.setColorAt(0, QColor(255, 255, 255, 55))
+        reflection.setColorAt(0.45, QColor(255, 255, 255, 0))
+        reflection.setColorAt(1, QColor(0, 0, 0, 30))
+        painter.fillPath(path, reflection)
+    painter.restore()
 
 
 @dataclass(frozen=True)
@@ -88,7 +135,6 @@ def face_stylesheet(face: Face, scale: float) -> str:
     QLabel#time {{ font-family: monospace; font-size: {round(face.time_size * scale)}px; }}
     QLabel#dim, QLabel#status {{ color: {p['muted']}; }}
     QLabel#status[error="true"] {{ color: {p['danger']}; }}
-    QLabel#art {{ background: {p['display']}; border: 1px solid {p['border']}; }}
     QPushButton {{
       background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
         stop:0 {p['buttonTop']}, stop:1 {p['buttonBottom']});
@@ -191,11 +237,33 @@ class CoverLabel(QLabel):
         self.setAccessibleName("View album cover")
         self.setToolTip("View album cover")
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._shape = "rectangle"
+        self._radius = 0.0
+        self._glass = False
+
+    def set_shape(self, shape: str, radius: float, glass: bool) -> None:
+        self._shape, self._radius, self._glass = shape, radius, glass
+        self.update()
+
+    def _cover_path(self) -> QPainterPath:
+        return control_path(QRectF(self.rect()), self._shape, self._radius)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        draw_cover(
+            painter, self.pixmap(), QRectF(self.rect()), self._shape, self._radius, self._glass,
+        )
+        if self.hasFocus():
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(QPen(self.palette().highlight().color(), 1, Qt.PenStyle.DashLine))
+            painter.drawPath(control_path(
+                QRectF(self.rect()).adjusted(2, 2, -2, -2), self._shape, self._radius,
+            ))
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if (
             event.button() == Qt.MouseButton.LeftButton
-            and self.rect().contains(event.position().toPoint())
+            and self._cover_path().contains(event.position())
         ):
             self.activated.emit()
         super().mouseReleaseEvent(event)
@@ -213,6 +281,21 @@ class FaceButton(QPushButton):
     def __init__(self, text: str, parent: QWidget) -> None:
         super().__init__(text, parent)
         self._sprites: dict[str, QPixmap] = {}
+        self._shape = "rectangle"
+        self._radius = 0.0
+
+    def set_shape(self, shape: str, radius: float) -> None:
+        self._shape, self._radius = shape, radius
+        self.update()
+
+    def hitButton(self, position: QPoint) -> bool:
+        path = control_path(QRectF(self.rect()), self._shape, self._radius)
+        return path.contains(QPointF(position))
+
+    def _indicator_path(self) -> QPainterPath:
+        return control_path(
+            QRectF(self.rect()).adjusted(2, 2, -2, -2), self._shape, self._radius,
+        )
 
     def set_sprites(self, sprites: dict[str, QPixmap]) -> None:
         self._sprites = sprites
@@ -220,7 +303,7 @@ class FaceButton(QPushButton):
 
     def paintEvent(self, event) -> None:
         transport = self.objectName() in TRANSPORT_CONTROLS
-        if not self._sprites and not transport:
+        if not self._sprites and not transport and self._shape == "rectangle":
             super().paintEvent(event)
             return
         state = "normal"
@@ -231,6 +314,8 @@ class FaceButton(QPushButton):
         elif self.underMouse():
             state = "hover"
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, self._shape != "rectangle")
+        painter.setClipPath(control_path(QRectF(self.rect()), self._shape, self._radius))
         if self._sprites:
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
             if state == "disabled" and state not in self._sprites:
@@ -243,16 +328,18 @@ class FaceButton(QPushButton):
             option = QStyleOptionButton()
             self.initStyleOption(option)
             option.text = ""
+            option.state &= ~QStyle.StateFlag.State_HasFocus
             self.style().drawControl(QStyle.ControlElement.CE_PushButton, option, painter, self)
         color = self.palette().buttonText().color()
+        label_rect = self.rect().translated(0, 1) if self.isDown() else self.rect()
         if transport:
-            draw_transport_icon(painter, self.objectName(), self.text(), self.rect(), color)
+            draw_transport_icon(painter, self.objectName(), self.text(), label_rect, color)
         else:
             painter.setPen(color)
-            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text())
+            painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, self.text())
         if self.hasFocus() or self.property("pending"):
             painter.setPen(QPen(self.palette().highlight().color(), 1, Qt.PenStyle.DashLine))
-            painter.drawRect(self.rect().adjusted(2, 2, -3, -3))
+            painter.drawPath(self._indicator_path())
 
 
 class FaceSurface(QWidget):

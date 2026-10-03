@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "manta-ray",
   "name": "Manta Ray",
   "author": "Amberfader",
@@ -23,13 +23,27 @@
     "buttonBottom": "#153849",
     "danger": "#ffceba"
   },
+  "coverGlass": true,
+  "controlShapes": {
+    "art": "ellipse",
+    "previous": "ellipse",
+    "play": "ellipse",
+    "next": "ellipse",
+    "like": "ellipse",
+    "search": "capsule",
+    "show": "capsule",
+    "hide": "capsule",
+    "menu": "ellipse",
+    "minimize": "ellipse",
+    "close": "ellipse"
+  },
   "controls": {
-    "art": [140, 174, 92, 92],
+    "art": [143, 180, 92, 92],
     "title": [302, 192, 276, 22],
     "artists": [302, 218, 276, 20],
     "time": [302, 244, 186, 30],
     "playback": [498, 250, 80, 20],
-    "seek": [372, 338, 148, 18],
+    "seek": [370, 332, 148, 18],
     "previous": [254, 295, 36, 32],
     "play": [588, 120, 56, 48],
     "next": [311, 311, 36, 32],

@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "viridian",
   "name": "Viridian",
   "author": "Amberfader",
@@ -7,7 +7,7 @@
   "background": "background.png",
   "font": "sans",
   "size": [440, 440],
-  "drag": [190, 49, 124, 18],
+  "drag": [170, 51, 128, 18],
   "timeSize": 26,
   "radius": 10,
   "palette": {
@@ -23,25 +23,39 @@
     "buttonBottom": "#abbfb0",
     "danger": "#7d201d"
   },
+  "coverGlass": true,
+  "controlShapes": {
+    "art": "ellipse",
+    "previous": "ellipse",
+    "play": "ellipse",
+    "next": "ellipse",
+    "like": "ellipse",
+    "search": "capsule",
+    "show": "capsule",
+    "hide": "capsule",
+    "menu": "ellipse",
+    "minimize": "ellipse",
+    "close": "ellipse"
+  },
   "controls": {
-    "art": [35, 194, 64, 64],
+    "art": [36, 193, 48, 48],
     "title": [146, 144, 206, 24],
     "artists": [132, 174, 238, 20],
     "time": [132, 204, 234, 36],
     "playback": [214, 244, 112, 18],
     "status": [168, 270, 178, 18],
     "seek": [158, 294, 186, 18],
-    "volume": [63, 275, 80, 18],
-    "previous": [90, 304, 36, 30],
-    "play": [138, 350, 52, 38],
-    "next": [204, 368, 36, 30],
-    "like": [254, 357, 40, 30],
-    "search": [147, 318, 58, 26],
-    "show": [215, 321, 76, 26],
-    "hide": [299, 315, 54, 26],
-    "menu": [86, 124, 26, 22],
-    "minimize": [64, 153, 22, 22],
-    "close": [100, 179, 22, 22]
+    "volume": [183, 352, 80, 18],
+    "previous": [67, 288, 30, 30],
+    "play": [103, 322, 42, 42],
+    "next": [151, 360, 30, 30],
+    "like": [315, 342, 40, 30],
+    "search": [183, 378, 58, 24],
+    "show": [243, 372, 72, 24],
+    "hide": [330, 313, 54, 24],
+    "menu": [85, 115, 22, 22],
+    "minimize": [61, 141, 22, 22],
+    "close": [47, 166, 22, 22]
   },
   "buttons": {
     "previous": {

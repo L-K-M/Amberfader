@@ -7,11 +7,12 @@ cancelled when the track changes (spec §9).
 from __future__ import annotations
 
 import base64
+from collections import OrderedDict
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QByteArray, QElapsedTimer, QPoint, Qt, QTimer
-from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
+from PySide6.QtCore import QBuffer, QByteArray, QElapsedTimer, QIODevice, QPoint, Qt, QTimer
+from PySide6.QtGui import QImageReader, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -37,6 +38,10 @@ from .search_window import SearchWindow
 
 if TYPE_CHECKING:
     from .faces_window import FacesWindow
+
+ARTWORK_CACHE_BYTES = 20 * 1024 * 1024
+MAX_ARTWORK_DIMENSION = 256
+MAX_ARTWORK_CACHE_ENTRIES = 80
 
 
 def _fmt(sec: Any) -> str:
@@ -80,6 +85,8 @@ class MainWindow(QMainWindow):
         self._placeholder = QPixmap()
         self._placeholder.loadFromData(QByteArray(placeholder_png()))
         self._cover = self._placeholder
+        self._artwork_cache: OrderedDict[tuple[str, str], tuple[QPixmap, int]] = OrderedDict()
+        self._artwork_cache_bytes = 0
         self._title = ElidedLabel("Nothing selected", self._surface)
         self._title.setObjectName("title")
         self._artists = ElidedLabel("Waiting for Firefox…", self._surface)
@@ -217,6 +224,13 @@ class MainWindow(QMainWindow):
             widget.setGeometry(*(round(value * effective_scale) for value in face.controls[name]))
             if isinstance(widget, FaceButton):
                 widget.set_sprites(artwork.buttons.get(name, {}))
+                widget.set_shape(
+                    face.control_shapes.get(name, "rectangle"), face.radius * effective_scale,
+                )
+        self._art.set_shape(
+            face.control_shapes.get("art", "rectangle"), face.radius * effective_scale,
+            face.cover_glass,
+        )
         self._face_id = face.info.id
         self._render_cover()
         if self._search is not None:
@@ -259,10 +273,34 @@ class MainWindow(QMainWindow):
     def _render_cover(self) -> None:
         for label in (self._art, self._cover_label):
             if label is not None:
+                mode = (
+                    Qt.AspectRatioMode.KeepAspectRatioByExpanding if label is self._art
+                    else Qt.AspectRatioMode.KeepAspectRatio
+                )
                 label.setPixmap(self._cover.scaled(
-                    label.size(), Qt.AspectRatioMode.KeepAspectRatio,
+                    label.size(), mode,
                     Qt.TransformationMode.SmoothTransformation,
                 ))
+
+    @staticmethod
+    def _artwork_key(data: dict) -> tuple[str, str] | None:
+        occurrence = data.get("occurrenceId")
+        artwork = data.get("artworkId")
+        if not isinstance(occurrence, str) or not occurrence:
+            return None
+        if not isinstance(artwork, str) or not artwork:
+            return None
+        return occurrence, artwork
+
+    def _restore_cover(self, track: dict | None) -> None:
+        key = self._artwork_key(track or {})
+        cached = self._artwork_cache.get(key) if key is not None else None
+        if cached is not None:
+            self._artwork_cache.move_to_end(key)
+        cover = cached[0] if cached is not None else self._placeholder
+        if self._cover.cacheKey() != cover.cacheKey():
+            self._cover = cover
+            self._render_cover()
 
     # ---- state -----------------------------------------------------------
 
@@ -294,9 +332,7 @@ class MainWindow(QMainWindow):
             self._title.setText("Nothing selected")
             self._artists.setText("Waiting for Firefox…")
             self._artists.setToolTip("")
-        if not track or not track.get("artworkId"):
-            self._cover = self._placeholder
-            self._render_cover()
+        self._restore_cover(track)
 
         playing = state.get("status") == "playing"
         status = state.get("status", "unknown")
@@ -345,18 +381,48 @@ class MainWindow(QMainWindow):
             self._seek.setValue(int(min(max(pos / dur, 0), 1) * 1000))
 
     def apply_asset(self, data: dict) -> None:
+        key = self._artwork_key(data)
         raw = data.get("dataBase64")
-        if not isinstance(raw, str):
+        if key is None or not isinstance(raw, str):
             return
         try:
-            pix = QPixmap()
-            pix.loadFromData(QByteArray(base64.b64decode(raw)))
-        except Exception:
+            encoded = QByteArray(base64.b64decode(raw, validate=True))
+        except ValueError:
             return
-        if pix.isNull():
+        buffer = QBuffer(encoded)
+        buffer.open(QIODevice.OpenModeFlag.ReadOnly)
+        reader = QImageReader(buffer)
+        size = reader.size()
+        # Validate the encoded image, not only the sender's declared dimensions.
+        if not (
+            0 < size.width() <= MAX_ARTWORK_DIMENSION
+            and 0 < size.height() <= MAX_ARTWORK_DIMENSION
+        ):
             return
-        self._cover = pix
-        self._render_cover()
+        cost = size.width() * size.height() * 4
+        if cost > ARTWORK_CACHE_BYTES:
+            return
+        image = reader.read()
+        if image.isNull():
+            return
+        pix = QPixmap.fromImage(image)
+        previous = self._artwork_cache.pop(key, None)
+        if previous is not None:
+            self._artwork_cache_bytes -= previous[1]
+        while (
+            self._artwork_cache_bytes + cost > ARTWORK_CACHE_BYTES
+            or len(self._artwork_cache) >= MAX_ARTWORK_CACHE_ENTRIES
+        ):
+            _, (_, discarded_cost) = self._artwork_cache.popitem(last=False)
+            self._artwork_cache_bytes -= discarded_cost
+        self._artwork_cache[key] = pix, cost
+        self._artwork_cache_bytes += cost
+        # Assets may precede state or finish after a different track was selected.
+        # Retain bounded bytes for replay, but render only the observed occurrence.
+        track = (self._state or {}).get("track")
+        if self._artwork_key(track or {}) == key:
+            self._cover = pix
+            self._render_cover()
 
     def set_connection(self, component: str, status: str, reason: str = "") -> None:
         if component in ("gui", "target", "adapter") and status != "connected":

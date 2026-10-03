@@ -68,6 +68,7 @@ class AmberfaderApp:
         self._session_id: str | None = None
         self._binding_token: str | None = None
         self._binding_state = _BindingState.UNKNOWN
+        self._state_epoch = 0
 
     # ---- lifecycle --------------------------------------------------------
 
@@ -130,6 +131,7 @@ class AmberfaderApp:
         self._pending[rid] = {
             "method": method, "timer": timer,
             "binding": (self._session_id, self._binding_token),
+            "state_epoch": self._state_epoch,
         }
         timer.start(deadline)
         if not self._send(msg):
@@ -162,6 +164,7 @@ class AmberfaderApp:
     # ---- inbound wiring ---------------------------------------------------
 
     def _on_helper(self, sock: FramedSocket) -> None:
+        self._state_epoch += 1
         self._session_id = self._binding_token = None
         self._binding_state = _BindingState.UNKNOWN
         self.conn = sock
@@ -172,6 +175,7 @@ class AmberfaderApp:
         self.request("state.get", {})
 
     def _on_helper_gone(self) -> None:
+        self._state_epoch += 1
         self.conn = None
         self._session_id = self._binding_token = None
         self._binding_state = _BindingState.UNKNOWN
@@ -193,6 +197,11 @@ class AmberfaderApp:
         if kind == "response":
             entry = self._pending.get(msg.get("id"))
             if entry is None:
+                return
+            if entry["method"] == "state.get" and entry["state_epoch"] != self._state_epoch:
+                # New state or a disconnect superseded this resync. Discard it
+                # before it can restore an old track, cover, or binding.
+                self._pending.pop(msg["id"])["timer"].stop()
                 return
             current = (self._session_id, self._binding_token)
             received = (msg.get("sessionId"), msg.get("bindingToken"))
@@ -234,15 +243,22 @@ class AmberfaderApp:
             event = msg.get("event")
             data = msg.get("data") or {}
             if event == "state":
+                self._state_epoch += 1
                 self.window.apply_state(data)
             elif event == "asset":
                 self.window.apply_asset(data)
             elif event == "connection":
+                if (
+                    data.get("component") in ("gui", "target", "adapter")
+                    and data.get("status") != "connected"
+                ):
+                    self._state_epoch += 1
                 self.window.set_connection(
                     data.get("component", ""), data.get("status", ""), data.get("reason", "")
                 )
             elif event == "binding":
                 if data.get("status") != "bound":
+                    self._state_epoch += 1
                     self._binding_token = None
                     self._binding_state = _BindingState.REVOKED
 

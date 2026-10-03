@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "aureole",
   "name": "Aureole",
   "author": "Amberfader",
@@ -23,25 +23,39 @@
     "buttonBottom": "#aeb7bf",
     "danger": "#782510"
   },
+  "coverGlass": true,
+  "controlShapes": {
+    "art": "ellipse",
+    "previous": "ellipse",
+    "play": "ellipse",
+    "next": "ellipse",
+    "like": "ellipse",
+    "search": "capsule",
+    "show": "capsule",
+    "hide": "capsule",
+    "menu": "ellipse",
+    "minimize": "ellipse",
+    "close": "ellipse"
+  },
   "controls": {
-    "art": [162, 143, 64, 64],
+    "art": [30, 143, 80, 80],
     "title": [230, 106, 274, 24],
     "artists": [230, 136, 274, 20],
     "time": [230, 164, 222, 34],
     "playback": [460, 172, 94, 18],
     "status": [230, 204, 272, 18],
     "seek": [243, 230, 220, 18],
-    "volume": [64, 232, 92, 18],
-    "previous": [42, 252, 34, 28],
-    "play": [49, 166, 46, 40],
-    "next": [78, 270, 34, 28],
-    "like": [123, 274, 40, 28],
-    "search": [225, 264, 64, 28],
-    "show": [301, 271, 80, 28],
-    "hide": [394, 280, 56, 28],
-    "menu": [74, 101, 26, 24],
-    "minimize": [44, 114, 22, 22],
-    "close": [22, 139, 22, 22]
+    "volume": [354, 252, 80, 18],
+    "previous": [95, 259, 28, 28],
+    "play": [133, 253, 42, 38],
+    "next": [192, 264, 28, 28],
+    "like": [229, 263, 36, 28],
+    "search": [284, 274, 60, 24],
+    "show": [355, 279, 76, 24],
+    "hide": [443, 276, 54, 24],
+    "menu": [86, 92, 22, 22],
+    "minimize": [57, 110, 22, 22],
+    "close": [34, 120, 22, 22]
   },
   "buttons": {
     "previous": {

@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "keystone",
   "name": "Keystone",
   "author": "Amberfader",
@@ -23,8 +23,22 @@
     "buttonBottom": "#262b2e",
     "danger": "#ffbba5"
   },
+  "coverGlass": true,
+  "controlShapes": {
+    "art": "ellipse",
+    "previous": "ellipse",
+    "play": "ellipse",
+    "next": "ellipse",
+    "like": "ellipse",
+    "search": "capsule",
+    "show": "capsule",
+    "hide": "capsule",
+    "menu": "ellipse",
+    "minimize": "ellipse",
+    "close": "ellipse"
+  },
   "controls": {
-    "art": [64, 96, 80, 80],
+    "art": [56, 88, 96, 96],
     "title": [194, 78, 278, 24],
     "artists": [194, 108, 278, 22],
     "time": [194, 136, 202, 34],

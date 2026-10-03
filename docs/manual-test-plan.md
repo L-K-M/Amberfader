@@ -35,7 +35,14 @@ save the report. Verify:
       verify that a fresh binding and snapshot restore controls.
 - [ ] Deny YouTube Music site access. The player shows an actionable connection
       error rather than waiting indefinitely. Regrant access and reopen it.
-- [ ] GUI shows artwork, title, artist, album for the playing track.
+- [ ] Both the extension player and GUI show artwork, title, artist, album for
+      the playing track. Record the loaded player image's origin and the
+      extension artwork request's status/content type if either cover is absent.
+- [ ] Pause playback, close and reopen each player, then restart the native
+      controller. The same cover returns without a site playback event.
+- [ ] While paused, change the player image's source or let its srcset image
+      finish loading. Both players update when the image resolves, including
+      when an earlier matching player image has an empty source.
 - [ ] Artwork downloads slower than a position sample still finish. Changing
       tracks or switching to a cached cover never displays an older result.
 - [ ] **Run probes** completes and **Download report** saves readable JSON in
@@ -106,7 +113,11 @@ Run these checks on both X11 and Wayland, including the Flatpak build. Offscreen
 tests verify rendering and state preservation, not compositor integration.
 
 - Open **☰ → Faces…**, or **Ctrl+,**. Preview and apply each bundled face.
-- Drag the engraved header. Check that transparent cutouts do not intercept
+  On Aureole and Viridian, check that covers fill their circular sockets and
+  leave the original bezel visible. Focus and pending outlines follow the
+  button shapes; clicking a transparent button corner does not issue a command.
+  Drag the empty metal rim, and open Cover view to see the complete image.
+- Drag the header or empty metal drag region. Check that transparent cutouts do not intercept
   clicks, and that minimize, close, and second-instance activation work.
 - Repeat with `--scale 1.0`, `--scale 1.5`, and `--scale 2.0`, including a small
   display. All controls must remain reachable.

@@ -27,6 +27,7 @@ export class ProtocolClient {
     onDisconnect: { addListener(cb: () => void): void };
   } | null = null;
   private reqSeq = 0;
+  private stateEpoch = 0;
   private readonly events: ClientEvents;
   private reconnectTimer: number | null = null;
 
@@ -63,6 +64,7 @@ export class ProtocolClient {
     port.onMessage.addListener((m: unknown) => this.onPortMessage(m));
     port.onDisconnect.addListener(() => {
       this.port = null;
+      this.stateEpoch += 1;
       this.events.onDisconnected?.();
       // Wake the event page and take a fresh snapshot; an old port is never
       // assumed to carry state across a router restart.
@@ -81,13 +83,18 @@ export class ProtocolClient {
       if (typeof ev.sessionId === "string") this.sessionId = ev.sessionId;
       if (typeof ev.bindingToken === "string") this.bindingToken = ev.bindingToken;
       if (ev.event === "state") {
+        this.stateEpoch += 1;
         this.events.onState?.(ev.data as PlayerState);
       } else if (ev.event === "binding") {
         const d = ev.data as { status: string; reason?: string };
-        if (d.status === "revoked" || d.status === "unbound") this.bindingToken = null;
+        if (d.status === "revoked" || d.status === "unbound") {
+          this.bindingToken = null;
+          this.stateEpoch += 1;
+        }
         this.events.onBinding?.(d.status, d.reason);
       } else if (ev.event === "connection") {
         const d = ev.data as { component: string; status: string; reason?: string };
+        if ((d.component === "target" || d.component === "adapter") && d.status !== "connected") this.stateEpoch += 1;
         this.events.onConnection?.(d.component, d.status, d.reason);
       }
     } else if (
@@ -117,8 +124,13 @@ export class ProtocolClient {
   }) => void;
 
   private async resync(): Promise<void> {
+    const epoch = this.stateEpoch;
     const resp = await this.request("state.get", {});
+    // A port event received during the request supersedes its snapshot. An
+    // older response must not restore an old track or cancel its new cover.
+    if (epoch !== this.stateEpoch) return;
     if (resp.ok && resp.result) {
+      if (resp.bindingToken && resp.bindingToken !== this.bindingToken) return;
       this.events.onState?.(resp.result as unknown as PlayerState);
     } else if (!resp.ok && resp.error.code !== "stale_target") {
       this.events.onConnection?.("adapter", "disconnected", resp.error.message);
@@ -142,11 +154,13 @@ export class ProtocolClient {
     if (needsBinding && this.bindingToken) req.bindingToken = this.bindingToken;
     const bindingAtDispatch = this.bindingToken;
     const sessionAtDispatch = this.sessionId;
+    const stateEpochAtDispatch = this.stateEpoch;
     const resp = await this.rawSend(req);
     // Learn binding tokens from responses too (select, state.get).
     const bt = (resp as { bindingToken?: unknown }).bindingToken;
     if (typeof bt === "string" && this.bindingToken === bindingAtDispatch &&
-        this.sessionId === sessionAtDispatch) this.bindingToken = bt;
+        this.sessionId === sessionAtDispatch &&
+        this.stateEpoch === stateEpochAtDispatch) this.bindingToken = bt;
     return resp;
   }
 

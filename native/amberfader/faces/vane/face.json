@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "vane",
   "name": "Vane",
   "author": "Amberfader",
@@ -23,8 +23,22 @@
     "buttonBottom": "#1a2d3a",
     "danger": "#8d2b23"
   },
+  "coverGlass": true,
+  "controlShapes": {
+    "art": "ellipse",
+    "previous": "ellipse",
+    "play": "ellipse",
+    "next": "ellipse",
+    "like": "ellipse",
+    "search": "capsule",
+    "show": "capsule",
+    "hide": "capsule",
+    "menu": "ellipse",
+    "minimize": "ellipse",
+    "close": "ellipse"
+  },
   "controls": {
-    "art": [30, 155, 64, 64],
+    "art": [29, 153, 60, 60],
     "title": [166, 124, 204, 22],
     "artists": [380, 124, 120, 22],
     "time": [166, 154, 222, 34],
@@ -39,7 +53,7 @@
     "search": [394, 220, 66, 26],
     "show": [468, 214, 74, 26],
     "hide": [550, 210, 50, 26],
-    "menu": [118, 130, 26, 22],
+    "menu": [120, 137, 26, 22],
     "minimize": [122, 160, 22, 22],
     "close": [128, 190, 22, 22]
   },

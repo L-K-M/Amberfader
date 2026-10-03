@@ -120,6 +120,60 @@ describe("YouTubeMusicAdapter (synthetic fixture)", () => {
     }
   });
 
+  it("skips an empty matching image before the observed player cover selector", async () => {
+    mountPlayer();
+    const image = document.querySelector("img")!;
+    const placeholder = document.createElement("img");
+    placeholder.className = "image";
+    placeholder.setAttribute("src", "");
+    image.before(placeholder);
+    const loadedSource = "https://yt3.googleusercontent.com/loaded-cover";
+    image.src = loadedSource;
+    const adapter = new YouTubeMusicAdapter();
+    await adapter.start();
+    try {
+      expect(adapter.proposedArtworkUrl).toBe(loadedSource);
+      expect(adapter.snapshot().track?.artworkId).not.toBeNull();
+    } finally {
+      adapter.stop();
+    }
+  });
+
+  it("publishes a changed artwork src immediately during paused playback", async () => {
+    mountPlayer();
+    const image = document.querySelector("img")!;
+    const adapter = new YouTubeMusicAdapter();
+    const states: AdapterPlayerState[] = [];
+    adapter.onState((state) => states.push(state));
+    await adapter.start();
+    try {
+      const initialRevision = states.at(-1)!.revision;
+      const loadedSource = "https://yt3.googleusercontent.com/updated-cover";
+      image.src = loadedSource;
+      await Promise.resolve();
+      expect(states.at(-1)!.revision).toBeGreaterThan(initialRevision);
+      expect(adapter.proposedArtworkUrl).toBe(loadedSource);
+    } finally {
+      adapter.stop();
+    }
+  });
+
+  it("publishes the resolved srcset cover when the player image finishes loading", async () => {
+    mountPlayer();
+    const image = document.querySelector("img")!;
+    let resolvedSource = "https://yt3.googleusercontent.com/previous-cover";
+    Object.defineProperty(image, "currentSrc", { get: () => resolvedSource });
+    const adapter = new YouTubeMusicAdapter();
+    await adapter.start();
+    try {
+      resolvedSource = "https://yt3.googleusercontent.com/resolved-cover";
+      image.dispatchEvent(new Event("load"));
+      expect(adapter.proposedArtworkUrl).toBe(resolvedSource);
+    } finally {
+      adapter.stop();
+    }
+  });
+
   it("previous/next click exactly one control per invocation", async () => {
     mountPlayer();
     const clicks: string[] = [];

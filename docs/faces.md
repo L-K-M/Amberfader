@@ -45,7 +45,9 @@ with shaped metal and plastic shells around the readout and controls.
 ![Four utilitarian player faces rendered with sample metadata](faces-utilitarian-preview.png)
 
 Aureole and Viridian place oval and round glass displays inside curved silver
-shells, with gold, navy and green instrument materials.
+shells, with gold, navy and green instrument materials. Covers fill the circular
+ports inside their original bezels. Buttons follow the rim without separate
+rectangular backings; the empty metal regions let you drag the window.
 
 ![Two lens player faces rendered with sample metadata](faces-lens-preview.png)
 
@@ -79,7 +81,7 @@ stored there. Damaged bundled faces report a reinstall error at startup.
 ## Create a plugin
 
 A face plugin is data, not executable Python. Its public contract is
-[`Face v1 JSON Schema`](../native/amberfader/faces/schema.json). Start by copying
+[`Face JSON Schema`](../native/amberfader/faces/schema.json). Start by copying
 [`amber-classic`](../native/amberfader/faces/amber-classic), change its `id`,
 `name`, `author` and `description`, then edit the layout and images.
 
@@ -94,7 +96,9 @@ my-face/
 
 ### Manifest fields
 
-- `formatVersion`: **1**. Unknown versions are rejected.
+- `formatVersion`: **1** or **2**. Existing version 1 packs keep their rectangular
+  controls. Version 2 adds constrained shapes; older app versions reject these
+  packs. Unknown versions are rejected.
 - `id`: unique lowercase identifier, starting with a letter. Use letters,
   digits and hyphens, at most 48 characters. Bundled IDs are reserved.
 - `name`, `author`, `description`: plain text displayed in the browser.
@@ -110,6 +114,13 @@ my-face/
   `buttonBottom`, `danger`. Give text and disabled states readable contrast.
 - `controls`: rectangles for every host control, listed below.
 - `buttons`: optional state images for individual buttons.
+- `controlShapes` (version 2): optional shape for `art` and any button. Choose
+  `rectangle`, `rounded`, `capsule` or `ellipse`. Omitted controls stay rectangular.
+  Covers fill the aperture with a centered crop; button painting, click areas,
+  keyboard focus and pending outlines follow the same contour. `rounded` uses
+  `radius`; `capsule` uses half the shorter dimension.
+- `coverGlass` (version 2): optional boolean, default false. Adds a faint glass
+  reflection over the cover while leaving the background's bezel visible.
 
 ### Required host controls
 
@@ -130,8 +141,10 @@ my-face/
 Every control must fit inside the canvas, avoid other controls and `drag`, and
 sit on an opaque part of the background. Buttons need at least 22×22 logical
 pixels; labels and drag regions need 64×18; sliders need 80×18. Artwork must be
-square and at least 64×64. Leave enough room for translated desktop fonts and
-long track names.
+square and at least 64×64, except version 2 elliptical apertures, which can be
+oval and need at least 48×48. The entire control rectangle must still fit on
+the opaque shell. Leave enough room for translated desktop fonts and long track
+names.
 
 Transparent PNG exteriors create shaped windows. Qt uses the background's
 alpha mask for hit testing. The compositor handles dragging where supported.

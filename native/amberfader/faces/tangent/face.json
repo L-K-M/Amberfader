@@ -1,5 +1,5 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "tangent",
   "name": "Tangent",
   "author": "Amberfader",
@@ -7,7 +7,7 @@
   "background": "background.png",
   "font": "sans",
   "size": [640, 320],
-  "drag": [68, 52, 100, 20],
+  "drag": [70, 54, 100, 20],
   "timeSize": 26,
   "radius": 6,
   "palette": {
@@ -23,15 +23,29 @@
     "buttonBottom": "#1b2b39",
     "danger": "#ffb59a"
   },
+  "coverGlass": true,
+  "controlShapes": {
+    "art": "ellipse",
+    "previous": "ellipse",
+    "play": "ellipse",
+    "next": "ellipse",
+    "like": "ellipse",
+    "search": "capsule",
+    "show": "capsule",
+    "hide": "capsule",
+    "menu": "ellipse",
+    "minimize": "ellipse",
+    "close": "ellipse"
+  },
   "controls": {
-    "art": [78, 104, 88, 88],
+    "art": [60, 86, 124, 124],
     "title": [230, 90, 326, 24],
     "artists": [230, 120, 326, 20],
     "time": [230, 144, 220, 32],
     "playback": [470, 151, 86, 20],
     "status": [230, 180, 326, 18],
     "seek": [232, 208, 344, 18],
-    "previous": [58, 224, 34, 28],
+    "previous": [60, 222, 34, 28],
     "play": [104, 218, 48, 38],
     "next": [164, 224, 34, 28],
     "like": [210, 228, 42, 26],

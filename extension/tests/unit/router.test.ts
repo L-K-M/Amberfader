@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PROTOCOL_VERSION } from "../../src/protocol/types";
 import type { RequestMessage } from "../../src/protocol/types";
+import type { AdapterStatePush } from "../../src/protocol/internal";
 
 interface FakeTab {
   id: number;
@@ -115,9 +116,89 @@ function req(partial: Partial<RequestMessage> & { method: RequestMessage["method
 const contentSender = (tabId: number) => ({ tab: { id: tabId }, frameId: 0, documentId: "doc-1" });
 const pageSender = { internal: "ui" };
 
+const artworkPush = (): AdapterStatePush => ({
+  scope: "amberfader-internal", type: "adapter.state", documentNonce: "nonce-1",
+  artworkUrl: "https://yt3.googleusercontent.com/current-cover",
+  state: {
+    revision: 2, status: "paused", contentKind: "track", positionSeconds: 12,
+    durationSeconds: 200, playbackRate: 1, volume: 1, muted: false, capabilities: [],
+    track: {
+      occurrenceId: "occ-1", providerId: "song", title: "Song", artists: ["Artist"],
+      album: null, artworkId: "current-cover",
+    },
+  },
+});
+
+async function routerWithArtwork() {
+  const { router, fake } = await makeRouter();
+  fake.tabsList = [{ id: 7, url: "https://music.youtube.com/" }];
+  await router.handleClientMessage(req({ method: "targets.select", params: { targetKey: "tab:7" } }));
+  await router.onInternalMessage(artworkPush(), contentSender(7));
+  return { router, fake };
+}
+
 describe("Router", () => {
   beforeEach(() => {
     vi.resetModules();
+  });
+
+  it("replays paused artwork after the matching state to a reopened UI", async () => {
+    const { router } = await routerWithArtwork();
+    const postMessage = vi.fn<(message: unknown) => void>();
+    router.subscribeUiPort({ postMessage });
+    expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
+      expect.objectContaining({ event: "state", data: expect.objectContaining({ track: expect.objectContaining({ artworkId: "current-cover" }) }) }),
+      expect.objectContaining({ type: "artwork.propose", url: artworkPush().artworkUrl, artworkId: "current-cover", occurrenceId: "occ-1" }),
+    ]);
+  });
+
+  it("replays paused artwork after the matching state to a new native controller", async () => {
+    const { router } = await routerWithArtwork();
+    const postMessage = vi.fn<(message: unknown) => void>();
+    router.attachControllerPort({ postMessage });
+    expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
+      expect.objectContaining({ type: "native.send", payload: expect.objectContaining({ event: "state" }) }),
+      expect.objectContaining({ type: "artwork.propose", artworkId: "current-cover", occurrenceId: "occ-1" }),
+    ]);
+  });
+
+  it("replays current artwork on native resync without requiring another site event", async () => {
+    const { router, fake } = await routerWithArtwork();
+    const postMessage = vi.fn<(message: unknown) => void>();
+    router.attachControllerPort({ postMessage });
+    postMessage.mockClear();
+    fake.sentToTab = [];
+    const response = await router.onInternalMessage({
+      scope: "amberfader-internal", type: "native.message", payload: req({ method: "state.get" }),
+    }, pageSender);
+    expect(response).toMatchObject({ ok: true, result: { track: { artworkId: "current-cover" } } });
+    expect(fake.sentToTab).toEqual([]);
+    expect(postMessage.mock.calls.map(([message]) => message)).toEqual([
+      expect.objectContaining({ type: "native.send", payload: expect.objectContaining({ event: "state" }) }),
+      expect.objectContaining({ type: "artwork.propose", artworkId: "current-cover", occurrenceId: "occ-1" }),
+    ]);
+  });
+
+  it("does not replay a previous source after artwork loss or document rebinding", async () => {
+    const { router } = await routerWithArtwork();
+    const missing = artworkPush();
+    missing.artworkUrl = null;
+    await router.onInternalMessage(missing, contentSender(7));
+    const postMessage = vi.fn<(message: unknown) => void>();
+    router.subscribeUiPort({ postMessage });
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    await router.onInternalMessage(artworkPush(), contentSender(7));
+    await router.onInternalMessage({
+      scope: "amberfader-internal", type: "adapter.register", documentNonce: "nonce-new", capabilities: [],
+    }, contentSender(7));
+    const nextPort = { postMessage: vi.fn() };
+    router.subscribeUiPort(nextPort);
+    expect(nextPort.postMessage).not.toHaveBeenCalled();
+    const current = await routerWithArtwork();
+    current.router.onTabRemoved(7);
+    const afterRemoval = { postMessage: vi.fn() };
+    current.router.subscribeUiPort(afterRemoval);
+    expect(afterRemoval.postMessage).not.toHaveBeenCalled();
   });
 
   it("validates messages and rejects malformed ones", async () => {
