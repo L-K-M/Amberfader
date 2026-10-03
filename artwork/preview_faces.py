@@ -192,6 +192,9 @@ def main() -> None:
         help="Write the sample contact sheet to this path",
     )
     options = parser.parse_args()
+    selected_ids = set(options.face_ids or [])
+    if selected_ids and options.output.resolve() == parser.get_default("output").resolve():
+        parser.error("--face needs a separate --output path to preserve the full gallery")
     app = QApplication([])
     PREVIEW_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
@@ -199,7 +202,6 @@ def main() -> None:
         library = FaceLibrary(Path(directory) / "faces", Path(directory) / "appearance.json")
         if library.problems:
             raise RuntimeError("Cannot render every bundled face: " + "; ".join(library.problems))
-        selected_ids = set(options.face_ids or [])
         unknown_ids = selected_ids - {info.id for info in library.faces}
         if unknown_ids:
             parser.error("Unknown face IDs: " + ", ".join(sorted(unknown_ids)))
@@ -217,9 +219,10 @@ def main() -> None:
             if not poster.save(str(options.output)):
                 raise RuntimeError(f"Could not save {options.output}")
             if options.states:
+                suffix = "-" + "-".join(sorted(selected_ids)) if selected_ids else ""
                 for state_name in ("long-metadata", "offline", "pending"):
                     sheet = _contact_sheet(app, window, faces, state_name, cover)
-                    destination = PREVIEW_DIRECTORY / f"faces-{state_name}.png"
+                    destination = PREVIEW_DIRECTORY / f"faces-{state_name}{suffix}.png"
                     if not sheet.save(str(destination)):
                         raise RuntimeError(f"Could not save {destination}")
         finally:
