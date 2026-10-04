@@ -1,12 +1,12 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "midnight-rack",
   "name": "Midnight Rack",
   "author": "Amberfader",
   "description": "1997 desktop hi-fi: graphite rack rails, machined buttons, and a green phosphor readout.",
   "size": [560, 344],
   "background": "background.png",
-  "drag": [28, 18, 378, 28],
+  "drag": [33, 13, 386, 26],
   "font": "mono",
   "timeSize": 30,
   "radius": 3,
@@ -23,25 +23,37 @@
     "buttonBottom": "#232a32",
     "danger": "#ff998b"
   },
+  "readoutStyles": {
+    "playback": {
+      "align": "right"
+    },
+    "title": {
+      "size": 15,
+      "bold": true
+    },
+    "artists": {
+      "size": 13
+    }
+  },
   "controls": {
-    "art": [28, 64, 120, 120],
-    "title": [180, 66, 338, 26],
-    "artists": [180, 98, 338, 22],
-    "time": [180, 128, 224, 44],
-    "playback": [414, 146, 104, 20],
-    "previous": [28, 198, 48, 36],
-    "play": [84, 192, 60, 48],
-    "next": [152, 198, 48, 36],
-    "like": [212, 198, 48, 36],
-    "volume": [378, 204, 140, 22],
-    "seek": [28, 244, 490, 20],
-    "search": [28, 278, 86, 28],
-    "show": [124, 278, 100, 28],
-    "hide": [234, 278, 74, 28],
-    "menu": [424, 18, 34, 28],
-    "minimize": [466, 18, 24, 28],
-    "close": [498, 18, 24, 28],
-    "status": [28, 314, 490, 18]
+    "art": [38, 54, 114, 114],
+    "title": [183, 55, 329, 30],
+    "artists": [183, 95, 329, 22],
+    "time": [181, 130, 249, 37],
+    "playback": [440, 145, 72, 20],
+    "previous": [32, 186, 72, 36],
+    "play": [112, 182, 88, 44],
+    "next": [208, 186, 72, 36],
+    "like": [288, 186, 72, 36],
+    "volume": [375, 192, 146, 24],
+    "seek": [39, 238, 482, 18],
+    "search": [32, 269, 160, 28],
+    "show": [200, 269, 160, 28],
+    "hide": [368, 269, 160, 28],
+    "menu": [428, 12, 28, 29],
+    "minimize": [464, 12, 28, 29],
+    "close": [500, 12, 28, 29],
+    "status": [43, 309, 474, 18]
   },
   "buttons": {
     "previous": {

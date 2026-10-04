@@ -7,7 +7,7 @@
   "background": "background.png",
   "font": "sans",
   "size": [620, 620],
-  "drag": [242, 226, 122, 24],
+  "drag": [250, 112, 120, 76],
   "timeSize": 26,
   "radius": 20,
   "palette": {
@@ -26,11 +26,11 @@
   "coverGlass": true,
   "sliderStyle": "inset",
   "readoutStyles": {
-    "title": {"align": "center", "font": "mono"},
+    "title": {"align": "center", "font": "mono", "size": 11},
     "artists": {"align": "center", "font": "mono", "size": 11},
-    "time": {"align": "center", "size": 24},
+    "time": {"align": "center", "font": "sans", "size": 17},
     "playback": {"align": "center", "font": "mono", "size": 11},
-    "status": {"align": "center", "size": 11}
+    "status": {"align": "center", "size": 10}
   },
   "controlShapes": {
     "art": "ellipse",
@@ -46,24 +46,24 @@
     "close": "ellipse"
   },
   "controls": {
-    "art": [184, 274, 112, 112],
-    "title": [324, 282, 122, 24],
-    "artists": [324, 312, 122, 22],
-    "time": [322, 344, 132, 34],
-    "playback": [324, 386, 122, 18],
-    "seek": [226, 414, 192, 20],
-    "previous": [44, 388, 44, 36],
-    "play": [515, 404, 62, 50],
-    "next": [94, 388, 44, 36],
-    "like": [68, 432, 44, 36],
-    "volume": [270, 533, 80, 18],
-    "search": [124, 534, 90, 30],
-    "show": [402, 538, 100, 30],
-    "hide": [395, 156, 66, 28],
-    "menu": [194, 100, 28, 24],
-    "minimize": [196, 134, 24, 24],
-    "close": [196, 168, 24, 24],
-    "status": [220, 446, 188, 18]
+    "art": [185, 272, 121, 128],
+    "title": [339, 296, 98, 20],
+    "artists": [339, 316, 98, 18],
+    "time": [339, 334, 98, 24],
+    "playback": [339, 359, 98, 18],
+    "seek": [334, 394, 108, 18],
+    "previous": [38, 371, 40, 40],
+    "play": [518, 395, 65, 65],
+    "next": [86, 371, 40, 40],
+    "like": [62, 412, 40, 40],
+    "volume": [264, 532, 92, 18],
+    "search": [116, 528, 80, 26],
+    "show": [424, 528, 80, 26],
+    "hide": [270, 223, 80, 26],
+    "menu": [206, 101, 22, 22],
+    "minimize": [201, 133, 22, 22],
+    "close": [198, 165, 22, 22],
+    "status": [229, 427, 162, 18]
   },
   "buttons": {
     "previous": {

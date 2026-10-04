@@ -56,6 +56,15 @@ READOUT_ALIGNMENT = {
     "center": Qt.AlignmentFlag.AlignCenter,
     "right": Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
 }
+KEYBOARD_FOCUS_REASONS = frozenset((
+    Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason,
+    Qt.FocusReason.ShortcutFocusReason,
+))
+# Window activation and closed popups return focus without new navigation.
+RESTORED_FOCUS_REASONS = frozenset((
+    Qt.FocusReason.ActiveWindowFocusReason, Qt.FocusReason.PopupFocusReason,
+    Qt.FocusReason.MenuBarFocusReason,
+))
 
 
 @dataclass(frozen=True)
@@ -211,6 +220,40 @@ def draw_slider(
     painter.restore()
 
 
+class KeyboardFocusRing:
+    """Mark focus reached by keyboard, not the control a pointer just used.
+
+    Qt focuses the cover when the window opens and keeps focus on clicked
+    buttons; drawing those rings would leave dashed outlines over every face.
+    Programmatic focus (setFocus() defaults to OtherFocusReason) hides the
+    ring, so pass a keyboard reason when code moves focus for a keyboard user.
+    """
+
+    _keyboard_focus = False
+
+    def focusInEvent(self, event) -> None:
+        reason = event.reason()
+        if reason in KEYBOARD_FOCUS_REASONS:
+            self._keyboard_focus = True
+        elif reason not in RESTORED_FOCUS_REASONS:
+            self._keyboard_focus = False
+        super().focusInEvent(event)
+
+    def mousePressEvent(self, event) -> None:
+        self._drop_keyboard_ring()
+        super().mousePressEvent(event)
+
+    def _drop_keyboard_ring(self) -> None:
+        # Clicking the focused control moves no focus, so no focus-in event
+        # reports the pointer; overrides that skip super() must call this.
+        if self._keyboard_focus:
+            self._keyboard_focus = False
+            self.update()
+
+    def focus_ring_visible(self) -> bool:
+        return self.hasFocus() and self._keyboard_focus
+
+
 class _SliderPopup(QFrame):
     dismissed = Signal()
 
@@ -265,7 +308,7 @@ class _PopupSlider(QSlider):
             self.setSliderDown(False)
 
 
-class FaceSlider(QSlider):
+class FaceSlider(KeyboardFocusRing, QSlider):
     """Face painting keeps QSlider's input, accessibility and signal behavior."""
 
     gestureCancelled = Signal()
@@ -364,6 +407,7 @@ class FaceSlider(QSlider):
             self._face is not None and self._face.slider_style == "popup"
             and event.button() == Qt.MouseButton.LeftButton
         ):
+            self._drop_keyboard_ring()
             self._show_popup()
             event.accept()
             return
@@ -402,7 +446,7 @@ class FaceSlider(QSlider):
                 if state == "disabled" and state not in self._sprites:
                     painter.setOpacity(0.5)
                 painter.drawPixmap(self.rect(), self._sprites.get(state, self._sprites["normal"]))
-            if self.hasFocus():
+            if self.focus_ring_visible():
                 painter.setPen(QPen(self.palette().highlight().color(), 1, Qt.PenStyle.DashLine))
                 painter.drawRect(self.rect().adjusted(1, 1, -1, -1))
             return
@@ -421,7 +465,7 @@ class FaceSlider(QSlider):
         painter = QPainter(self)
         draw_slider(
             painter, QRectF(groove), QRectF(handle), self._face.palette,
-            self.isEnabled(), self.hasFocus(), option.upsideDown,
+            self.isEnabled(), self.focus_ring_visible(), option.upsideDown,
         )
 
 
@@ -715,8 +759,10 @@ def _draw_preview_control(painter, face, artwork, cover, labels, name, coordinat
 
 
 def like_font_size(face: Face) -> int:
-    # A narrow v1 plugin button must still display the unknown-state question mark.
-    return 18 if face.controls.get("like", (0, 0, 40, 22))[2] >= 40 else 12
+    # Scale the heart with its button like the drawn transport glyphs. The
+    # 12 px floor still fits the unknown-state "♡?" in a 22 px v1 button.
+    _, _, width, height = face.controls.get("like", (0, 0, 40, 22))
+    return max(12, min(18, round(min(width, height) / 2)))
 
 
 def face_stylesheet(face: Face, scale: float) -> str:
@@ -792,7 +838,9 @@ def draw_transport_icon(
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(Qt.PenStyle.NoPen)
     painter.setBrush(color)
-    painter.translate(rect.center())
+    # QRect.center() rounds (left + right) / 2 down: 1 px up and left on
+    # even-sized buttons (19 for 0..39) and 0.5 px on odd-sized ones.
+    painter.translate(QRectF(rect).center())
     size = min(rect.width(), rect.height()) * 0.42
     painter.scale(size, size)
     if name == "play":
@@ -806,8 +854,9 @@ def draw_transport_icon(
     else:
         if name == "next":
             painter.scale(-1, 1)
-        painter.drawRect(QRectF(-0.55, -0.45, 0.12, 0.9))
-        for x in (-0.35, 0.05):
+        # Bar and triangles span -0.48..0.48, so the skip glyph's ink is centered.
+        painter.drawRect(QRectF(-0.48, -0.45, 0.12, 0.9))
+        for x in (-0.28, 0.12):
             painter.drawPolygon(QPolygonF([
                 QPointF(x, 0), QPointF(x + 0.36, -0.45), QPointF(x + 0.36, 0.45),
             ]))
@@ -851,7 +900,7 @@ class ReadoutLabel(QLabel):
         painter.drawText(self.rect(), self.alignment(), text)
 
 
-class CoverLabel(QLabel):
+class CoverLabel(KeyboardFocusRing, QLabel):
     activated = Signal()
 
     def __init__(self, parent: QWidget) -> None:
@@ -878,11 +927,11 @@ class CoverLabel(QLabel):
         draw_cover(
             painter, self.pixmap(), QRectF(self.rect()), self._shape, self._radius, self._glass,
         )
-        if self.hasFocus():
+        if self.focus_ring_visible():
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             painter.setPen(QPen(self.palette().highlight().color(), 1, Qt.PenStyle.DashLine))
             painter.drawPath(control_path(
-                QRectF(self.rect()).adjusted(2, 2, -2, -2), self._shape, self._radius,
+                QRectF(self.rect()).adjusted(2.5, 2.5, -2.5, -2.5), self._shape, self._radius,
             ))
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
@@ -891,6 +940,7 @@ class CoverLabel(QLabel):
             and self._cover_path().contains(event.position())
         )
         if self._pressed:
+            self._drop_keyboard_ring()
             self.setFocus(Qt.FocusReason.MouseFocusReason)
             event.accept()
             return
@@ -912,7 +962,7 @@ class CoverLabel(QLabel):
         super().keyPressEvent(event)
 
 
-class FaceButton(QPushButton):
+class FaceButton(KeyboardFocusRing, QPushButton):
     """Optional artist sprites retain host labels, focus and pending states."""
 
     def __init__(self, text: str, parent: QWidget) -> None:
@@ -931,9 +981,14 @@ class FaceButton(QPushButton):
         return path.contains(QPointF(position))
 
     def _indicator_path(self) -> QPainterPath:
-        return control_path(
-            QRectF(self.rect()).adjusted(2, 2, -2, -2), self._shape, self._radius,
-        )
+        # Half-pixel insets keep the antialiased 1 px dashes on pixel centers.
+        inner = QRectF(self.rect()).adjusted(2.5, 2.5, -2.5, -2.5)
+        if self._shape != "rectangle":
+            return control_path(inner, self._shape, self._radius)
+        # Rectangular controls keep square hit areas, but their surfaces use the
+        # face radius (as the generated stylesheet does), so follow those corners.
+        corner = max(0.0, min(self._radius, self.width() / 2 - 1, self.height() / 2 - 1) - 2)
+        return control_path(inner, "rounded", corner)
 
     def set_sprites(self, sprites: dict[str, QPixmap], *, labels: bool = True) -> None:
         self._sprites = sprites
@@ -983,7 +1038,8 @@ class FaceButton(QPushButton):
         else:
             painter.setPen(color)
             painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, self.text())
-        if self.hasFocus() or self.property("pending"):
+        if self.focus_ring_visible() or self.property("pending"):
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             painter.setPen(QPen(self.palette().highlight().color(), 1, Qt.PenStyle.DashLine))
             painter.drawPath(self._indicator_path())
 

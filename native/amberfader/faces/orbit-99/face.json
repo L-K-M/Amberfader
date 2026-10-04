@@ -7,9 +7,9 @@
   "background": "background.png",
   "font": "sans",
   "size": [720, 480],
-  "drag": [230, 82, 138, 20],
+  "drag": [256, 32, 100, 18],
   "timeSize": 28,
-  "radius": 18,
+  "radius": 9,
   "palette": {
     "window": "#182b40",
     "panel": "#12304c",
@@ -28,7 +28,7 @@
   "readoutStyles": {
     "title": {"align": "center", "font": "mono"},
     "artists": {"align": "center", "font": "mono", "size": 11},
-    "time": {"align": "center"},
+    "time": {"align": "center", "size": 17},
     "playback": {"align": "center", "font": "mono", "size": 11},
     "status": {"align": "center", "size": 11}
   },
@@ -46,24 +46,24 @@
     "close": "ellipse"
   },
   "controls": {
-    "art": [108, 96, 80, 80],
-    "title": [210, 130, 184, 24],
-    "artists": [210, 160, 184, 22],
-    "time": [210, 188, 184, 38],
-    "playback": [210, 232, 176, 18],
-    "seek": [188, 274, 204, 20],
-    "previous": [166, 326, 42, 36],
-    "play": [529, 199, 52, 48],
-    "next": [354, 326, 44, 36],
-    "like": [260, 343, 44, 36],
-    "volume": [606, 212, 82, 18],
-    "search": [256, 425, 52, 24],
-    "show": [208, 298, 82, 24],
-    "hide": [300, 298, 56, 24],
-    "menu": [286, 102, 28, 24],
-    "minimize": [322, 102, 24, 24],
-    "close": [354, 102, 24, 24],
-    "status": [168, 252, 236, 18]
+    "art": [102, 91, 96, 96],
+    "title": [222, 125, 116, 20],
+    "artists": [222, 145, 116, 18],
+    "time": [222, 163, 116, 26],
+    "playback": [222, 190, 116, 18],
+    "seek": [217, 280, 126, 18],
+    "previous": [162, 314, 52, 52],
+    "play": [525, 187, 58, 58],
+    "next": [352, 314, 52, 52],
+    "like": [256, 333, 52, 52],
+    "volume": [604, 211, 80, 18],
+    "search": [183, 219, 59, 24],
+    "show": [246, 219, 68, 24],
+    "hide": [318, 219, 59, 24],
+    "menu": [238, 91, 24, 24],
+    "minimize": [268, 91, 24, 24],
+    "close": [298, 91, 24, 24],
+    "status": [188, 253, 184, 18]
   },
   "buttons": {
     "previous": {
@@ -91,10 +91,10 @@
       "disabled": "play-disabled.png"
     },
     "search": {
-      "normal": "utility-normal.png",
-      "hover": "utility-hover.png",
-      "pressed": "utility-pressed.png",
-      "disabled": "utility-disabled.png"
+      "normal": "search-normal.png",
+      "hover": "search-hover.png",
+      "pressed": "search-pressed.png",
+      "disabled": "search-disabled.png"
     },
     "show": {
       "normal": "utility-normal.png",
@@ -103,10 +103,10 @@
       "disabled": "utility-disabled.png"
     },
     "hide": {
-      "normal": "utility-normal.png",
-      "hover": "utility-hover.png",
-      "pressed": "utility-pressed.png",
-      "disabled": "utility-disabled.png"
+      "normal": "hide-normal.png",
+      "hover": "hide-hover.png",
+      "pressed": "hide-pressed.png",
+      "disabled": "hide-disabled.png"
     },
     "menu": {
       "normal": "chrome-normal.png",

@@ -190,11 +190,14 @@ face; oversized windows are fitted to the available screen.
 ```
 
 `normal` is required when a button has images. Other states fall back to it;
-missing disabled artwork is dimmed. Sprites stretch to the control rectangle.
+missing disabled artwork is dimmed. Sprites stretch to the control rectangle,
+so give buttons that share an image the same size; otherwise the image's
+corners and rims distort.
 Version 1/2 host labels are drawn on top, so draw button surfaces rather than
 transport symbols. Version 3 can retain symbols baked into its sprites using
 `spriteLabels: false`. Faces cannot replace actions or bypass disabled/pending
-controls. Keyboard focus and pending indicators remain visible.
+controls. Pending indicators remain visible; focus outlines appear once you
+move focus with the keyboard.
 
 ### Compact imported layouts (version 3)
 
@@ -262,11 +265,14 @@ inspiration-based originals, not converted Audion or Winamp assets.
 into 2x PNG backgrounds with precise alpha silhouettes, opaque readout wells,
 and normal/hover/pressed/disabled button surfaces. The player owns the text,
 symbols and actions. Re-exporting works offline and needs no API key; font
-rasterization can vary with your Qt build and installed fonts. From a checkout
-with the GUI extra installed:
+rasterization can vary with your Qt build and installed fonts. Buttons in a
+group share one surface when they match in size and shape; any other button
+gets its own surface, so nothing is stretched out of shape. Repeat `--face ID`
+to re-export only those packs. From a checkout with the GUI extra installed:
 
 ```sh
 QT_QPA_PLATFORM=offscreen uv run python artwork/render_faces.py
+QT_QPA_PLATFORM=offscreen uv run python artwork/render_faces.py --face orbit-99
 QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py --states
 QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
   --face orbit-99 --face manta-ray --face jellyfish-fm --face boom-bot \

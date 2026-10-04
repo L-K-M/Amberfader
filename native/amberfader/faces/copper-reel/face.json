@@ -1,15 +1,21 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "copper-reel",
   "name": "Copper Reel",
   "author": "Amberfader",
   "description": "Brushed copper and amber glass with a complete circular platter and warm machined controls.",
   "size": [640, 344],
   "background": "background.png",
-  "drag": [28, 18, 270, 28],
+  "drag": [37, 18, 269, 26],
   "font": "sans",
   "timeSize": 30,
   "radius": 14,
+  "readoutStyles": {
+    "title": {
+      "size": 15,
+      "bold": true
+    }
+  },
   "palette": {
     "window": "#332018",
     "panel": "#543325",
@@ -24,24 +30,24 @@
     "danger": "#ffd0b6"
   },
   "controls": {
-    "art": [28, 74, 112, 112],
-    "title": [168, 72, 252, 26],
-    "artists": [168, 104, 252, 22],
-    "time": [168, 134, 252, 36],
-    "playback": [168, 174, 252, 18],
-    "previous": [442, 160, 42, 36],
-    "play": [492, 144, 60, 64],
-    "next": [560, 160, 42, 36],
-    "like": [500, 218, 44, 36],
-    "volume": [460, 110, 132, 22],
-    "seek": [28, 220, 392, 22],
-    "search": [28, 274, 86, 28],
-    "show": [124, 274, 100, 28],
-    "hide": [234, 274, 74, 28],
-    "menu": [314, 18, 34, 28],
-    "minimize": [356, 18, 24, 28],
-    "close": [390, 18, 24, 28],
-    "status": [28, 314, 578, 18]
+    "art": [42, 67, 121, 121],
+    "title": [193, 68, 206, 30],
+    "artists": [193, 99, 206, 22],
+    "time": [192, 125, 207, 35],
+    "playback": [193, 162, 206, 25],
+    "previous": [455, 152, 40, 36],
+    "play": [502, 140, 60, 60],
+    "next": [569, 152, 40, 36],
+    "like": [512, 206, 40, 36],
+    "volume": [488, 104, 88, 24],
+    "seek": [43, 215, 365, 18],
+    "search": [36, 253, 121, 28],
+    "show": [165, 253, 121, 28],
+    "hide": [294, 253, 121, 28],
+    "menu": [315, 17, 28, 29],
+    "minimize": [351, 17, 28, 29],
+    "close": [387, 17, 28, 29],
+    "status": [47, 301, 544, 18]
   },
   "buttons": {
     "previous": {
