@@ -28,6 +28,7 @@ MAX_MANIFEST_BYTES = 64 * 1024
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_PACK_BYTES = 16 * 1024 * 1024
 MAX_IMAGE_DIMENSION = 2048
+MAX_DRAFT_GEOMETRY = 2048
 MAX_USER_FACES = 64
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 PNG_HEADER = struct.Struct(">8sI4sII5BI")
@@ -101,8 +102,11 @@ def _manifest(directory: Path) -> dict[str, Any]:
     return data
 
 
-def _validate_manifest(data: dict[str, Any]) -> None:
-    problem = next(_validator(BUILTIN_DIRECTORY / "schema.json").iter_errors(data), None)
+def _validate_manifest(
+    data: dict[str, Any], validation: FaceValidation = FaceValidation.STRICT,
+) -> None:
+    validator = _validator(BUILTIN_DIRECTORY / "schema.json", validation)
+    problem = next(validator.iter_errors(data), None)
     if problem is not None:
         location = ".".join(str(part) for part in problem.absolute_path) or "face.json"
         # Do not echo potentially huge or malformed field values into the UI.
@@ -112,10 +116,25 @@ def _validate_manifest(data: dict[str, Any]) -> None:
             raise FaceError(f"Invalid controlRotations.{name}: rotation must be finite")
 
 
-@lru_cache(maxsize=1)
-def _validator(path: Path) -> Draft202012Validator:
+@lru_cache(maxsize=2)
+def _validator(
+    path: Path, validation: FaceValidation = FaceValidation.STRICT,
+) -> Draft202012Validator:
     # The schema is a bundled program resource, not part of an editable pack.
-    return Draft202012Validator(json.loads(path.read_text(encoding="utf-8")))
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    if validation is FaceValidation.DRAFT:
+        # Dragging can temporarily put a control outside the shell. Its bounds
+        # remain finite and typed; the production schema stays unchanged.
+        origin = {
+            "type": "integer", "minimum": -MAX_DRAFT_GEOMETRY,
+            "maximum": MAX_DRAFT_GEOMETRY,
+        }
+        extent = {"type": "integer", "minimum": 1, "maximum": MAX_DRAFT_GEOMETRY}
+        schema["$defs"]["rect"] = {
+            "type": "array", "prefixItems": [origin, origin, extent, extent],
+            "items": False, "minItems": 4, "maxItems": 4,
+        }
+    return Draft202012Validator(schema)
 
 
 def _image_path(directory: Path, name: str) -> Path:
@@ -259,14 +278,14 @@ def load_face_snapshot(
 ) -> Face:
     """Build a bounded data-only face from an editor's in-memory snapshot.
 
-    DRAFT permits unfinished geometry for editing. It does not permit invalid
-    schema fields or image resources; install and player paths use STRICT.
+    DRAFT permits bounded unfinished rectangles for editing. Other schema and
+    image constraints still apply; install and player paths use STRICT.
     """
     try:
         encoded = json.dumps(manifest).encode("utf-8")
         if len(encoded) > MAX_MANIFEST_BYTES:
             raise FaceError("face.json exceeds its 64 KiB limit")
-        _validate_manifest(manifest)
+        _validate_manifest(manifest, validation)
         if validation is FaceValidation.STRICT:
             _check_layout(manifest)
         elif validation is not FaceValidation.DRAFT:

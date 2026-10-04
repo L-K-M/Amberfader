@@ -51,6 +51,8 @@ the player can distinguish a window drag from a control press. Screen labels,
 buttons, artwork, and sliders must fit inside the canvas and avoid each other.
 The editor shows validation problems while you arrange controls and blocks
 invalid saves. A draft preview can show overlapping controls while you work.
+Bounded draft coordinates also allow temporary placement outside the face;
+saving still requires every control to fit inside the canvas.
 
 Use the properties panels to adjust the name, ID, author, description, palette,
 font, slider style, and cover glass. Per-screen font, size, alignment, and bold

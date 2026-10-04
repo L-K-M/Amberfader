@@ -508,3 +508,61 @@ def test_proxy_tab_navigation_can_return_to_native_siblings(qapp):
         shell.close()
         shell.deleteLater()
         qapp.processEvents()
+
+
+@pytest.mark.parametrize("name", ["play", "drag"])
+@pytest.mark.parametrize("rect", [
+    [-12, 150, 70, 24], [130, -12, 70, 24], [-2048, 2048, 2048, 2048],
+    [130, 150, 1500, 24], [130, 150, 70, 1500],
+])
+def test_snapshot_draft_renders_bounded_unfinished_rectangle(rotating_pack, name, rect):
+    from amberfader.face_library import FaceValidation, load_face_snapshot
+
+    directory, data = rotating_pack
+    if name == "drag":
+        data["drag"] = rect
+    else:
+        data["controls"][name] = rect
+    images = {"background.png": (directory / "background.png").read_bytes()}
+    draft = load_face_snapshot(data, images, directory, validation=FaceValidation.DRAFT)
+    actual = draft.drag if name == "drag" else draft.controls[name]
+    assert actual == tuple(rect)
+    with pytest.raises(FaceError):
+        load_face_snapshot(data, images, directory)
+
+
+@pytest.mark.parametrize("rect", [
+    [-2049, 150, 70, 24], [2049, 150, 70, 24], [130, -2049, 70, 24],
+    [130, 2049, 70, 24], [130, 150, 2049, 24], [130, 150, 70, 2049],
+    [130, 150, 0, 24], [130, 150, -1, 24], [130, 150, 70, 0],
+    [130, 150, 70, -1], [130.5, 150, 70, 24], [130, True, 70, 24],
+    [130, 150, 70.5, 24], [130, 150, 70, 24, 5], [130, 150, 70],
+])
+def test_snapshot_draft_geometry_stays_bounded_and_structural(rotating_pack, rect):
+    from amberfader.face_library import FaceValidation, load_face_snapshot
+
+    directory, data = rotating_pack
+    data["controls"]["play"] = rect
+    images = {"background.png": (directory / "background.png").read_bytes()}
+    with pytest.raises(FaceError):
+        load_face_snapshot(data, images, directory, validation=FaceValidation.DRAFT)
+
+
+@pytest.mark.parametrize("change", [
+    lambda data: data.update(font="malformed"),
+    lambda data: data.update(name=""),
+    lambda data: data.update(controlRotations={"play": 181}),
+    lambda data: data.update(background="../outside.png"),
+    lambda data: data["controls"].pop("play"),
+    lambda data: data.update(size=[350, 560]),
+    lambda data: data.update(controlShapes={"play": "malformed"}),
+])
+def test_snapshot_draft_geometry_relaxation_preserves_other_constraints(rotating_pack, change):
+    from amberfader.face_library import FaceValidation, load_face_snapshot
+
+    directory, data = rotating_pack
+    data["controls"]["play"][0] = -12
+    change(data)
+    images = {"background.png": (directory / "background.png").read_bytes()}
+    with pytest.raises(FaceError):
+        load_face_snapshot(data, images, directory, validation=FaceValidation.DRAFT)

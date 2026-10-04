@@ -11,7 +11,7 @@ from PySide6.QtGui import QColor, QPainter, QPen, QPixmap, QTransform
 from PySide6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView, QWidget
 
 from ..face_document import FaceDocument
-from ..face_library import Face
+from ..face_library import MAX_DRAFT_GEOMETRY, Face, control_bounds
 from .face_surface import FaceArtwork, control_path, draw_face_preview
 
 
@@ -28,8 +28,17 @@ class _FaceItem(QGraphicsItem):
         self.artwork: FaceArtwork | None = None
         self.cover = QPixmap()
 
-    def boundingRect(self) -> QRectF:
+    def face_rect(self) -> QRectF:
         return QRectF(0, 0, *(self.face.size if self.face else (440, 280)))
+
+    def boundingRect(self) -> QRectF:
+        bounds = self.face_rect()
+        if self.face is not None:
+            bounds = bounds.united(QRectF(*self.face.drag))
+            for name, rect in self.face.controls.items():
+                region = QRectF(*control_bounds(rect, self.face.control_rotations.get(name, 0)))
+                bounds = bounds.united(region)
+        return bounds
 
     def set_face(self, face: Face, artwork: FaceArtwork, cover: QPixmap) -> None:
         self.prepareGeometryChange()
@@ -98,10 +107,10 @@ class FaceEditorCanvas(QGraphicsView):
         self._selected = "play"
 
     def set_preview(self, face: Face, artwork: FaceArtwork, cover: QPixmap) -> None:
-        previous_size = self._item.boundingRect().size()
+        previous_size = self._item.face_rect().size()
         self._item.set_face(face, artwork, cover)
         self.setSceneRect(self._item.boundingRect().adjusted(-64, -64, 64, 64))
-        if self._fitting or previous_size != self._item.boundingRect().size():
+        if self._fitting or previous_size != self._item.face_rect().size():
             self.fit_face()
         self.viewport().update()
 
@@ -121,7 +130,7 @@ class FaceEditorCanvas(QGraphicsView):
     def fit_face(self) -> None:
         self._fitting = True
         self.fitInView(
-            self._item.boundingRect().adjusted(-28, -36, 28, 28), Qt.AspectRatioMode.KeepAspectRatio
+            self._item.face_rect().adjusted(-28, -36, 28, 28), Qt.AspectRatioMode.KeepAspectRatio
         )
         self.zoomChanged.emit(self.zoom)
 
@@ -138,9 +147,9 @@ class FaceEditorCanvas(QGraphicsView):
 
     def drawBackground(self, painter: QPainter, rect: QRectF) -> None:
         painter.fillRect(rect, QColor("#30343b"))
-        area = self._item.boundingRect().intersected(rect)
+        area = self._item.face_rect().intersected(rect)
         painter.save()
-        painter.setClipRect(self._item.boundingRect())
+        painter.setClipRect(self._item.face_rect())
         tile = 16
         first_x, first_y = math.floor(area.left() / tile), math.floor(area.top() / tile)
         for x in range(first_x, math.ceil(area.right() / tile)):
@@ -150,9 +159,9 @@ class FaceEditorCanvas(QGraphicsView):
         if self.snap:
             painter.setPen(QPen(QColor(95, 109, 132, 90), 0))
             for x in range(0, int(area.right()) + 1, self.grid_size):
-                painter.drawLine(QPointF(x, 0), QPointF(x, self._item.boundingRect().bottom()))
+                painter.drawLine(QPointF(x, 0), QPointF(x, self._item.face_rect().bottom()))
             for y in range(0, int(area.bottom()) + 1, self.grid_size):
-                painter.drawLine(QPointF(0, y), QPointF(self._item.boundingRect().right(), y))
+                painter.drawLine(QPointF(0, y), QPointF(self._item.face_rect().right(), y))
         painter.restore()
 
     def _geometry(self, name: str) -> tuple[QRectF, float]:
@@ -273,6 +282,15 @@ class FaceEditorCanvas(QGraphicsView):
         )
         return round(value / step) * step
 
+    def _set_rect(self, coordinates: list[int]) -> None:
+        if self._document is None:
+            return
+        bounded = [
+            max(-MAX_DRAFT_GEOMETRY if index < 2 else 1, min(MAX_DRAFT_GEOMETRY, value))
+            for index, value in enumerate(coordinates)
+        ]
+        self._document.set_rect(self._selected, bounded)
+
     def mouseMoveEvent(self, event) -> None:
         document = self._document
         if document is None or self._gesture is None:
@@ -301,8 +319,7 @@ class FaceEditorCanvas(QGraphicsView):
                     self._snap_value(rect.y() + delta.y(), event),
                 )
             )
-            document.set_rect(
-                self._selected,
+            self._set_rect(
                 [
                     round(value)
                     for value in (
@@ -339,8 +356,7 @@ class FaceEditorCanvas(QGraphicsView):
                 )
             )
             center = fixed + half
-            document.set_rect(
-                self._selected,
+            self._set_rect(
                 [
                     round(center.x() - width / 2),
                     round(center.y() - height / 2),
@@ -390,8 +406,7 @@ class FaceEditorCanvas(QGraphicsView):
             rect, _ = self._geometry(self._selected)
             factor = 10 if event.modifiers() & Qt.KeyboardModifier.ShiftModifier else 1
             dx, dy = directions[event.key()]
-            self._document.set_rect(
-                self._selected,
+            self._set_rect(
                 [
                     round(rect.x()) + dx * factor,
                     round(rect.y()) + dy * factor,

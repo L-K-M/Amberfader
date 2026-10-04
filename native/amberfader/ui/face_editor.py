@@ -32,7 +32,13 @@ from PySide6.QtWidgets import (
 )
 
 from ..face_document import FaceDocument
-from ..face_library import BUILTIN_DIRECTORY, DEFAULT_FACE_ID, FaceError, FaceLibrary
+from ..face_library import (
+    BUILTIN_DIRECTORY,
+    DEFAULT_FACE_ID,
+    MAX_DRAFT_GEOMETRY,
+    FaceError,
+    FaceLibrary,
+)
 from .face_editor_canvas import FaceEditorCanvas
 from .face_surface import READOUT_CONTROLS, FaceArtwork, prepare_face, prepare_face_preview
 
@@ -254,7 +260,7 @@ class FaceEditorWindow(QMainWindow):
         for index, label in enumerate(("X", "Y", "Width", "Height")):
             field = QSpinBox(panel)
             field.setObjectName(f"element{label}")
-            field.setRange(-2048 if index < 2 else 1, 2048)
+            field.setRange(-MAX_DRAFT_GEOMETRY if index < 2 else 1, MAX_DRAFT_GEOMETRY)
             field.setKeyboardTracking(False)
             field.setSuffix(" px")
             field.valueChanged.connect(self._edit_rect)

@@ -504,3 +504,55 @@ def test_saving_active_drag_finishes_it_before_saved_checkpoint(editor, qapp, tm
     editor._redo()
     assert editor.document.manifest["controls"]["play"] == moved
     assert not editor.document.dirty
+
+
+@pytest.mark.parametrize("index", [0, 1])
+def test_negative_position_draft_renders_at_same_geometry_as_selection(editor, index):
+    original = editor.document.manifest["controls"]["play"]
+    editor._rect_fields[index].setValue(-12)
+    draft = editor.document.manifest["controls"]["play"]
+    assert draft[index] == -12
+    assert "Cannot save yet" in editor._validation.text()
+    assert not editor._save_action.isEnabled()
+    assert editor._canvas._item.face.controls["play"] == tuple(draft)
+    assert editor._canvas._geometry("play")[0].getRect() == tuple(draft)
+    editor._undo()
+    assert editor.document.manifest["controls"]["play"] == original
+    assert editor._save_action.isEnabled()
+
+
+def test_oversized_draft_control_is_rendered_and_expands_scrollable_scene(editor):
+    editor._rect_fields[2].setValue(1500)
+    draft = editor.document.manifest["controls"]["play"]
+    assert editor._canvas._item.face.controls["play"] == tuple(draft)
+    assert editor._canvas._item.boundingRect().right() >= draft[0] + draft[2]
+    assert editor._canvas.sceneRect().right() > draft[0] + draft[2]
+    assert not editor._save_action.isEnabled()
+
+
+def test_negative_draft_control_expands_item_bounds_without_changing_face_size(editor):
+    face_size = editor._canvas._item.face_rect().size()
+    editor._rect_fields[0].setValue(-120)
+    assert editor._canvas._item.boundingRect().left() <= -120
+    assert editor._canvas.sceneRect().left() < -120
+    assert editor._canvas._item.face_rect().size() == face_size
+    assert not editor._save_action.isEnabled()
+
+
+def test_nudges_stop_at_shared_draft_bounds_and_keep_preview_current(editor, qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from amberfader.face_library import MAX_DRAFT_GEOMETRY
+
+    editor._rect_fields[0].setValue(MAX_DRAFT_GEOMETRY)
+    QTest.keyClick(editor._canvas, Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier)
+    draft = editor.document.manifest["controls"]["play"]
+    assert draft[0] == MAX_DRAFT_GEOMETRY
+    assert editor._canvas._item.face.controls["play"] == tuple(draft)
+    editor._rect_fields[1].setValue(-MAX_DRAFT_GEOMETRY)
+    QTest.keyClick(editor._canvas, Qt.Key.Key_Up, Qt.KeyboardModifier.ShiftModifier)
+    draft = editor.document.manifest["controls"]["play"]
+    assert draft[1] == -MAX_DRAFT_GEOMETRY
+    assert editor._canvas._item.face.controls["play"] == tuple(draft)
+    assert editor._rect_fields[0].maximum() == editor._rect_fields[2].maximum()

@@ -96,7 +96,7 @@ def _read_snapshot(source: Path) -> _Snapshot:
 class FaceDocument:
     """An editable face with undoable commands and a saved checkpoint.
 
-    Layout mistakes remain editable and can be rendered as draft previews.
+    Bounded layout mistakes remain editable and can be rendered as draft previews.
     Saves always use strict validation, even while a gesture is active.
     """
 

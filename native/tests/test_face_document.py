@@ -456,3 +456,23 @@ def test_rename_race_failed_restore_retains_concurrent_file(tmp_path, monkeypatc
     backups = list(tmp_path.glob(".face-edit-*/previous/precious.txt"))
     assert len(backups) == 1
     assert backups[0].read_text() == "Concurrent work"
+
+
+@pytest.mark.parametrize("rectangle", [(-8, 192, 60, 48), (84, -8, 60, 48)])
+def test_negative_coordinate_draft_is_visible_but_not_savable_and_undo_restores(
+    tmp_path, rectangle,
+):
+    document = FaceDocument.from_template(TEMPLATE)
+    target = document.save(tmp_path / "working")
+    original = document.manifest["controls"]["play"]
+    saved_bytes = (target / "face.json").read_bytes()
+    document.set_rect("play", rectangle)
+    assert document.preview().controls["play"] == rectangle
+    assert document.validate()
+    with pytest.raises(FaceError):
+        document.save()
+    assert (target / "face.json").read_bytes() == saved_bytes
+    assert document.undo()
+    assert document.preview().controls["play"] == tuple(original)
+    assert not document.dirty
+    assert not document.validate()
