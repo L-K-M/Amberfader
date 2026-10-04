@@ -103,6 +103,9 @@ save the report. Verify:
 - [ ] `web-ext sign` (unlisted) produces an installable `.xpi`.
 - [ ] `.deb` installs on the target; `amberfader` launches; native host
       manifest lands in `~/.mozilla/native-messaging-hosts`.
+- [ ] Inspect the `.deb` with `dpkg-deb --field PACKAGE.deb Depends`. Its Python
+      lower bound matches the bundled CPython wheel tags; the upper bound is
+      the next minor. Confirm the target's `/usr/bin/python3` uses that minor.
 - [ ] `.flatpak` installs; per-user registration via `scripts/install-user`
       works against Flatpak Firefox.
 - [ ] `scripts/uninstall-user` removes only app-owned files.

@@ -18,6 +18,14 @@ DIST="${2:?usage: build-deb.sh <version> <dist-dir>}"
 STAGE="$DIST/deb/stage"
 LIB="$STAGE/opt/amberfader/lib"
 ARCH="$(dpkg --print-architecture 2>/dev/null || echo amd64)"
+BUILD_PYTHON="/usr/bin/python3"
+PYTHON_VERSION="$("$BUILD_PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+IFS=. read -r PYTHON_MAJOR PYTHON_MINOR <<< "$PYTHON_VERSION"
+if (( PYTHON_MAJOR < 3 || (PYTHON_MAJOR == 3 && PYTHON_MINOR < 11) )); then
+  echo "error: $BUILD_PYTHON must be Python 3.11 or newer (found $PYTHON_VERSION)" >&2
+  exit 1
+fi
+NEXT_PYTHON_VERSION="$PYTHON_MAJOR.$((PYTHON_MINOR + 1))"
 
 echo "-- staging .deb tree (version $VERSION, arch $ARCH)"
 rm -rf "$DIST/deb"
@@ -25,12 +33,12 @@ mkdir -p "$LIB" "$STAGE/usr/bin" "$STAGE/usr/lib/mozilla/native-messaging-hosts"
   "$STAGE/usr/share/applications" "$STAGE/usr/share/icons/hicolor/96x96/apps" \
   "$STAGE/DEBIAN"
 
-# Python + deps into the target dir. Uses the machine's python; the deb is
-# honest about its interpreter via Depends and its abi-tagged wheels.
+# Resolve native wheels for the launcher's interpreter, not an active venv.
+# The dependency interval below keeps its CPython ABI on the same minor.
 if command -v uv >/dev/null 2>&1; then
-  uv pip install --quiet --target "$LIB" ".[gui]"
+  uv pip install --quiet --python "$BUILD_PYTHON" --target "$LIB" ".[gui]"
 else
-  python3 -m pip install --quiet --target "$LIB" ".[gui]"
+  "$BUILD_PYTHON" -m pip install --quiet --target "$LIB" ".[gui]"
 fi
 # Distutils metadata dirs are noise for end users; keep the code only.
 find "$LIB" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
@@ -75,7 +83,7 @@ Section: sound
 Priority: optional
 Architecture: $ARCH
 Maintainer: L-K-M
-Depends: python3 (>= 3.11)
+Depends: python3 (>= $PYTHON_VERSION), python3 (<< $NEXT_PYTHON_VERSION)
 Description: Classic-style remote for YouTube Music in Firefox
  Compact player for an existing music.youtube.com tab: playback control,
  artwork, and song search without bringing the browser forward. Registers a

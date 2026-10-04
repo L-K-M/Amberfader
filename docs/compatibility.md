@@ -68,6 +68,12 @@ than placing the control socket somewhere world-readable |
 | `.flatpak` | expected — `scripts/build-flatpak.sh` repacks the deb layout |
 | AppImage / Snap | not planned |
 
+The `.deb` resolves its bundled Python wheels with the build host's
+`/usr/bin/python3` and requires that same Python minor version at runtime.
+For example, a Python 3.12 build declares `python3 (>= 3.12), python3 (<< 3.13)`.
+Build a package on a matching host for distributions using a different minor.
+Source installs keep the project's Python 3.11+ requirement.
+
 The Flatpak bundle ships a host-side registration script, not a native-host
 manifest. `scripts/install-user --app flatpak` registers a launcher running
 `flatpak run --command=amberfader-helper ch.lkmc.amberfader`. A Flatpak browser
