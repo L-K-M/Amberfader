@@ -83,7 +83,8 @@ to that format first.
 
 Source ZIPs are limited to 512 MiB, 150,000 entries and 32 MiB of directory
 metadata. A collection can contain up to 2048 faces; folder discovery scans up
-to 8192 immediate entries. Archives are read in place and are never extracted.
+to 8192 immediate entries. ZIP members must use stored or deflate compression.
+Archives are read in place and are never extracted.
 
 Imported version 3 faces can omit elements that the original design did not
 contain. Use **Add element…** to add a playback button, screen label, artwork

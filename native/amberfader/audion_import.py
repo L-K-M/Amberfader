@@ -11,12 +11,13 @@ import re
 import stat
 import struct
 import sys
+import zlib
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
 from uuid import uuid4
-from zipfile import BadZipFile, ZipFile
+from zipfile import ZIP_DEFLATED, ZIP_STORED, BadZipFile, ZipFile
 
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, Qt
 from PySide6.QtGui import QImage, QPainter
@@ -42,6 +43,8 @@ ZIP64_LOCATOR = struct.Struct("<4sIQI")
 ZIP64_END = struct.Struct("<4sQ2H2I4Q")
 ZIP_CENTRAL = struct.Struct("<4s6H3I5H2I")
 ZIP_MAX_COMMENT = 65535
+SUPPORTED_ZIP_METHODS = frozenset({ZIP_STORED, ZIP_DEFLATED})
+ZIP_COMPRESSION_ERROR = "Audion ZIP members must use stored or deflate compression"
 SOURCE_HELP = (
     "Choose a converted Audion face folder or a ZIP from Panic's preserved collection. "
     "Classic resource-fork/PICT faces must be converted first."
@@ -155,6 +158,10 @@ def _preflight_archive(stream: BinaryIO, size: int) -> None:
         flags = entry[3]
         if flags & (1 | (1 << 6) | (1 << 13)):
             raise FaceError("Audion ZIP members must be unencrypted")
+        # Other stdlib codecs allocate dictionaries or unbounded intermediate
+        # output before ZipExtFile applies the requested read length.
+        if entry[4] not in SUPPORTED_ZIP_METHODS:
+            raise FaceError(ZIP_COMPRESSION_ERROR)
         if entry[13] != 0:
             raise FaceError("Audion ZIP must be a single-disk archive")
         try:
@@ -289,6 +296,9 @@ class _SourceReader:
                 not _regular_zip_entry(entry) or entry.flag_bits & 1
             ):
                 raise FaceError(f"Audion asset {name} must be an unencrypted regular file")
+            # Recheck the parsed member if the archive changed after preflight.
+            if entry.compress_type not in SUPPORTED_ZIP_METHODS:
+                raise FaceError(ZIP_COMPRESSION_ERROR)
             if entry.file_size > limit:
                 raise FaceError(f"Audion asset {name} exceeds its size limit")
             with self._archive.open(entry) as stream:
@@ -593,10 +603,15 @@ def import_audion_face(source: AudionFaceSource) -> AudionImportResult:
         if not isinstance(index, dict):
             raise FaceError("Audion index.json must contain an object")
         return _Converter(source, reader, index).convert()
-    except (OSError, ValueError, RecursionError, BadZipFile, RuntimeError) as exc:
+    except (
+        OSError, ValueError, RecursionError, BadZipFile, RuntimeError, EOFError, zlib.error,
+    ) as exc:
         if isinstance(exc, FaceError):
             raise
-        raise FaceError(f"Cannot import Audion face: {exc}") from exc
+        reason = (
+            "ZIP ended unexpectedly while reading the face" if isinstance(exc, EOFError) else exc
+        )
+        raise FaceError(f"Cannot import Audion face: {reason}") from exc
     finally:
         if reader is not None:
             reader.close()

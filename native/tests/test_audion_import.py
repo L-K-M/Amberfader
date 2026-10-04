@@ -412,3 +412,62 @@ def test_repeated_source_images_count_pixels_once(audion_pack, monkeypatch, qapp
             reader.image("play.png")
     finally:
         reader.close()
+
+
+@pytest.mark.parametrize("method", [zipfile.ZIP_LZMA, zipfile.ZIP_BZIP2])
+def test_unsafe_compression_is_rejected_before_decoder_creation(tmp_path, monkeypatch, method):
+    archive = tmp_path / "Faces.zip"
+    with ZipFile(archive, "w", compression=method) as writer:
+        writer.writestr("Orb/index.json", "{}")
+    if method == zipfile.ZIP_LZMA:
+        data = bytearray(archive.read_bytes())
+        name_size, extra_size = struct.unpack_from("<HH", data, 26)
+        # LZMA's ZIP properties can request an arbitrary dictionary allocation.
+        dictionary_offset = 30 + name_size + extra_size + 5
+        struct.pack_into("<I", data, dictionary_offset, 2**31)
+        archive.write_bytes(data)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("The unsafe compression decoder was created")
+
+    monkeypatch.setattr(zipfile, "_get_decompressor", forbidden)
+    with pytest.raises(FaceError, match="stored or deflate"):
+        import_audion_face(list_audion_faces(archive)[0])
+
+
+def test_deflated_collection_import_remains_supported(audion_pack, tmp_path, qapp):
+    archive = tmp_path / "Faces.zip"
+    with ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as writer:
+        for path in audion_pack.iterdir():
+            writer.write(path, "Orb/" + path.name)
+    document = import_audion_face(list_audion_faces(archive)[0]).document
+    assert document.validate() == ()
+
+
+def test_corrupt_deflate_payload_reports_face_error(tmp_path):
+    archive = tmp_path / "Faces.zip"
+    with ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as writer:
+        writer.writestr("Orb/index.json", "{}")
+    data = bytearray(archive.read_bytes())
+    name_size, extra_size = struct.unpack_from("<HH", data, 26)
+    data[30 + name_size + extra_size] = 0x07  # Reserved DEFLATE block type.
+    archive.write_bytes(data)
+    with pytest.raises(FaceError, match="Cannot import Audion face"):
+        import_audion_face(list_audion_faces(archive)[0])
+
+
+def test_truncated_member_reports_face_error(tmp_path, monkeypatch):
+    archive = tmp_path / "Faces.zip"
+    with ZipFile(archive, "w") as writer:
+        writer.writestr("Orb/index.json", "{}")
+    original_open = ZipFile.open
+
+    def truncate_after_header(self, *args, **kwargs):
+        member = original_open(self, *args, **kwargs)
+        archive.write_bytes(b"")
+        self.fp.seek(0, os.SEEK_END)  # Invalidate buffered bytes from the previous file.
+        return member
+
+    monkeypatch.setattr(ZipFile, "open", truncate_after_header)
+    with pytest.raises(FaceError, match="Cannot import Audion face: ZIP ended unexpectedly"):
+        import_audion_face(list_audion_faces(archive)[0])
