@@ -19,7 +19,7 @@
     "danger": "#ff9ec0"
   },
   "size": [560, 344],
-  "drag": [60, 10, 166, 24],
+  "drag": [60, 10, 341, 24],
   "font": "mono",
   "timeSize": 30,
   "radius": 0,

@@ -6,7 +6,7 @@
   "description": "Flowing chrome and satin aluminum with blue glass and sculpted silver controls.",
   "size": [600, 344],
   "background": "background.png",
-  "drag": [36, 36, 178, 22],
+  "drag": [36, 36, 421, 22],
   "font": "sans",
   "timeSize": 30,
   "radius": 16,

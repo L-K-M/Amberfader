@@ -83,6 +83,9 @@ STATUS_PAD = (10, 4)
 # reason.
 FACE_STATUS_PAD = {"rave-grid": (10, 1)}
 FACE_PLATE_NAME_GAP = {"rave-grid": 8, "moonstone": 8}
+# Those two plates stop short of their artwork; the invisible drag region
+# keeps covering the rest of the header band up to the window buttons.
+FACE_PLATE_WIDTH = {"rave-grid": 166, "moonstone": 178}
 # Paper Signal types its status line straight onto the cream paper, centred
 # on the seal stamped at the line's end. A well tall enough for the text
 # cannot share the seal's centre without crossing the bottom ruled line.
@@ -460,6 +463,8 @@ def render_background(face: dict) -> QImage:
     # Readable, static identity plate filling the safe drag region, so the
     # title bar spans the same grid columns as the rows beneath it.
     plate = QRectF(*face["drag"])
+    if face["id"] in FACE_PLATE_WIDTH:
+        plate.setWidth(FACE_PLATE_WIDTH[face["id"]])
     _well(painter, plate, p["window"], p["border"], radius)
     # Both strings share one baseline that centres AMBERFADER's capitals on
     # the plate, snapped to whole device pixels so the caps stay crisp.
