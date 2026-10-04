@@ -1,12 +1,12 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "moonstone",
   "name": "Moonstone",
   "author": "Amberfader",
   "description": "Flowing chrome and satin aluminum with blue glass and sculpted silver controls.",
   "size": [600, 344],
   "background": "background.png",
-  "drag": [44, 18, 378, 28],
+  "drag": [36, 36, 178, 22],
   "font": "sans",
   "timeSize": 30,
   "radius": 16,
@@ -23,25 +23,37 @@
     "buttonBottom": "#abb9c3",
     "danger": "#8b231e"
   },
+  "readoutStyles": {
+    "title": {
+      "size": 15,
+      "bold": true
+    },
+    "artists": {
+      "size": 13
+    },
+    "playback": {
+      "align": "right"
+    }
+  },
   "controls": {
-    "art": [44, 64, 128, 128],
-    "title": [204, 66, 342, 26],
-    "artists": [204, 98, 342, 22],
-    "time": [204, 126, 224, 44],
-    "playback": [438, 146, 108, 20],
-    "previous": [44, 208, 48, 36],
-    "play": [100, 202, 60, 48],
-    "next": [168, 208, 48, 36],
-    "like": [228, 208, 48, 36],
-    "volume": [404, 214, 142, 22],
-    "seek": [44, 258, 510, 20],
-    "search": [44, 288, 90, 28],
-    "show": [144, 288, 100, 28],
-    "hide": [254, 288, 74, 28],
-    "menu": [438, 18, 34, 28],
-    "minimize": [480, 18, 24, 28],
-    "close": [512, 18, 24, 28],
-    "status": [44, 320, 510, 18]
+    "art": [94, 72, 88, 88],
+    "title": [213, 73, 283, 27],
+    "artists": [213, 100, 283, 22],
+    "time": [211, 122, 203, 37],
+    "playback": [418, 137, 78, 20],
+    "previous": [88, 176, 64, 36],
+    "play": [160, 173, 76, 42],
+    "next": [244, 176, 64, 36],
+    "like": [316, 176, 64, 36],
+    "volume": [395, 182, 110, 24],
+    "seek": [95, 226, 410, 18],
+    "search": [35, 256, 70, 28],
+    "show": [113, 256, 70, 28],
+    "hide": [191, 256, 70, 28],
+    "menu": [465, 35, 28, 25],
+    "minimize": [501, 35, 28, 25],
+    "close": [537, 35, 28, 25],
+    "status": [280, 261, 274, 18]
   },
   "buttons": {
     "previous": {

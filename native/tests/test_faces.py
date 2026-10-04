@@ -81,6 +81,20 @@ def test_bundled_catalog_is_complete_and_valid(library):
         assert "art" in face.controls
 
 
+@pytest.mark.parametrize("face_id", sorted(BUNDLED_IDS))
+def test_bundled_shared_sprites_fit_one_button_size(face_id):
+    # A sprite stretches to each control, so a shared surface needs one size
+    # and shape or its corners, rims and capsule ends distort on some buttons.
+    data = json.loads((BUILTIN_DIRECTORY / face_id / "face.json").read_text())
+    shapes = data.get("controlShapes", {})
+    members = {}
+    for name, images in data["buttons"].items():
+        outline = (tuple(data["controls"][name][2:]), shapes.get(name, "rectangle"))
+        members.setdefault(images["normal"], {})[name] = outline
+    for sprite, outlines in members.items():
+        assert len(set(outlines.values())) == 1, (face_id, sprite, outlines)
+
+
 @pytest.mark.parametrize("change", [
     lambda d: d.update(formatVersion=3),
     lambda d: d.update(code="plugin.py"),

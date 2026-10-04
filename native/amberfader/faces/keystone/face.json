@@ -7,7 +7,7 @@
   "background": "background.png",
   "font": "sans",
   "size": [540, 360],
-  "drag": [198, 50, 140, 18],
+  "drag": [100, 36, 340, 18],
   "timeSize": 26,
   "radius": 6,
   "palette": {
@@ -26,10 +26,11 @@
   "coverGlass": true,
   "sliderStyle": "inset",
   "readoutStyles": {
-    "title": {"align": "center", "font": "mono"},
-    "artists": {"align": "center", "font": "mono"},
+    "title": {"align": "left", "font": "mono"},
+    "artists": {"align": "left", "font": "mono"},
+    "time": {"align": "left", "font": "mono"},
     "playback": {"align": "right", "font": "mono", "size": 11},
-    "status": {"align": "center", "font": "mono", "size": 11}
+    "status": {"align": "left", "font": "mono", "size": 11}
   },
   "controlShapes": {
     "art": "ellipse",
@@ -45,24 +46,24 @@
     "close": "ellipse"
   },
   "controls": {
-    "art": [56, 88, 96, 96],
-    "title": [194, 78, 278, 24],
-    "artists": [194, 108, 278, 22],
-    "time": [194, 130, 202, 30],
-    "playback": [408, 136, 64, 20],
-    "status": [194, 162, 278, 18],
-    "seek": [202, 180, 248, 18],
-    "previous": [56, 228, 40, 30],
-    "play": [104, 222, 52, 40],
-    "next": [164, 228, 40, 30],
-    "like": [212, 228, 44, 30],
-    "volume": [268, 234, 120, 18],
-    "search": [76, 266, 84, 26],
-    "show": [170, 266, 94, 26],
-    "hide": [274, 266, 64, 26],
-    "menu": [160, 90, 26, 22],
-    "minimize": [160, 122, 22, 22],
-    "close": [160, 154, 22, 22]
+    "art": [54, 87, 97, 97],
+    "title": [189, 71, 263, 20],
+    "artists": [189, 93, 297, 18],
+    "time": [188, 113, 212, 30],
+    "playback": [406, 117, 80, 20],
+    "status": [189, 145, 297, 18],
+    "seek": [189, 167, 297, 18],
+    "previous": [40, 232, 40, 28],
+    "play": [88, 228, 48, 36],
+    "next": [144, 232, 40, 28],
+    "like": [192, 232, 40, 28],
+    "volume": [252, 237, 144, 18],
+    "search": [160, 266, 68, 24],
+    "show": [236, 266, 68, 24],
+    "hide": [312, 266, 68, 24],
+    "menu": [416, 234, 24, 24],
+    "minimize": [446, 234, 24, 24],
+    "close": [476, 234, 24, 24]
   },
   "buttons": {
     "previous": {

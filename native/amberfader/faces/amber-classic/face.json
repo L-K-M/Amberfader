@@ -1,12 +1,12 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "amber-classic",
   "name": "Amber Classic",
   "author": "Amberfader",
   "description": "An amber hi-fi remote: warm glass, dark walnut, and a compact cover display.",
   "size": [560, 344],
   "background": "background.png",
-  "drag": [28, 18, 378, 28],
+  "drag": [33, 13, 386, 26],
   "font": "sans",
   "timeSize": 30,
   "radius": 7,
@@ -23,25 +23,49 @@
     "buttonBottom": "#352316",
     "danger": "#ff8b79"
   },
+  "controlShapes": {
+    "previous": "rounded",
+    "play": "rounded",
+    "next": "rounded",
+    "like": "rounded",
+    "search": "rounded",
+    "show": "rounded",
+    "hide": "rounded",
+    "menu": "rounded",
+    "minimize": "rounded",
+    "close": "rounded"
+  },
+  "readoutStyles": {
+    "playback": {
+      "align": "right"
+    },
+    "title": {
+      "size": 15,
+      "bold": true
+    },
+    "artists": {
+      "size": 13
+    }
+  },
   "controls": {
-    "art": [28, 64, 120, 120],
-    "title": [180, 66, 338, 26],
-    "artists": [180, 98, 338, 22],
-    "time": [180, 128, 224, 44],
-    "playback": [414, 146, 104, 20],
-    "previous": [28, 198, 48, 36],
-    "play": [84, 192, 60, 48],
-    "next": [152, 198, 48, 36],
-    "like": [212, 198, 48, 36],
-    "volume": [378, 204, 140, 22],
-    "seek": [28, 244, 490, 20],
-    "search": [28, 278, 86, 28],
-    "show": [124, 278, 100, 28],
-    "hide": [234, 278, 74, 28],
-    "menu": [424, 18, 34, 28],
-    "minimize": [466, 18, 24, 28],
-    "close": [498, 18, 24, 28],
-    "status": [28, 314, 490, 18]
+    "art": [38, 54, 114, 114],
+    "title": [183, 55, 329, 28],
+    "artists": [183, 95, 329, 22],
+    "time": [181, 130, 249, 37],
+    "playback": [440, 145, 72, 20],
+    "previous": [32, 186, 72, 36],
+    "play": [112, 182, 88, 44],
+    "next": [208, 186, 72, 36],
+    "like": [288, 186, 72, 36],
+    "volume": [375, 192, 146, 24],
+    "seek": [39, 238, 482, 18],
+    "search": [32, 269, 160, 28],
+    "show": [200, 269, 160, 28],
+    "hide": [368, 269, 160, 28],
+    "menu": [428, 12, 28, 29],
+    "minimize": [464, 12, 28, 29],
+    "close": [500, 12, 28, 29],
+    "status": [43, 309, 474, 18]
   },
   "buttons": {
     "previous": {

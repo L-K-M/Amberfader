@@ -7,7 +7,7 @@
   "background": "background.png",
   "font": "sans",
   "size": [600, 600],
-  "drag": [208, 30, 100, 20],
+  "drag": [250, 14, 100, 18],
   "timeSize": 24,
   "radius": 24,
   "palette": {
@@ -27,7 +27,7 @@
   "sliderStyle": "inset",
   "readoutStyles": {
     "title": {"align": "center", "size": 14},
-    "artists": {"align": "center"},
+    "artists": {"align": "center", "size": 11},
     "playback": {"align": "right", "size": 11},
     "status": {"align": "center", "size": 11}
   },
@@ -45,24 +45,24 @@
     "close": "ellipse"
   },
   "controls": {
-    "art": [140, 120, 76, 76],
-    "title": [234, 110, 210, 24],
-    "artists": [234, 140, 210, 22],
-    "time": [234, 164, 144, 30],
-    "playback": [384, 176, 64, 18],
-    "seek": [230, 194, 196, 18],
-    "previous": [90, 272, 40, 36],
-    "play": [398, 272, 52, 44],
-    "next": [114, 402, 42, 36],
-    "like": [416, 396, 48, 40],
-    "volume": [246, 522, 116, 18],
-    "search": [138, 276, 78, 28],
-    "show": [458, 280, 72, 28],
-    "hide": [168, 406, 64, 28],
-    "menu": [182, 60, 26, 22],
-    "minimize": [218, 60, 22, 22],
-    "close": [374, 60, 22, 22],
-    "status": [214, 548, 188, 18]
+    "art": [146, 127, 48, 48],
+    "title": [207, 122, 186, 19],
+    "artists": [207, 141, 186, 18],
+    "time": [210, 159, 107, 20],
+    "playback": [320, 160, 70, 18],
+    "seek": [207, 187, 186, 18],
+    "previous": [79, 272, 40, 40],
+    "play": [479, 270, 44, 44],
+    "next": [108, 401, 40, 40],
+    "like": [406, 127, 48, 48],
+    "volume": [383, 412, 100, 18],
+    "search": [127, 279, 70, 26],
+    "show": [401, 279, 70, 26],
+    "hide": [156, 408, 70, 26],
+    "menu": [177, 55, 22, 22],
+    "minimize": [289, 34, 22, 22],
+    "close": [401, 55, 22, 22],
+    "status": [205, 534, 190, 18]
   },
   "buttons": {
     "previous": {
@@ -78,10 +78,10 @@
       "disabled": "transport-disabled.png"
     },
     "like": {
-      "normal": "transport-normal.png",
-      "hover": "transport-hover.png",
-      "pressed": "transport-pressed.png",
-      "disabled": "transport-disabled.png"
+      "normal": "like-normal.png",
+      "hover": "like-hover.png",
+      "pressed": "like-pressed.png",
+      "disabled": "like-disabled.png"
     },
     "play": {
       "normal": "play-normal.png",
