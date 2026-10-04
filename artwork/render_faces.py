@@ -7,10 +7,12 @@ Text and transport symbols remain host-owned. No generation or network call is
 needed to rebuild the shipped 2x PNGs.
 
 Run: QT_QPA_PLATFORM=offscreen uv run python artwork/render_faces.py
+Repeat --face ID to re-export only those packs.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -50,6 +52,9 @@ UTILITARIAN_FACES = frozenset({"tangent", "keystone", "switchback", "vane"})
 LENS_FACES = frozenset({"aureole", "viridian"})
 SHAPED_FACES = SCULPTURAL_FACES | UTILITARIAN_FACES | LENS_FACES
 READOUT_CONTROLS = frozenset({"title", "artists", "time", "playback", "status"})
+GROUP_REPRESENTATIVES = {
+    "transport": "previous", "play": "play", "utility": "show", "chrome": "menu",
+}
 
 
 def _rounded(rect: QRectF, radius: float) -> QPainterPath:
@@ -308,10 +313,19 @@ def _render_shaped_button(face: dict, control: str, state: str) -> QImage:
     return image
 
 
-def render_button(face: dict, group: str, state: str) -> QImage:
-    representative = {"transport": "previous", "play": "play", "utility": "show", "chrome": "menu"}[
-        group
+def _mismatched_group_sizes(face: dict) -> list[str]:
+    """Each group shares one sprite, which Qt stretches onto every member."""
+    controls = face["controls"]
+    return [
+        f"{name} {controls[name][2]}x{controls[name][3]} differs from {group} sprite "
+        f"{controls[GROUP_REPRESENTATIVES[group]][2]}x{controls[GROUP_REPRESENTATIVES[group]][3]}"
+        for name, group in sorted(BUTTON_GROUPS.items())
+        if controls[name][2:] != controls[GROUP_REPRESENTATIVES[group]][2:]
     ]
+
+
+def render_button(face: dict, group: str, state: str) -> QImage:
+    representative = GROUP_REPRESENTATIVES[group]
     if face["id"] in SHAPED_FACES:
         return _render_shaped_button(face, representative, state)
     _, _, width, height = face["controls"][representative]
@@ -383,8 +397,20 @@ def _save(image: QImage, path: Path) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--face", action="append", dest="face_ids", metavar="ID",
+        help="Re-export only this face; repeat to select several faces",
+    )
+    options = parser.parse_args()
+    manifests = sorted(FACES_ROOT.glob("*/face.json"))
+    if options.face_ids:
+        unknown = set(options.face_ids) - {manifest.parent.name for manifest in manifests}
+        if unknown:
+            parser.error("Unknown face IDs: " + ", ".join(sorted(unknown)))
+        manifests = [manifest for manifest in manifests if manifest.parent.name in options.face_ids]
     app = QGuiApplication.instance() or QGuiApplication([])
-    for manifest in sorted(FACES_ROOT.glob("*/face.json")):
+    for manifest in manifests:
         face = json.loads(manifest.read_text())
         # Four shared surface families keep pack size small; host text stays live.
         expected_buttons = {
@@ -396,6 +422,9 @@ def main() -> None:
         }
         if face.get("buttons") != expected_buttons:
             raise RuntimeError(f"{face['id']}: sprite declarations differ from the exporter")
+        mismatched = _mismatched_group_sizes(face)
+        if mismatched:
+            raise RuntimeError(f"{face['id']}: distorted shared sprites: {'; '.join(mismatched)}")
         background = render_background(face)
         bad = _translucent_regions(face, background)
         if bad:
