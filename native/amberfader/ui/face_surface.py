@@ -184,6 +184,8 @@ class KeyboardFocusRing:
 
     Qt focuses the cover when the window opens and keeps focus on clicked
     buttons; drawing those rings would leave dashed outlines over every face.
+    Programmatic focus (setFocus() defaults to OtherFocusReason) hides the
+    ring, so pass a keyboard reason when code moves focus for a keyboard user.
     """
 
     _keyboard_focus = False

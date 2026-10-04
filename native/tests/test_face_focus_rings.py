@@ -74,7 +74,7 @@ def test_pointer_and_window_focus_draw_no_ring(player, qapp, name, reason):
 @pytest.mark.parametrize(
     "reason", (Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason),
 )
-def test_keyboard_focus_ring_survives_window_reactivation(player, qapp, name, reason):
+def test_keyboard_focus_ring_survives_restored_focus(player, qapp, name, reason):
     window, sent = player
     window.select_face("orbit-99")
     widget = window._controls[name]
@@ -85,7 +85,8 @@ def test_keyboard_focus_ring_survives_window_reactivation(player, qapp, name, re
     focused = widget.grab().toImage()
     assert focused != unfocused
 
-    # Returning to the window restores focus without changing how it arrived.
+    # Qt reports window reactivation as ActiveWindowFocusReason; restoring
+    # focus with that reason must not change how it arrived.
     widget.clearFocus()
     widget.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
     qapp.processEvents()
