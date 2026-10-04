@@ -182,7 +182,8 @@ face; oversized windows are fitted to the available screen.
 missing disabled artwork is dimmed. Sprites stretch to the control rectangle.
 Host labels are drawn on top, so draw button surfaces rather than transport
 symbols. A face cannot replace actions, hide the unknown heart, or bypass a
-disabled/pending control. Keyboard focus and pending indicators remain visible.
+disabled/pending control. Pending indicators remain visible; focus outlines
+appear once you move focus with the keyboard.
 
 ### Resource and path limits
 

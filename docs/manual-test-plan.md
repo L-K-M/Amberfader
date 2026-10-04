@@ -119,6 +119,8 @@ tests verify rendering and state preservation, not compositor integration.
   On Aureole and Viridian, check that covers fill their circular sockets and
   leave the original bezel visible. Focus and pending outlines follow the
   button shapes; clicking a transparent button corner does not issue a command.
+  Opening the player or clicking a control leaves no focus outline; press Tab
+  and check that an outline follows keyboard focus.
   Check that utility/transport controls stay inside the metal panels and both
   sliders stay on the glass. Viridian's five readouts share the screen center;
   Aureole's readouts form a centered group in its oval. Check normal and long

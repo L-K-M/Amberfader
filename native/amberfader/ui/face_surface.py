@@ -40,6 +40,15 @@ READOUT_ALIGNMENT = {
     "center": Qt.AlignmentFlag.AlignCenter,
     "right": Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
 }
+KEYBOARD_FOCUS_REASONS = frozenset((
+    Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason,
+    Qt.FocusReason.ShortcutFocusReason,
+))
+# Window activation and closed popups return focus without new navigation.
+RESTORED_FOCUS_REASONS = frozenset((
+    Qt.FocusReason.ActiveWindowFocusReason, Qt.FocusReason.PopupFocusReason,
+    Qt.FocusReason.MenuBarFocusReason,
+))
 
 
 @dataclass(frozen=True)
@@ -170,7 +179,28 @@ def draw_slider(
     painter.restore()
 
 
-class FaceSlider(QSlider):
+class KeyboardFocusRing:
+    """Mark focus reached by keyboard, not the control a pointer just used.
+
+    Qt focuses the cover when the window opens and keeps focus on clicked
+    buttons; drawing those rings would leave dashed outlines over every face.
+    """
+
+    _keyboard_focus = False
+
+    def focusInEvent(self, event) -> None:
+        reason = event.reason()
+        if reason in KEYBOARD_FOCUS_REASONS:
+            self._keyboard_focus = True
+        elif reason not in RESTORED_FOCUS_REASONS:
+            self._keyboard_focus = False
+        super().focusInEvent(event)
+
+    def focus_ring_visible(self) -> bool:
+        return self.hasFocus() and self._keyboard_focus
+
+
+class FaceSlider(KeyboardFocusRing, QSlider):
     """Face painting keeps QSlider's input, accessibility and signal behavior."""
 
     def __init__(self, orientation: Qt.Orientation, parent: QWidget) -> None:
@@ -197,7 +227,7 @@ class FaceSlider(QSlider):
         painter = QPainter(self)
         draw_slider(
             painter, QRectF(groove), QRectF(handle), self._face.palette,
-            self.isEnabled(), self.hasFocus(), option.upsideDown,
+            self.isEnabled(), self.focus_ring_visible(), option.upsideDown,
         )
 
 
@@ -357,7 +387,7 @@ class ReadoutLabel(QLabel):
         painter.drawText(self.rect(), self.alignment(), self.text())
 
 
-class CoverLabel(QLabel):
+class CoverLabel(KeyboardFocusRing, QLabel):
     activated = Signal()
 
     def __init__(self, parent: QWidget) -> None:
@@ -383,7 +413,7 @@ class CoverLabel(QLabel):
         draw_cover(
             painter, self.pixmap(), QRectF(self.rect()), self._shape, self._radius, self._glass,
         )
-        if self.hasFocus():
+        if self.focus_ring_visible():
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             painter.setPen(QPen(self.palette().highlight().color(), 1, Qt.PenStyle.DashLine))
             painter.drawPath(control_path(
@@ -405,7 +435,7 @@ class CoverLabel(QLabel):
         super().keyPressEvent(event)
 
 
-class FaceButton(QPushButton):
+class FaceButton(KeyboardFocusRing, QPushButton):
     """Optional artist sprites retain host labels, focus and pending states."""
 
     def __init__(self, text: str, parent: QWidget) -> None:
@@ -467,7 +497,7 @@ class FaceButton(QPushButton):
         else:
             painter.setPen(color)
             painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, self.text())
-        if self.hasFocus() or self.property("pending"):
+        if self.focus_ring_visible() or self.property("pending"):
             painter.setPen(QPen(self.palette().highlight().color(), 1, Qt.PenStyle.DashLine))
             painter.drawPath(self._indicator_path())
 
