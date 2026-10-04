@@ -90,20 +90,13 @@ def test_minimum_width_like_keeps_unknown_marker(button):
 
 
 def _ink_center(image: QImage) -> tuple[float, float]:
-    xs, ys = [], []
-    for y in range(image.height()):
-        for x in range(image.width()):
-            alpha = image.pixelColor(x, y).alpha()
-            if alpha:
-                xs.append((x + 0.5, alpha))
-                ys.append((y + 0.5, alpha))
-    total = sum(alpha for _, alpha in xs)
-    left = min(x for x, _ in xs) - 0.5
-    right = max(x for x, _ in xs) + 0.5
-    top = min(y for y, _ in ys) - 0.5
-    bottom = max(y for y, _ in ys) + 0.5
-    assert total
-    return (left + right) / 2, (top + bottom) / 2
+    inked = [
+        (x, y) for y in range(image.height()) for x in range(image.width())
+        if image.pixelColor(x, y).alpha()
+    ]
+    assert inked, "transport glyph drew no ink"
+    xs, ys = [x for x, _ in inked], [y for _, y in inked]
+    return (min(xs) + max(xs) + 1) / 2, (min(ys) + max(ys) + 1) / 2
 
 
 @pytest.mark.parametrize("size", [(40, 40), (41, 41), (48, 36), (29, 24)])
