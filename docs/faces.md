@@ -107,7 +107,9 @@ my-face/
 - `size`: `[width, height]` in logical pixels. Version 1/2 width: 360–1024;
   height: 180–768. Version 3 accepts 1–2048 on each axis.
 - `background`: a local PNG filename. Its dimensions must equal `size`, or
-  exactly twice `size` for sharper high-DPI rendering.
+  exactly twice `size` for sharper high-DPI rendering. PNGs are capped at
+  2048 pixels per axis, so 2× backgrounds and masks require a canvas no larger
+  than 1024 pixels per axis.
 - `drag`: `[x, y, width, height]` of an empty region used to move the window.
 - `font`: `sans`, `mono`, or `serif`. Default: `sans`.
 - `timeSize`: readout font size in logical pixels, 16–36. Default: 24.

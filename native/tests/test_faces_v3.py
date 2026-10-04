@@ -318,3 +318,16 @@ def test_catalog_probe_checks_the_aggregate_pixel_budget(imported_snapshot, tmp_
     monkeypatch.setattr(face_module, "MAX_DECODED_PIXELS", 24 * 11)
     with pytest.raises(FaceError, match="decoded image limit"):
         face_module._probe_face(saved)
+
+
+@pytest.mark.parametrize("control", ["close", "volume"])
+def test_sprite_import_requires_a_present_control(imported_snapshot, tmp_path, control):
+    document = FaceDocument.from_snapshot(*imported_snapshot)
+    source = tmp_path / "sprite.png"
+    source.write_bytes(png(8, 8))
+    before = document.manifest
+    assets = dict(document.assets)
+    with pytest.raises(FaceError, match=f"Add the {control} control"):
+        document.import_button(control, "normal", source)
+    assert document.manifest == before and document.assets == assets
+    assert not document.can_undo

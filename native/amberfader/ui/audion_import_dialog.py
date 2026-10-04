@@ -166,6 +166,7 @@ class AudionImportDialog(QDialog):
     def load_source(self, source: Path) -> bool:
         """Discover a supported source without modifying its files."""
         try:
+            self._folder = Path(source) if Path(source).is_dir() else Path(source).parent
             candidates = _list_faces(Path(source))
             if not candidates:
                 raise FaceError("No supported Audion faces were found in this source.")
@@ -179,7 +180,6 @@ class AudionImportDialog(QDialog):
                 "or choose a supported ZIP archive."
             )
             return False
-        self._folder = Path(source) if Path(source).is_dir() else Path(source).parent
         self._source.setText(str(source))
         self._faces.clear()
         self._cached_candidate = None

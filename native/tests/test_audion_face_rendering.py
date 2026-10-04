@@ -585,3 +585,49 @@ def test_maskless_face_keeps_button_holes_and_every_sprite_state_hittable(
         assert window.mask().contains(QPoint(round(27 * scale), round(50 * scale)))
         native = window._surface.grab().toImage()
         assert _rgb(native, round(x * scale), round(50 * scale)) == expected
+
+
+def test_reopened_popup_refreshes_accessibility_labels(audion_player, qapp):
+    window, _, _, _ = audion_player
+    owner = window._vol
+    slider = _open_popup(owner, qapp)
+    owner.cancel_popup()
+    owner.setAccessibleName("Output volume")
+    owner.setToolTip("Change output volume")
+    assert _open_popup(owner, qapp) is slider
+    assert slider.accessibleName() == "Output volume"
+    assert slider.toolTip() == "Change output volume"
+
+
+@pytest.mark.parametrize("rotation", [0, 25])
+def test_reopened_popup_follows_its_anchor_screen(audion_player, qapp, monkeypatch, rotation):
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtGui import QGuiApplication
+
+    from amberfader.ui.face_surface import prepare_face
+
+    window, _, face, _ = audion_player
+    owner = window._vol
+    _open_popup(owner, qapp)
+    owner.cancel_popup()
+    face = replace(face, control_rotations=_frozen({"volume": rotation}))
+    window._apply_face(face, prepare_face(face))
+    window.move(900, 100)
+    qapp.processEvents()
+    anchor = window._surface.control_global_position(
+        "volume", owner, QPoint(0, owner.height()),
+    )
+
+    class SecondaryScreen:
+        def availableGeometry(self):
+            return QRect(800, 0, 800, 800)
+
+    def screen_at(point):
+        assert point == anchor
+        return SecondaryScreen()
+
+    monkeypatch.setattr(QGuiApplication, "screenAt", screen_at)
+    # Reusing a popup created on another monitor must not clamp to its old screen.
+    owner._show_popup()
+    qapp.processEvents()
+    assert owner._popup.frameGeometry().topLeft() == anchor

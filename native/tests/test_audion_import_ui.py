@@ -217,6 +217,61 @@ def test_native_browse_actions_use_portal_compatible_folder_and_zip_dialogs(qapp
         qapp.processEvents()
 
 
+@pytest.mark.parametrize("source_kind", ["folder", "archive"])
+def test_failed_source_browse_retries_in_the_selected_location(
+    qapp, tmp_path, monkeypatch, source_kind,
+):
+    from PySide6.QtWidgets import QFileDialog
+
+    from amberfader.ui.audion_import_dialog import AudionImportDialog
+
+    location = tmp_path / "selected location"
+    location.mkdir()
+    source = location
+    if source_kind == "archive":
+        source = location / "broken.zip"
+        source.write_bytes(b"This is not a ZIP archive")
+    starts = []
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *args: (
+        starts.append(args[2]) or ""
+    ))
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *args: (
+        starts.append(args[2]) or "", ""
+    ))
+    dialog = AudionImportDialog()
+    try:
+        assert not dialog.load_source(source)
+        assert "Could not read Audion faces" in dialog._details.toPlainText()
+        assert not dialog._import_button.isEnabled()
+        if source_kind == "folder":
+            dialog._browse_folder()
+        else:
+            dialog._browse_zip()
+        assert starts == [str(location)]
+    finally:
+        dialog.deleteLater()
+        qapp.processEvents()
+
+
+def test_inaccessible_source_shows_an_inline_read_error(qapp, tmp_path, monkeypatch):
+    from amberfader.ui.audion_import_dialog import AudionImportDialog
+
+    dialog = AudionImportDialog()
+
+    def inaccessible(path):
+        raise PermissionError("The source folder is inaccessible")
+
+    monkeypatch.setattr(Path, "is_dir", inaccessible)
+    try:
+        assert not dialog.load_source(tmp_path / "inaccessible")
+        assert "The source folder is inaccessible" in dialog._details.toPlainText()
+        assert dialog.import_result is None
+        assert not dialog._import_button.isEnabled()
+    finally:
+        dialog.deleteLater()
+        qapp.processEvents()
+
+
 def test_removing_bitmap_clock_discards_cached_digit_artwork(editor, monkeypatch):
     from PySide6.QtWidgets import QMessageBox
 

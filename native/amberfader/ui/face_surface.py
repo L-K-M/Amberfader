@@ -12,6 +12,7 @@ from PySide6.QtGui import (
     QFont,
     QFontDatabase,
     QFontMetrics,
+    QGuiApplication,
     QImage,
     QKeyEvent,
     QLinearGradient,
@@ -367,8 +368,6 @@ class FaceSlider(KeyboardFocusRing, QSlider):
             layout.setContentsMargins(8, 8, 8, 8)
             self._popup_slider = _PopupSlider(self, self._popup)
             self._popup_slider.setMinimumWidth(192)
-            self._popup_slider.setAccessibleName(self.accessibleName())
-            self._popup_slider.setToolTip(self.toolTip())
             layout.addWidget(self._popup_slider)
             self._popup_slider.sliderPressed.connect(lambda: self.setSliderDown(True))
             self._popup_slider.sliderMoved.connect(self.setSliderPosition)
@@ -378,13 +377,17 @@ class FaceSlider(KeyboardFocusRing, QSlider):
         self._popup_slider.setRange(self.minimum(), self.maximum())
         self._popup_slider.setSingleStep(self.singleStep())
         self._popup_slider.setPageStep(self.pageStep())
+        self._popup_slider.setAccessibleName(self.accessibleName())
+        self._popup_slider.setToolTip(self.toolTip())
         self._sync_popup_value(self.value())
         self._popup.adjustSize()
         anchor = (
             self._popup_anchor() if self._popup_anchor is not None
             else self.mapToGlobal(QPoint(0, self.height()))
         )
-        screen = self._popup.screen()
+        # A reused popup retains its previous screen until it moves. Rotated
+        # controls are embedded widgets, so use their actual global anchor.
+        screen = QGuiApplication.screenAt(anchor) or self._popup_parent.screen()
         if screen is not None:
             available = screen.availableGeometry()
             anchor.setX(max(

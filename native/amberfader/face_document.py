@@ -360,6 +360,8 @@ class FaceDocument:
         if control not in SPRITE_CONTROLS or state not in IMPORT_BUTTON_STATES:
             raise FaceError("Choose a supported button and sprite state")
         data = self.manifest
+        if control not in data["controls"]:
+            raise FaceError(f"Add the {control} control before importing its sprites")
         states = data.setdefault("buttons", {}).setdefault(control, {})
         if state != "normal" and "normal" not in states:
             raise FaceError("Import the normal button sprite before its other states")
