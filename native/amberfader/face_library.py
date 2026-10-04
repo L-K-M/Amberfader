@@ -24,10 +24,12 @@ from jsonschema import Draft202012Validator
 DEFAULT_FACE_ID = "amber-classic"
 BUNDLED_FACE_ERROR = "Bundled faces are unavailable. Reinstall Amberfader."
 FACE_FORMAT_VERSION = 2
+IMPORT_FACE_FORMAT_VERSION = 3
 MAX_MANIFEST_BYTES = 64 * 1024
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_PACK_BYTES = 16 * 1024 * 1024
 MAX_IMAGE_DIMENSION = 2048
+MAX_DECODED_PIXELS = 32 * 1024 * 1024
 MAX_DRAFT_GEOMETRY = 2048
 MAX_USER_FACES = 64
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -36,6 +38,7 @@ PNG_HEADER_BYTES = PNG_HEADER.size
 PNG_HEADER_CHUNK = b"IHDR"
 PNG_HEADER_DATA_BYTES = 13
 PACK_LIMIT_ERROR = "Face images exceed the 16 MiB pack limit"
+DECODED_LIMIT_ERROR = "Face images exceed the 128 MiB decoded image limit"
 BUILTIN_DIRECTORY = Path(__file__).with_name("faces")
 Rect = tuple[int, int, int, int]
 Polygon = tuple[tuple[float, float], ...]
@@ -60,6 +63,12 @@ class FaceInfo:
 
 
 @dataclass(frozen=True)
+class TimeDigit:
+    rect: Rect
+    images: tuple[bytes, ...]
+
+
+@dataclass(frozen=True)
 class Face:
     info: FaceInfo
     size: tuple[int, int]
@@ -80,6 +89,11 @@ class Face:
     control_rotations: MappingProxyType[str, float] = field(
         default_factory=lambda: MappingProxyType({}),
     )
+    format_version: int = FACE_FORMAT_VERSION
+    source_credit: str = ""
+    sprite_labels: bool = True
+    time_digits: tuple[TimeDigit, ...] = ()
+    alpha_mask: bytes | None = None
 
 
 def _read_bounded(path: Path, limit: int) -> bytes:
@@ -130,10 +144,12 @@ def _validator(
             "maximum": MAX_DRAFT_GEOMETRY,
         }
         extent = {"type": "integer", "minimum": 1, "maximum": MAX_DRAFT_GEOMETRY}
-        schema["$defs"]["rect"] = {
+        draft_rect = {
             "type": "array", "prefixItems": [origin, origin, extent, extent],
             "items": False, "minItems": 4, "maxItems": 4,
         }
+        schema["$defs"]["rect"] = draft_rect
+        schema["$defs"]["legacyRect"] = draft_rect
     return Draft202012Validator(schema)
 
 
@@ -205,6 +221,12 @@ def _intersects(left: Polygon, right: Polygon) -> bool:
 def _check_layout(data: dict) -> None:
     width, height = data["size"]
     regions = {**data["controls"], "drag": data["drag"]}
+    imported = data["formatVersion"] == IMPORT_FACE_FORMAT_VERSION
+    if imported:
+        regions.update({
+            f"timeDigits.{index}": digit["rect"]
+            for index, digit in enumerate(data.get("timeDigits", []))
+        })
     rotations = data.get("controlRotations", {})
     polygons = {
         name: control_polygon(tuple(rect), rotations.get(name, 0))
@@ -216,6 +238,8 @@ def _check_layout(data: dict) -> None:
             for px, py in polygons[name]
         ):
             raise FaceError(f"{name} must fit inside the face")
+        if imported:
+            continue
         minimum = (22, 22)
         if name == "art":
             curved = data.get("controlShapes", {}).get("art") == "ellipse"
@@ -229,6 +253,8 @@ def _check_layout(data: dict) -> None:
         if w < minimum[0] or h < minimum[1]:
             raise FaceError(f"{name} is too small to use")
 
+    if imported:
+        return  # Audion's original hit regions and drag masks can overlap.
     names = list(regions)
     for index, name in enumerate(names):
         for other in names[index + 1:]:
@@ -236,18 +262,29 @@ def _check_layout(data: dict) -> None:
                 raise FaceError(f"{name} overlaps {other}")
 
 
+def declared_image_names(data: Mapping[str, Any]) -> set[str]:
+    """Collect assets from a schema-controlled face or editor snapshot."""
+    names = {data["background"]}
+    if "alphaMask" in data:
+        names.add(data["alphaMask"])
+    for states in data.get("buttons", {}).values():
+        names.update(states.values())
+    for digit in data.get("timeDigits", []):
+        names.update(digit["images"])
+    return names
+
+
 def _pack_manifest(directory: Path) -> tuple[dict[str, Any], list[str]]:
     data = _manifest(directory)
     _check_layout(data)
-    names = {data["background"]}
-    for states in data.get("buttons", {}).values():
-        names.update(states.values())
-    return data, sorted(names)
+    return data, sorted(declared_image_names(data))
 
 
-def _check_background_size(size: list[int], image_size: tuple[int, int]) -> None:
+def _check_background_size(
+    size: list[int], image_size: tuple[int, int], *, name: str = "Background",
+) -> None:
     if image_size not in (tuple(size), (size[0] * 2, size[1] * 2)):
-        raise FaceError("Background must match the face size at 1x or 2x")
+        raise FaceError(f"{name} must match the face size at 1x or 2x")
 
 
 def _probe_face(directory: Path) -> FaceInfo:
@@ -256,6 +293,7 @@ def _probe_face(directory: Path) -> FaceInfo:
         directory = directory.resolve()
         data, names = _pack_manifest(directory)
         total_bytes = 0
+        decoded_pixels = 0
         dimensions = {}
         for name in names:
             with _image_path(directory, name).open("rb") as stream:
@@ -266,7 +304,12 @@ def _probe_face(directory: Path) -> FaceInfo:
                 if total_bytes > MAX_PACK_BYTES:
                     raise FaceError(PACK_LIMIT_ERROR)
                 dimensions[name] = _png_dimensions(stream.read(PNG_HEADER_BYTES), name)
+                decoded_pixels += dimensions[name][0] * dimensions[name][1]
+                if decoded_pixels > MAX_DECODED_PIXELS:
+                    raise FaceError(DECODED_LIMIT_ERROR)
         _check_background_size(data["size"], dimensions[data["background"]])
+        if "alphaMask" in data:
+            _check_background_size(data["size"], dimensions[data["alphaMask"]], name="Alpha mask")
         return FaceInfo(data["id"], data["name"], data["author"], data["description"], directory)
     except (OSError, ValueError, RecursionError, struct.error) as exc:
         raise FaceError(str(exc)) from exc
@@ -290,11 +333,10 @@ def load_face_snapshot(
             _check_layout(manifest)
         elif validation is not FaceValidation.DRAFT:
             raise FaceError("Unknown face validation mode")
-        names = {manifest["background"]}
-        for states in manifest.get("buttons", {}).values():
-            names.update(states.values())
+        names = declared_image_names(manifest)
         validated = {}
         total_bytes = 0
+        decoded_pixels = 0
         for name in sorted(names):
             image = images.get(name)
             if not isinstance(image, bytes):
@@ -304,9 +346,17 @@ def load_face_snapshot(
             total_bytes += len(image)
             if total_bytes > MAX_PACK_BYTES:
                 raise FaceError(PACK_LIMIT_ERROR)
-            validated[name] = image, _png_dimensions(image, name)
+            dimensions = _png_dimensions(image, name)
+            decoded_pixels += dimensions[0] * dimensions[1]
+            if decoded_pixels > MAX_DECODED_PIXELS:
+                raise FaceError(DECODED_LIMIT_ERROR)
+            validated[name] = image, dimensions
         if validation is FaceValidation.STRICT:
             _check_background_size(manifest["size"], validated[manifest["background"]][1])
+            if "alphaMask" in manifest:
+                _check_background_size(
+                    manifest["size"], validated[manifest["alphaMask"]][1], name="Alpha mask",
+                )
         return Face(
             info=FaceInfo(
                 manifest["id"], manifest["name"], manifest["author"],
@@ -336,6 +386,15 @@ def load_face_snapshot(
             }),
             slider_style=manifest.get("sliderStyle", "classic"),
             control_rotations=MappingProxyType(dict(manifest.get("controlRotations", {}))),
+            format_version=manifest["formatVersion"],
+            source_credit=manifest.get("sourceCredit", ""),
+            sprite_labels=manifest.get("spriteLabels", True),
+            time_digits=tuple(
+                TimeDigit(tuple(digit["rect"]), tuple(
+                    validated[name][0] for name in digit["images"]
+                )) for digit in manifest.get("timeDigits", [])
+            ),
+            alpha_mask=(validated[manifest["alphaMask"]][0] if "alphaMask" in manifest else None),
         )
     except (TypeError, ValueError, RecursionError, struct.error) as exc:
         raise FaceError(str(exc)) from exc
@@ -488,10 +547,7 @@ class FaceLibrary:
                 (staging / "face.json").write_text(
                     json.dumps(data, indent=2) + "\n", encoding="utf-8"
                 )
-                names = {data["background"]}
-                for states in data.get("buttons", {}).values():
-                    names.update(states.values())
-                for name in names:
+                for name in declared_image_names(data):
                     (staging / name).write_bytes(_image(face.info.source, name)[0])
                 # Validate the staged snapshot, not a source that may have changed.
                 installed = load_face(staging)

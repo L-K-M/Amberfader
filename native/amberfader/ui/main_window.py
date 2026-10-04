@@ -177,17 +177,19 @@ class MainWindow(QMainWindow):
         self._btn_show.clicked.connect(lambda: self._request("browser.showPlayer", {}))
         self._btn_hide.clicked.connect(lambda: self._request("browser.hidePlayer", {}))
         self._btn_search.clicked.connect(self.open_search)
-        self._btn_menu.clicked.connect(lambda: self._menu.popup(
+        self._btn_menu.clicked.connect(lambda: self._popup_menu(
             self._surface.control_global_position(
                 "menu", self._btn_menu, QPoint(0, self._btn_menu.height()),
             )
         ))
+        self._surface.menuRequested.connect(self._popup_menu)
         self._btn_minimize.clicked.connect(self.showMinimized)
         self._btn_close.clicked.connect(self.close)
         self._art.activated.connect(self.open_cover)
         self._seek.sliderPressed.connect(self._seek_press)
         self._seek.sliderReleased.connect(self._seek_release)
         self._seek.sliderMoved.connect(self._seek_preview)
+        self._seek.gestureCancelled.connect(self._cancel_seek)
         self._vol.sliderReleased.connect(self._vol_release)
 
         QShortcut(QKeySequence(Qt.Key.Key_Space), self, self._toggle_play)
@@ -244,16 +246,27 @@ class MainWindow(QMainWindow):
         view = bar.addMenu("&View")
         view.addActions([search, cover])
         view.addSeparator()
-        view.addAction("Show YouTube Music", self._btn_show.click)
-        view.addAction("Hide YouTube Music", self._btn_hide.click)
+        show = view.addAction("Show YouTube Music", self._btn_show.click)
+        hide = view.addAction("Hide YouTube Music", self._btn_hide.click)
         window = bar.addMenu("&Window")
-        window.addAction("Minimize", self._btn_minimize.click)
+        minimize = window.addAction("Minimize", self._btn_minimize.click)
+
+        # Imported faces may omit modern controls. Share QAction state while
+        # keeping this popup's QMenu objects independent of the native bar.
+        self._import_menu = QMenu(self)
+        self._import_menu.addActions(self._menu.actions())
+        self._import_menu.addSeparator()
+        self._import_menu.addMenu("Playback").addActions(list(self._playback_actions.values()))
+        self._import_menu.addActions([show, hide, minimize])
 
         # Native menus remain exported when their QWidget is hidden. Keep the
         # shaped surface at (0, 0), including desktops without a global menu.
         # The face's popup button remains the local fallback.
         bar.hide()
         self._sync_menu_actions()
+
+    def _popup_menu(self, position: QPoint) -> None:
+        self._face_menu.popup(position)
 
     def _sync_menu_actions(self) -> None:
         state = self._state or {}
@@ -289,6 +302,7 @@ class MainWindow(QMainWindow):
     # ---- appearance ------------------------------------------------------
 
     def _apply_face(self, face: Face, artwork: FaceArtwork) -> None:
+        self._face_menu = self._import_menu if face.format_version >= 3 else self._menu
         effective_scale = self._scale
         if self.screen() is not None:
             available = self.screen().availableGeometry()
@@ -302,6 +316,16 @@ class MainWindow(QMainWindow):
         self.setMask(artwork.scaled_mask(size))
         # Move the same widgets, preserving focus, pending commands and gestures.
         for name, widget in self._controls.items():
+            if name not in face.controls:
+                if isinstance(widget, FaceSlider):
+                    widget.cancel_popup()
+                    with QSignalBlocker(widget):
+                        widget.setSliderDown(False)
+                    if name == "seek":
+                        self._seeking = False
+                        self._seek_occ = None
+                self._surface.hide_control(name, widget)
+                continue
             rotation = face.control_rotations.get(name, 0)
             if self._surface.needs_rehosting(name, rotation):
                 if isinstance(widget, FaceSlider) and widget.isSliderDown():
@@ -320,15 +344,21 @@ class MainWindow(QMainWindow):
                 rotation, self.styleSheet(),
             )
             if isinstance(widget, FaceButton):
-                widget.set_sprites(artwork.buttons.get(name, {}))
+                widget.set_sprites(artwork.buttons.get(name, {}), labels=face.sprite_labels)
                 widget.set_shape(
                     face.control_shapes.get(name, "rectangle"), face.radius * effective_scale,
                 )
             elif isinstance(widget, FaceSlider):
-                widget.set_face(face)
+                widget.set_face(face, artwork.buttons.get(name, {}))
+                widget.set_popup_anchor(lambda name=name, widget=widget:
+                    self._surface.control_global_position(name, widget, QPoint(0, widget.height())))
             elif name in READOUT_CONTROLS:
-                widget.setAlignment(readout_style(face, name).alignment)
+                style = readout_style(face, name)
+                widget.setAlignment(style.alignment)
+                widget.setProperty("readoutColor", style.color)
+                widget.setProperty("minimumReadoutSize", 6 if face.format_version >= 3 else 10)
                 widget.setFont(readout_font(face, name, effective_scale))
+        self._time.set_time_digits(artwork.time_digits)
         self._art.set_shape(
             face.control_shapes.get("art", "rectangle"), face.radius * effective_scale,
             face.cover_glass,
@@ -465,6 +495,7 @@ class MainWindow(QMainWindow):
         self._playback.setText(str(status).upper())
         self._playback.setToolTip(f"Playback: {status}")
         self._play.setText("⏸" if playing else "▶")
+        self._play.setProperty("playing", playing)
         self._play.setProperty("pending", self._pending_transport)
         self._play.style().unpolish(self._play)
         self._play.style().polish(self._play)
@@ -656,6 +687,11 @@ class MainWindow(QMainWindow):
     def _seek_press(self) -> None:
         self._seeking = True
         self._seek_occ = ((self._state or {}).get("track") or {}).get("occurrenceId")
+
+    def _cancel_seek(self) -> None:
+        self._seeking = False
+        self._seek_occ = None
+        self._render_time()
 
     def _seek_preview(self, value: int) -> None:
         dur = (self._state or {}).get("durationSeconds")

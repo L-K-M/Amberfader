@@ -82,7 +82,7 @@ def test_bundled_catalog_is_complete_and_valid(library):
 
 
 @pytest.mark.parametrize("change", [
-    lambda d: d.update(formatVersion=3),
+    lambda d: d.update(formatVersion=4),
     lambda d: d.update(code="plugin.py"),
     lambda d: d.update(background="../outside.png"),
     lambda d: d["palette"].update(accent="red; background: url(https://example.org)"),

@@ -104,7 +104,8 @@ class FaceEditorCanvas(QGraphicsView):
     def set_document(self, document: FaceDocument) -> None:
         self.cancel_gesture()
         self._document = document
-        self._selected = "play"
+        controls = document.manifest["controls"]
+        self._selected = "play" if "play" in controls else next(iter(controls), "drag")
 
     def set_preview(self, face: Face, artwork: FaceArtwork, cover: QPixmap) -> None:
         previous_size = self._item.face_rect().size()
@@ -115,6 +116,10 @@ class FaceEditorCanvas(QGraphicsView):
         self.viewport().update()
 
     def select(self, name: str) -> None:
+        if self._document is None:
+            return
+        if name != "drag" and name not in self._document.manifest["controls"]:
+            return
         if name == self._selected:
             return
         # A gesture belongs to its initial element; switching selection abandons it.

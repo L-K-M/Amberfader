@@ -48,7 +48,8 @@ resize, or rotation gesture is one undo step.
 
 The face's drag region is editable too. Keep it clear of playback controls so
 the player can distinguish a window drag from a control press. Screen labels,
-buttons, artwork, and sliders must fit inside the canvas and avoid each other.
+buttons, artwork, and sliders must fit inside the canvas. Version 1/2 layouts
+also require controls to avoid each other and the drag region.
 The editor shows validation problems while you arrange controls and blocks
 invalid saves. A draft preview can show overlapping controls while you work.
 Bounded draft coordinates also allow temporary placement outside the face;
@@ -56,8 +57,52 @@ saving still requires every control to fit inside the canvas.
 
 Use the properties panels to adjust the name, ID, author, description, palette,
 font, slider style, and cover glass. Per-screen font, size, alignment, and bold
-overrides use the same rendering as the player and picker. Reset an override to
-use the face defaults.
+overrides use the same rendering as the player and picker. You can also specify
+a font family, italic text, and a text color. Font families depend on what is
+installed on your computer. Reset an override to use the face defaults.
+
+## Import Audion faces
+
+Choose **File → Import Audion face…**, then **Browse folder…** or **Browse ZIP…**.
+You can select a single converted Audion face folder, a collection of folders,
+or a supported ZIP archive. Select a face in the list to preview its conversion;
+the filter finds faces by name. The dialog shows the original credits and any
+features that could not be converted. Review these notes before choosing
+**Import editable copy**.
+
+The import creates an unsaved Amberfader document. It reads the source without
+changing or extracting files into it, and keeps the converted images inside
+the document. Importing does not install the face or change the player. Use
+**Save As** to create a portable face folder, then install it through the player.
+Original source credits remain visible in the Face panel and are included in
+the saved manifest.
+
+The importer supports Panic's preserved JSON/PNG format containing `index.json`
+and its images. Original classic resource-fork and PICT files require conversion
+to that format first.
+
+Source ZIPs are limited to 512 MiB, 150,000 entries and 32 MiB of directory
+metadata. A collection can contain up to 2048 faces; folder discovery scans up
+to 8192 immediate entries. Archives are read in place and are never extracted.
+
+Imported version 3 faces can omit elements that the original design did not
+contain. Use **Add element…** to add a playback button, screen label, artwork
+aperture, or slider. Use **Remove element** to remove the selected control;
+the window drag region remains required. Adding and removing elements can be
+undone. Version 3 preserves small canvas dimensions and overlapping controls
+used by these designs. Existing version 1 and 2 faces retain their layout rules;
+removing a control upgrades that document to version 3.
+
+Button artwork may already contain its labels. The Face panel's **Draw labels
+over button artwork** option lets you keep the original artwork without drawing
+another label over it. Imported sliders may use a popup control when their
+original shape cannot be represented by a straight track.
+
+On Flatpak, choose the containing folder so the native file picker can grant
+access to the index and its images together. Selecting a ZIP grants access to
+one self-contained source. If an image cannot be read, select the folder again
+or choose an accessible archive. Unsupported or malformed sources leave your
+current face intact.
 
 ## Backgrounds and sprites
 
@@ -70,12 +115,21 @@ paths or external references.
 A background must match the canvas at 1x or 2x. Changing the canvas size requires
 a matching background and enough room for every control. Supported button
 sprite states are normal, hover, pressed, and disabled; import normal first.
+Version 3 also supports the four corresponding playing states for the pause
+artwork, and state sprites for popup seek and volume triggers.
 Sprites are drawn within each button's logical rectangle, then rotated with the
 button. Supply unrotated sprites to avoid applying an angle twice.
+
+Version 3 can include a separate window mask. Its alpha channel clips the
+complete face, including controls. Import a matching 1x or 2x PNG through the
+Background panel, or remove the mask to use the background's own transparency.
+If you change the canvas size, supply a matching mask or remove the old one.
 
 The existing face limits apply: a 64 KiB manifest, 4 MiB per PNG, 16 MiB of
 declared images per face, and image dimensions up to 2048 pixels. Undo retains
 at most 100 steps and 64 MiB of unique PNG bytes across document snapshots.
+The combined declared image dimensions must fit the 128 MiB decode
+budget, preventing highly compressed images from exhausting memory.
 
 ## Rotated controls
 
@@ -93,10 +147,11 @@ region remains axis aligned.
 }
 ```
 
-This is a fragment, not a complete face manifest. Keep the full required control
-set when editing a manifest by hand. Rotation applies to the visual and its
-pointer interaction together. Its transformed footprint must remain inside the
-canvas and clear of other controls and the drag region. Use the editor's outline
+This is a fragment, not a complete face manifest. Versions 1 and 2 require the
+full control set; version 3 permits omitted controls. Rotation applies to the
+visual and its pointer interaction together. Its transformed footprint must
+remain inside the canvas. Version 1/2 also requires it to stay clear of other
+controls and the drag region. Use the editor's outline
 and validation feedback to check the actual rotated footprint.
 
 ## Save and install
@@ -124,8 +179,8 @@ Run the editor on macOS and Linux, open a bundled template, and move, resize,
 rotate, undo, and redo a button and slider. Confirm the preview follows the
 handles and inspector values. Import a PNG, remove the source file, save to a
 new folder, close the editor, and reopen that folder. Check that geometry,
-typography, sprites, and angles survive unchanged. Try overlapping controls and
-confirm saving is blocked until the layout is valid.
+typography, sprites, and angles survive unchanged. In a version 1/2 face, try
+overlapping controls and confirm saving is blocked until the layout is valid.
 
 On Linux, install the exported face in the player. Check click and keyboard
 focus on angled buttons, drag both ends of an angled slider, and switch faces

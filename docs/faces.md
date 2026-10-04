@@ -53,8 +53,9 @@ rectangular backings; the empty metal regions let you drag the window.
 
 These are original designs inspired by [Audion Faces](https://panic.com/blog/facing-forward/),
 SoundJam MP, and late-1990s desktop players. They do not contain those apps'
-artwork. Original Audion Faces and Winamp skin archives cannot be imported
-directly; Amberfader uses its own format.
+artwork. The [visual editor](face-editor.md#import-audion-faces) can import Panic's
+preserved JSON/PNG Audion face folders and ZIP collections. Classic resource-fork
+or PICT faces need conversion first; Winamp skin archives are unsupported.
 
 ## Install a face
 
@@ -96,13 +97,15 @@ my-face/
 
 ### Manifest fields
 
-- `formatVersion`: **1** or **2**. Existing version 1 packs keep their rectangular
-  controls. Version 2 adds constrained shapes; older app versions reject these
-  packs. Unknown versions are rejected.
+- `formatVersion`: **1**, **2**, or **3**. Existing version 1 packs keep their
+  rectangular controls. Version 2 adds constrained shapes. Version 3 supports
+  compact imported layouts, described below. Older apps reject newer packs;
+  unknown versions are rejected.
 - `id`: unique lowercase identifier, starting with a letter. Use letters,
   digits and hyphens, at most 48 characters. Bundled IDs are reserved.
 - `name`, `author`, `description`: plain text displayed in the browser.
-- `size`: `[width, height]` in logical pixels. Width: 360–1024; height: 180–768.
+- `size`: `[width, height]` in logical pixels. Version 1/2 width: 360–1024;
+  height: 180–768. Version 3 accepts 1–2048 on each axis.
 - `background`: a local PNG filename. Its dimensions must equal `size`, or
   exactly twice `size` for sharper high-DPI rendering.
 - `drag`: `[x, y, width, height]` of an empty region used to move the window.
@@ -112,7 +115,8 @@ my-face/
 - `palette`: hexadecimal `#RRGGBB` colors. Required slots: `window`, `panel`,
   `display`, `text`, `muted`, `readout`, `accent`, `border`, `buttonTop`,
   `buttonBottom`, `danger`. Give text and disabled states readable contrast.
-- `controls`: rectangles for every host control, listed below.
+- `controls`: rectangles for host controls, listed below. Version 1/2 requires
+  every control; version 3 includes only the controls present in the layout.
 - `buttons`: optional state images for individual buttons.
 - `controlShapes` (version 2): optional shape for `art` and any button. Choose
   `rectangle`, `rounded`, `capsule` or `ellipse`. Omitted controls stay rectangular.
@@ -156,8 +160,8 @@ my-face/
 | `status` | Connection status and command errors; full text in tooltip |
 | `minimize`, `close` | Desktop window controls; closing leaves music playing |
 
-Every control must fit inside the canvas, avoid other controls and `drag`, and
-sit on an opaque part of the background. Buttons need at least 22×22 logical
+In version 1/2, every control must fit inside the canvas, avoid other controls
+and `drag`, and sit on an opaque part of the background. Buttons need at least 22×22 logical
 pixels; labels and drag regions need 64×18; sliders need 80×18. Artwork must be
 square and at least 64×64, except version 2 elliptical apertures, which can be
 oval and need at least 48×48. The entire control rectangle must still fit on
@@ -187,18 +191,57 @@ face; oversized windows are fitted to the available screen.
 
 `normal` is required when a button has images. Other states fall back to it;
 missing disabled artwork is dimmed. Sprites stretch to the control rectangle.
-Host labels are drawn on top, so draw button surfaces rather than transport
-symbols. A face cannot replace actions, hide the unknown heart, or bypass a
-disabled/pending control. Keyboard focus and pending indicators remain visible.
+Version 1/2 host labels are drawn on top, so draw button surfaces rather than
+transport symbols. Version 3 can retain symbols baked into its sprites using
+`spriteLabels: false`. Faces cannot replace actions or bypass disabled/pending
+controls. Keyboard focus and pending indicators remain visible.
+
+### Compact imported layouts (version 3)
+
+Version 3 preserves the smaller, irregular layouts of converted Audion faces.
+Control rectangles must be nonempty and fit inside the canvas; their rotated
+footprints must intersect the visible shell. Overlap is allowed, including a
+seek trigger over the clock. Missing controls stay absent. The face menu or
+right-click menu provides additional player commands, including Like, Search,
+Show/Hide, Faces and Cover view.
+
+- `alphaMask`: optional local PNG matching the canvas at 1x or 2x. Its alpha
+  channel masks the assembled background and controls once, preserving soft
+  edges without double compositing.
+- `spriteLabels`: default `true`; set `false` when button symbols are already
+  present in their images. Play also accepts `playing`, `playing-hover`,
+  `playing-pressed` and `playing-disabled` sprites for observed playback.
+- `sliderStyle: "popup"`: keeps volume and seek triggers at their original
+  positions. Clicking opens a slider. Releasing commits the existing guarded
+  command; cancelling, disabling or changing the face cancels the gesture.
+  `buttons` can provide state sprites for these triggers.
+- `timeDigits`: up to four digit entries, each with a `rect` and ten local PNG
+  names in `images`, ordered 0–9. A complete four-digit bitmap clock displays
+  elapsed `mm:ss`. Incomplete clocks, unknown or longer times use a text fallback.
+  Moving, resizing or rotating the time control transforms its complete layout.
+- `readoutStyles`: additionally accepts an installed `fontFamily`, hexadecimal
+  `color`, and `italic`. Sizes can be 6–36 logical pixels. Unavailable fonts use
+  a local fallback; packs cannot supply or download fonts.
+- `sourceCredit`: original plain-text credits, up to 4096 characters, retained
+  through saving, export and installation.
+
+The editor can add or remove controls from these layouts. Import creates an
+unsaved copy and does not change the source. Audion file/CD controls and track
+indicators remain decorative; animated indicators are omitted. The import
+preview reports these limitations before you accept the copy.
 
 ### Resource and path limits
 
 - Manifest: 64 KiB. Each PNG: 4 MiB and at most 2048×2048 pixels.
 - All declared images together: 16 MiB. Installed folders loaded: at most 64.
+- Declared PNG dimensions together: 33,554,432 pixels (128 MiB at 32 bits),
+  checked before decoding. Repeated asset references share decoded storage.
 - Image filenames use letters, digits, underscores and hyphens plus `.png`.
   No nested paths, remote URLs, or symlinks outside the pack.
-- Unsupported fields, overlapping/out-of-bounds controls, invalid images and
-  transparent control regions are rejected. The face browser shows errors.
+- Unsupported fields, out-of-bounds controls and invalid images are rejected.
+  Version 1/2 also rejects overlapping controls and transparent control regions;
+  version 3 requires controls to intersect the visible shell. The face browser
+  shows errors.
 
 Discovery reads metadata and PNG headers, not full image payloads. Selected
 faces and installation snapshots are loaded and validated again before use.
