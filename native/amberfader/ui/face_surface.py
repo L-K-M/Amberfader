@@ -274,8 +274,10 @@ def prepare_face(face: Face) -> FaceArtwork:
 
 
 def like_font_size(face: Face) -> int:
-    # A narrow v1 plugin button must still display the unknown-state question mark.
-    return 18 if face.controls["like"][2] >= 40 else 12
+    # Scale the heart with its button like the drawn transport glyphs. The
+    # 12 px floor still fits the unknown-state "♡?" in a 22 px v1 button.
+    _, _, width, height = face.controls["like"]
+    return max(12, min(18, round(min(width, height) / 2)))
 
 
 def face_stylesheet(face: Face, scale: float) -> str:
@@ -346,7 +348,8 @@ def draw_transport_icon(
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(Qt.PenStyle.NoPen)
     painter.setBrush(color)
-    painter.translate(rect.center())
+    # QRect.center() rounds down, which shifts glyphs on even-sized buttons.
+    painter.translate(QRectF(rect).center())
     size = min(rect.width(), rect.height()) * 0.42
     painter.scale(size, size)
     if name == "play":
@@ -360,8 +363,9 @@ def draw_transport_icon(
     else:
         if name == "next":
             painter.scale(-1, 1)
-        painter.drawRect(QRectF(-0.55, -0.45, 0.12, 0.9))
-        for x in (-0.35, 0.05):
+        # Bar and triangles span -0.48..0.48, so the skip glyph's ink is centered.
+        painter.drawRect(QRectF(-0.48, -0.45, 0.12, 0.9))
+        for x in (-0.28, 0.12):
             painter.drawPolygon(QPolygonF([
                 QPointF(x, 0), QPointF(x + 0.36, -0.45), QPointF(x + 0.36, 0.45),
             ]))
