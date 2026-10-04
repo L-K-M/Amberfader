@@ -102,6 +102,29 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  face-editor-macos:
+    name: Face editor and rotated controls (macOS)
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@b75a909f75acd358c2196fb9a5f1299a9a8868a4 # v7.1.2
+
+      - name: Sync editor environment
+        run: uv sync --extra gui
+
+      - name: Editor, persistence and transformed input tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: >-
+          uv run pytest -q native/tests/test_editor_cli.py
+          native/tests/test_editor_player_integration.py
+          native/tests/test_face_document.py native/tests/test_face_editor.py
+          native/tests/test_face_rotation.py
+
   deb:
     name: Debian package builds
     runs-on: ubuntu-24.04

@@ -552,7 +552,6 @@ def test_picker_and_runtime_use_inset_slider_presentation(slider_window, qapp, m
         return draw
 
     monkeypatch.setattr(face_surface, "draw_slider", record("native"))
-    monkeypatch.setattr(faces_window, "draw_slider", record("picker"))
     parent = QWidget()
     preview = faces_window.FacePreview(parent)
     preview.resize(face.size[0] + 24, face.size[1] + 24)
@@ -560,6 +559,7 @@ def test_picker_and_runtime_use_inset_slider_presentation(slider_window, qapp, m
         for name in ("seek", "volume"):
             window._controls[name].setValue(window._controls[name].maximum() // 2)
             window._controls[name].grab()
+        monkeypatch.setattr(face_surface, "draw_slider", record("picker"))
         preview.set_face(face, face_surface.prepare_face(face))
         preview.grab()
         native = [call for call in calls if call[0] == "native"]

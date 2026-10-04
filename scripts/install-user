@@ -95,6 +95,10 @@ EOF
 #!/bin/sh
 exec flatpak run "$APP_ID" "\$@"
 EOF
+  cat > "$BINDIR/amberfader-face-editor" <<EOF
+#!/bin/sh
+exec flatpak run --command=amberfader-face-editor "$APP_ID" "\$@"
+EOF
   if [[ -n ${XDG_RUNTIME_DIR:-} ]]; then
     mkdir -p "$XDG_RUNTIME_DIR/$HOST_NAME"
     chmod 700 "$XDG_RUNTIME_DIR/$HOST_NAME"
@@ -108,13 +112,18 @@ EOF
 #!/bin/sh
 exec "$PYTHON" -m amberfader.app "\$@"
 EOF
+  cat > "$BINDIR/amberfader-face-editor" <<EOF
+#!/bin/sh
+exec "$PYTHON" -m amberfader.editor_app "\$@"
+EOF
 fi
 cat > "$BINDIR/amberfader-helper-flatpak" <<EOF
 #!/bin/sh
 # Re-enter the host; its launcher chooses the source helper or Flatpak app.
 exec flatpak-spawn --host "$BINDIR/amberfader-helper" "\$@"
 EOF
-chmod +x "$BINDIR/amberfader" "$BINDIR/amberfader-helper" "$BINDIR/amberfader-helper-flatpak"
+chmod +x "$BINDIR/amberfader" "$BINDIR/amberfader-helper" "$BINDIR/amberfader-helper-flatpak" \
+  "$BINDIR/amberfader-face-editor"
 
 # ---- detection -------------------------------------------------------------
 

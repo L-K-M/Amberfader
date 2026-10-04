@@ -4,11 +4,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QRect, QRectF, Qt, QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import (
     QColor,
     QDesktopServices,
-    QFont,
     QLinearGradient,
     QPainter,
     QPen,
@@ -28,27 +27,13 @@ from PySide6.QtWidgets import (
 
 from ..face_library import Face, FaceError, FaceLibrary, load_face
 from .face_surface import (
-    FONT_FAMILIES,
-    READOUT_CONTROLS,
-    TRANSPORT_CONTROLS,
-    FaceArtwork,
-    control_path,
-    draw_cover,
-    draw_slider,
-    draw_transport_icon,
-    fit_readout_font,
-    like_font_size,
-    prepare_face,
-    readout_font,
-    readout_style,
+    PREVIEW_LABELS as PREVIEW_LABELS,
 )
-
-PREVIEW_LABELS = {
-    "title": "A face for your music", "artists": "Amberfader · Face preview",
-    "time": "03:48 / 04:30", "playback": "PREVIEW", "previous": "⏮", "play": "▶",
-    "next": "⏭", "like": "♥", "search": "Search", "show": "Show YT", "hide": "Hide",
-    "menu": "☰", "minimize": "\u2212", "close": "\u00d7", "status": "Firefox keeps playing",
-}
+from .face_surface import (
+    FaceArtwork,
+    draw_face_preview,
+    prepare_face,
+)
 
 
 class FacePreview(QWidget):
@@ -85,88 +70,20 @@ class FacePreview(QWidget):
             (self.height() - face.size[1] * scale) / 2,
         )
         painter.scale(scale, scale)
-        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        painter.drawPixmap(QRect(0, 0, *face.size), artwork.background)
-        p = face.palette
-        for name, coordinates in face.controls.items():
-            rect = QRect(*coordinates)
-            painter.setPen(QColor(p["readout"]))
-            if name in READOUT_CONTROLS:
-                font = readout_font(face, name)
-            else:
-                font = QFont(FONT_FAMILIES[face.font])
-                font.setPixelSize(like_font_size(face) if name == "like" else 12)
-            if name == "time":
-                font = fit_readout_font(font, PREVIEW_LABELS["time"], rect)
-            painter.setFont(font)
-            if name == "art":
-                draw_cover(
-                    painter, self._cover, QRectF(rect), face.control_shapes.get("art", "rectangle"),
-                    face.radius, face.cover_glass,
-                )
-                continue
-            if name in ("seek", "volume"):
-                if face.slider_style == "inset":
-                    groove = QRectF(rect.x(), rect.y() + (rect.height() - 4) / 2, rect.width(), 4)
-                    # The 12px QSS handle has a 1px border on either side.
-                    handle = QRectF(
-                        rect.center().x() - 6, rect.y() + (rect.height() - 14) / 2, 14, 14,
-                    )
-                    draw_slider(painter, groove, handle, p)
-                    continue
-                groove = rect.adjusted(4, rect.height() // 2 - 2, -4, -(rect.height() // 2 - 2))
-                painter.fillRect(groove, QColor(p["display"]))
-                groove.setWidth(groove.width() // 2)
-                painter.fillRect(groove, QColor(p["accent"]))
-                continue
-            button = name in (
-                "previous", "play", "next", "like", "search", "show", "hide", "menu",
-                "minimize", "close",
-            )
-            if button:
-                painter.save()
-                painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-                path = control_path(
-                    QRectF(rect), face.control_shapes.get(name, "rectangle"), face.radius,
-                )
-                painter.setClipPath(path, Qt.ClipOperation.IntersectClip)
-                if name in artwork.buttons:
-                    painter.drawPixmap(rect, artwork.buttons[name]["normal"])
-                else:
-                    gradient = QLinearGradient(rect.topLeft(), rect.bottomLeft())
-                    gradient.setColorAt(0, QColor(p["buttonTop"]))
-                    gradient.setColorAt(1, QColor(p["buttonBottom"]))
-                    painter.setBrush(gradient)
-                    painter.setPen(QColor(p["border"]))
-                    painter.drawPath(path)
-                painter.restore()
-                painter.setPen(QColor(p["text"]))
-            elif name == "status":
-                painter.setPen(QColor(p["muted"]))
-            if name in TRANSPORT_CONTROLS:
-                draw_transport_icon(painter, name, PREVIEW_LABELS[name], rect, QColor(p["text"]))
-                continue
-            text = PREVIEW_LABELS.get(name, "")
-            if name != "time":
-                text = painter.fontMetrics().elidedText(
-                    text, Qt.TextElideMode.ElideRight, rect.width()
-                )
-            alignment = (
-                readout_style(face, name).alignment if name in READOUT_CONTROLS
-                else Qt.AlignmentFlag.AlignCenter
-            )
-            painter.drawText(rect, alignment, text)
+        draw_face_preview(painter, face, artwork, self._cover)
 
 
 class FacesWindow(QDialog):
     def __init__(
-        self, library: FaceLibrary, choose: Callable[[str], None], parent: QWidget
+        self, library: FaceLibrary, choose: Callable[[str], None], parent: QWidget,
+        *, edit: Callable[[str], None] | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Amberfader · Faces")
         self.resize(760, 540)
         self._library = library
         self._choose = choose
+        self._edit = edit
         self._selected: str | None = None
         self._list = QListWidget(self)
         self._list.setMinimumWidth(180)
@@ -178,6 +95,10 @@ class FacesWindow(QDialog):
         self._status.setWordWrap(True)
         self._status.setTextFormat(Qt.TextFormat.PlainText)
         self._apply = QPushButton("Use face", self)
+        self._edit_button = QPushButton("Edit a copy…", self)
+        self._edit_button.setObjectName("editFace")
+        self._edit_button.setVisible(edit is not None)
+        self._edit_button.setEnabled(False)
         install = QPushButton("Install face folder…", self)
         folder = QPushButton("Open faces folder", self)
         close = QPushButton("Close", self)
@@ -194,7 +115,7 @@ class FacesWindow(QDialog):
         root.addLayout(body, 1)
         root.addWidget(self._status)
         buttons = QHBoxLayout()
-        for button in (install, folder):
+        for button in (install, folder, self._edit_button):
             buttons.addWidget(button)
         buttons.addStretch(1)
         buttons.addWidget(self._apply)
@@ -204,6 +125,7 @@ class FacesWindow(QDialog):
         self._list.currentItemChanged.connect(self._preview_item)
         self._list.itemActivated.connect(lambda _: self._use_face())
         self._apply.clicked.connect(self._use_face)
+        self._edit_button.clicked.connect(self._edit_copy)
         install.clicked.connect(self._install)
         folder.clicked.connect(self._open_folder)
         close.clicked.connect(self.close)
@@ -222,6 +144,7 @@ class FacesWindow(QDialog):
     def _preview_item(self, item: QListWidgetItem | None, previous=None) -> None:
         self._selected = None
         self._apply.setEnabled(False)
+        self._edit_button.setEnabled(False)
         if item is None:
             return
         try:
@@ -232,8 +155,13 @@ class FacesWindow(QDialog):
             )
             self._selected = face.info.id
             self._apply.setEnabled(True)
+            self._edit_button.setEnabled(self._edit is not None)
         except FaceError as exc:
             self._status.setText(str(exc))
+
+    def _edit_copy(self) -> None:
+        if self._selected is not None and self._edit is not None:
+            self._edit(self._selected)
 
     def _use_face(self) -> None:
         if self._selected is None:
