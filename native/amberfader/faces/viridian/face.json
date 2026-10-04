@@ -7,7 +7,7 @@
   "background": "background.png",
   "font": "sans",
   "size": [440, 440],
-  "drag": [170, 51, 128, 18],
+  "drag": [181, 102, 112, 18],
   "timeSize": 26,
   "radius": 10,
   "palette": {
@@ -24,6 +24,14 @@
     "danger": "#7d201d"
   },
   "coverGlass": true,
+  "sliderStyle": "inset",
+  "readoutStyles": {
+    "title": {"align": "center", "font": "mono", "size": 12, "bold": true},
+    "artists": {"align": "center", "font": "mono", "size": 11, "bold": false},
+    "time": {"align": "center", "font": "mono", "size": 24, "bold": false},
+    "playback": {"align": "center", "font": "mono", "size": 10, "bold": false},
+    "status": {"align": "center", "font": "mono", "size": 10, "bold": false}
+  },
   "controlShapes": {
     "art": "ellipse",
     "previous": "ellipse",
@@ -39,23 +47,23 @@
   },
   "controls": {
     "art": [36, 193, 48, 48],
-    "title": [146, 144, 206, 24],
-    "artists": [132, 174, 238, 20],
-    "time": [132, 204, 234, 36],
-    "playback": [214, 244, 112, 18],
-    "status": [168, 270, 178, 18],
-    "seek": [158, 294, 186, 18],
-    "volume": [183, 352, 80, 18],
-    "previous": [67, 288, 30, 30],
-    "play": [103, 322, 42, 42],
-    "next": [151, 360, 30, 30],
-    "like": [315, 342, 40, 30],
-    "search": [183, 378, 58, 24],
-    "show": [243, 372, 72, 24],
-    "hide": [330, 313, 54, 24],
-    "menu": [85, 115, 22, 22],
-    "minimize": [61, 141, 22, 22],
-    "close": [47, 166, 22, 22]
+    "title": [154, 131, 192, 20],
+    "artists": [126, 157, 248, 18],
+    "time": [139, 181, 222, 34],
+    "playback": [176, 219, 148, 18],
+    "status": [130, 241, 240, 18],
+    "seek": [141, 269, 218, 18],
+    "volume": [197, 304, 106, 18],
+    "previous": [66, 272, 30, 30],
+    "play": [108, 338, 38, 38],
+    "next": [197, 363, 30, 30],
+    "like": [296, 346, 40, 30],
+    "search": [138, 60, 60, 22],
+    "show": [210, 38, 64, 22],
+    "hide": [260, 64, 48, 22],
+    "menu": [96, 102, 22, 22],
+    "minimize": [73, 128, 22, 22],
+    "close": [55, 154, 22, 22]
   },
   "buttons": {
     "previous": {

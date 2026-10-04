@@ -24,6 +24,12 @@
     "danger": "#ffb59a"
   },
   "coverGlass": true,
+  "sliderStyle": "inset",
+  "readoutStyles": {
+    "title": {"size": 14},
+    "playback": {"align": "right", "size": 11},
+    "status": {"size": 11}
+  },
   "controlShapes": {
     "art": "ellipse",
     "previous": "ellipse",
@@ -44,7 +50,7 @@
     "time": [230, 144, 220, 32],
     "playback": [470, 151, 86, 20],
     "status": [230, 180, 326, 18],
-    "seek": [232, 208, 344, 18],
+    "seek": [232, 208, 308, 18],
     "previous": [60, 222, 34, 28],
     "play": [104, 218, 48, 38],
     "next": [164, 224, 34, 28],

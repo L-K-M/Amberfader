@@ -63,6 +63,10 @@ class Face:
     buttons: MappingProxyType[str, MappingProxyType[str, bytes]]
     control_shapes: MappingProxyType[str, str] = field(default_factory=lambda: MappingProxyType({}))
     cover_glass: bool = False
+    readout_styles: MappingProxyType[str, MappingProxyType[str, Any]] = field(
+        default_factory=lambda: MappingProxyType({}),
+    )
+    slider_style: str = "classic"
 
 
 def _read_bounded(path: Path, limit: int) -> bytes:
@@ -223,6 +227,11 @@ def load_face(directory: Path) -> Face:
             }),
             control_shapes=MappingProxyType(data.get("controlShapes", {})),
             cover_glass=data.get("coverGlass", False),
+            readout_styles=MappingProxyType({
+                name: MappingProxyType(style)
+                for name, style in data.get("readoutStyles", {}).items()
+            }),
+            slider_style=data.get("sliderStyle", "classic"),
         )
     except (OSError, ValueError, RecursionError, struct.error) as exc:
         raise FaceError(str(exc)) from exc

@@ -24,6 +24,13 @@
     "danger": "#8d2b23"
   },
   "coverGlass": true,
+  "sliderStyle": "inset",
+  "readoutStyles": {
+    "title": {"size": 14},
+    "artists": {"align": "right"},
+    "playback": {"align": "right", "font": "mono", "size": 11},
+    "status": {"align": "right", "size": 11}
+  },
   "controlShapes": {
     "art": "ellipse",
     "previous": "ellipse",
@@ -41,10 +48,10 @@
     "art": [29, 153, 60, 60],
     "title": [166, 124, 204, 22],
     "artists": [380, 124, 120, 22],
-    "time": [166, 154, 222, 34],
+    "time": [166, 146, 222, 30],
     "playback": [402, 150, 94, 18],
     "status": [402, 174, 94, 18],
-    "seek": [164, 192, 132, 18],
+    "seek": [208, 178, 184, 18],
     "previous": [112, 220, 36, 26],
     "play": [156, 212, 48, 36],
     "next": [212, 220, 36, 26],

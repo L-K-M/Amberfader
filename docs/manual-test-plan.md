@@ -116,11 +116,18 @@ tests verify rendering and state preservation, not compositor integration.
   On Aureole and Viridian, check that covers fill their circular sockets and
   leave the original bezel visible. Focus and pending outlines follow the
   button shapes; clicking a transparent button corner does not issue a command.
-  Drag the empty metal rim, and open Cover view to see the complete image.
+  Check that utility/transport controls stay inside the metal panels and both
+  sliders stay on the glass. Viridian's five readouts share the screen center;
+  Aureole's readouts form a centered group in its oval. Check normal and long
+  metadata, including unknown/pending/offline states. Open Cover view to see
+  the complete image.
 - Drag the header or empty metal drag region. Check that transparent cutouts do not intercept
   clicks, and that minimize, close, and second-instance activation work.
 - Repeat with `--scale 1.0`, `--scale 1.5`, and `--scale 2.0`, including a small
-  display. All controls must remain reachable.
+  display. All controls must remain reachable, and fonts/slider endpoints must
+  stay inside the same panel. Drag the declared empty area, including the
+  upper empty glass on Viridian. Switch between centered and left-aligned
+  faces; their typography must reset without changing playback.
 - Switch faces while playing, while a like request is pending, and with search
   results open. Playback and queries must remain intact; the heart must wait
   for reported state; recents, play-result, and **Start mix** must still work.
