@@ -3,6 +3,7 @@ import pytest
 
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 
+from PySide6.QtCore import QPoint
 from PySide6.QtGui import QColor, QImage, QPalette, QPixmap
 from PySide6.QtWidgets import QWidget
 
@@ -132,3 +133,28 @@ def test_like_heart_scales_with_its_button(size, expected):
     controls = dict(face.controls)
     controls["like"] = (212, 198, *size)
     assert like_font_size(replace(face, controls=MappingProxyType(controls))) == expected
+
+
+def test_pending_outline_follows_rounded_corners_of_rectangular_buttons(button):
+    from PySide6.QtGui import QPalette
+
+    surface = QPixmap(2, 2)
+    surface.fill(QColor("#000000"))
+    button.setObjectName("like")
+    button.resize(40, 30)
+    button.set_sprites({"normal": surface})
+    # v1 and unshaped buttons keep rectangular hit areas but rounded surfaces.
+    button.set_shape("rectangle", 8)
+    palette = button.palette()
+    palette.setColor(QPalette.ColorRole.Highlight, QColor("#ff0000"))
+    button.setPalette(palette)
+    button.setProperty("pending", True)
+    image = button.grab().toImage()
+
+    def red(x, y):
+        color = logical_pixel(image, x, y)
+        return color.red() > 128 and color.green() < 64
+
+    assert any(red(x, 2) for x in range(14, 26))
+    assert not red(2, 2) and not red(37, 27)
+    assert button.hitButton(QPoint(1, 1))

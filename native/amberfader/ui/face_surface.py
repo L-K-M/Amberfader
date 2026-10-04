@@ -459,9 +459,14 @@ class FaceButton(KeyboardFocusRing, QPushButton):
         return path.contains(QPointF(position))
 
     def _indicator_path(self) -> QPainterPath:
-        return control_path(
-            QRectF(self.rect()).adjusted(2, 2, -2, -2), self._shape, self._radius,
-        )
+        # Half-pixel insets keep the antialiased 1 px dashes on pixel centers.
+        inner = QRectF(self.rect()).adjusted(2.5, 2.5, -2.5, -2.5)
+        if self._shape != "rectangle":
+            return control_path(inner, self._shape, self._radius)
+        # Rectangular controls keep square hit areas, but their surfaces use the
+        # face radius (as the generated stylesheet does), so follow those corners.
+        corner = max(0.0, min(self._radius, self.width() / 2 - 1, self.height() / 2 - 1) - 2)
+        return control_path(inner, "rounded", corner)
 
     def set_sprites(self, sprites: dict[str, QPixmap]) -> None:
         self._sprites = sprites
@@ -504,6 +509,7 @@ class FaceButton(KeyboardFocusRing, QPushButton):
             painter.setPen(color)
             painter.drawText(label_rect, Qt.AlignmentFlag.AlignCenter, self.text())
         if self.focus_ring_visible() or self.property("pending"):
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             painter.setPen(QPen(self.palette().highlight().color(), 1, Qt.PenStyle.DashLine))
             painter.drawPath(self._indicator_path())
 
