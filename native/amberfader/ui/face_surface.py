@@ -210,6 +210,17 @@ class KeyboardFocusRing:
             self._keyboard_focus = False
         super().focusInEvent(event)
 
+    def mousePressEvent(self, event) -> None:
+        self._drop_keyboard_ring()
+        super().mousePressEvent(event)
+
+    def _drop_keyboard_ring(self) -> None:
+        # Clicking the focused control moves no focus, so no focus-in event
+        # reports the pointer; overrides that skip super() must call this.
+        if self._keyboard_focus:
+            self._keyboard_focus = False
+            self.update()
+
     def focus_ring_visible(self) -> bool:
         return self.hasFocus() and self._keyboard_focus
 
@@ -466,7 +477,8 @@ def draw_transport_icon(
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setPen(Qt.PenStyle.NoPen)
     painter.setBrush(color)
-    # QRect.center() rounds down, which shifts glyphs on even-sized buttons.
+    # QRect.center() rounds (left + right) / 2 down: 1 px up and left on
+    # even-sized buttons (19 for 0..39) and 0.5 px on odd-sized ones.
     painter.translate(QRectF(rect).center())
     size = min(rect.width(), rect.height()) * 0.42
     painter.scale(size, size)
@@ -542,7 +554,7 @@ class CoverLabel(KeyboardFocusRing, QLabel):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             painter.setPen(QPen(self.palette().highlight().color(), 1, Qt.PenStyle.DashLine))
             painter.drawPath(control_path(
-                QRectF(self.rect()).adjusted(2, 2, -2, -2), self._shape, self._radius,
+                QRectF(self.rect()).adjusted(2.5, 2.5, -2.5, -2.5), self._shape, self._radius,
             ))
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
@@ -551,6 +563,7 @@ class CoverLabel(KeyboardFocusRing, QLabel):
             and self._cover_path().contains(event.position())
         )
         if self._pressed:
+            self._drop_keyboard_ring()
             self.setFocus(Qt.FocusReason.MouseFocusReason)
             event.accept()
             return

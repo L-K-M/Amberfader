@@ -71,9 +71,10 @@ def test_pointer_and_window_focus_draw_no_ring(player, qapp, name, reason):
 
 
 @pytest.mark.parametrize("name", FOCUSABLE)
-@pytest.mark.parametrize(
-    "reason", (Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason),
-)
+@pytest.mark.parametrize("reason", (
+    Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason,
+    Qt.FocusReason.ShortcutFocusReason,
+))
 def test_keyboard_focus_ring_survives_restored_focus(player, qapp, name, reason):
     window, sent = player
     window.select_face("orbit-99")
@@ -85,14 +86,38 @@ def test_keyboard_focus_ring_survives_restored_focus(player, qapp, name, reason)
     focused = widget.grab().toImage()
     assert focused != unfocused
 
-    # Qt reports window reactivation as ActiveWindowFocusReason; restoring
-    # focus with that reason must not change how it arrived.
-    widget.clearFocus()
-    widget.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
-    qapp.processEvents()
-    assert widget.grab().toImage() == focused
+    # Window reactivation and closed popups or menus restore focus; that must
+    # not change how it arrived.
+    for restored in (
+        Qt.FocusReason.ActiveWindowFocusReason, Qt.FocusReason.PopupFocusReason,
+        Qt.FocusReason.MenuBarFocusReason,
+    ):
+        widget.clearFocus()
+        widget.setFocus(restored)
+        qapp.processEvents()
+        assert widget.grab().toImage() == focused, restored
 
     # A later pointer focus hides the ring again.
     _focus(qapp, window, widget, Qt.FocusReason.MouseFocusReason)
     assert widget.grab().toImage() == unfocused
+    assert sent == []
+
+
+@pytest.mark.parametrize("name", ("art", "search", "seek"))
+def test_pointer_press_on_keyboard_focused_control_hides_the_ring(player, qapp, name):
+    from PySide6.QtCore import QPoint
+    from PySide6.QtTest import QTest
+
+    window, sent = player
+    window.select_face("orbit-99")
+    widget = window._controls[name]
+    _focus(qapp, window, widget, Qt.FocusReason.TabFocusReason)
+    assert widget.focus_ring_visible()
+    # Focus stays put, so no focus-in event reports the pointer.
+    QTest.mousePress(widget, Qt.MouseButton.LeftButton, pos=widget.rect().center())
+    assert widget.hasFocus()
+    assert not widget.focus_ring_visible()
+    # Releasing outside the control cancels the click without a command.
+    QTest.mouseRelease(widget, Qt.MouseButton.LeftButton, pos=QPoint(-40, -40))
+    qapp.processEvents()
     assert sent == []
