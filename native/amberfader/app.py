@@ -10,12 +10,14 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from collections.abc import Callable
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from . import PROTOCOL_VERSION
 from .face_library import FaceError
+from .hosts import HOST_COPY, PlaybackHost
 from .protocol import validate_message
 from .transport.local import (
     FramedSocket,
@@ -34,6 +36,7 @@ SEARCH_DEADLINE_MS = 15000
 MAX_PENDING = 64
 BINDING_METHOD_PREFIXES = ("player.", "search.", "browser.")
 UNBOUND_SEARCH_METHODS = frozenset(("search.history", "search.clearHistory"))
+WINDOW_METHODS = frozenset(("browser.showPlayer", "browser.hidePlayer"))
 
 
 def _requires_binding(method: str) -> bool:
@@ -53,14 +56,28 @@ class AmberfaderApp:
     process already owns the socket path (second-instance semantics live in
     main(): it activates the existing window and exits instead)."""
 
-    def __init__(self, socket_path: str, scale: float = 1.0) -> None:
+    def __init__(
+        self,
+        socket_path: str,
+        scale: float = 1.0,
+        host: PlaybackHost = PlaybackHost.FIREFOX,
+        show_page: Callable[[bool], bool] | None = None,
+    ) -> None:
         from PySide6.QtWidgets import QApplication
 
         self.app = QApplication.instance()
         if self.app is None:
             raise RuntimeError("AmberfaderApp requires a QApplication")
+        # The embedded page window is local to this process: showing it must
+        # work before any page is bound (for example to sign in), so it never
+        # becomes a bound protocol request.
+        if (host is PlaybackHost.EMBEDDED) != (show_page is not None):
+            raise ValueError("show_page is required for, and only for, the embedded host")
         self.socket_path = socket_path
         self._scale = scale
+        self._host = host
+        self._copy = HOST_COPY[host]
+        self._show_page = show_page
         self.server = LocalServer(socket_path)
         self.window: MainWindow | None = None
         self.conn: FramedSocket | None = None
@@ -79,11 +96,15 @@ class AmberfaderApp:
         from .ui.main_window import MainWindow
 
         try:
-            self.window = MainWindow(self.request, scale=self._scale)
+            self.window = MainWindow(self.request, scale=self._scale, host=self._host)
         except FaceError:
             self.server.close()
             raise
-        self.server.helperConnected.connect(self._on_helper)
+        if self._host is PlaybackHost.FIREFOX:
+            self.server.helperConnected.connect(self._on_helper)
+        else:
+            # The embedded socket only serves single-instance activation.
+            self.server.helperConnected.connect(lambda s: s.socket.disconnectFromServer())
         self.server.activationRequested.connect(self._on_activation)
         self.server.invalidPeer.connect(lambda s: s.socket.disconnectFromServer())
         self.window.show()
@@ -100,11 +121,15 @@ class AmberfaderApp:
     def request(self, method: str, params: dict) -> None:
         if self.window is None:
             return
+        if self._show_page is not None and method in WINDOW_METHODS:
+            changed = self._show_page(method == "browser.showPlayer")
+            self.window.route_response(method, changed, {} if changed else {
+                "message": "Could not change the YouTube Music window.",
+            })
+            return
         needs_binding = _requires_binding(method)
         if needs_binding and (self._session_id is None or self._binding_token is None):
-            self.window.route_response(method, False, {
-                "message": "Playback tab is not connected. Reconnect in the extension options.",
-            })
+            self.window.route_response(method, False, {"message": self._copy.unbound})
             return
         if len(self._pending) >= MAX_PENDING:
             self.window.show_status("Too many requests in flight", error=True)
@@ -135,7 +160,7 @@ class AmberfaderApp:
         }
         timer.start(deadline)
         if not self._send(msg):
-            self._settle(rid, False, {"message": "Firefox bridge is not connected"})
+            self._settle(rid, False, {"message": self._copy.not_connected})
 
     def _on_timeout(self, rid: str, method: str) -> None:
         # A timeout does not prove the operation never ran — report
@@ -156,12 +181,18 @@ class AmberfaderApp:
             }
             if validate_message(snapshot):
                 ok = False
-                payload = {"message": "Firefox returned an invalid player snapshot."}
+                payload = {"message": self._copy.invalid_snapshot}
             else:
                 self.window.apply_state(payload)
         self.window.route_response(entry["method"], ok, payload)
 
     # ---- inbound wiring ---------------------------------------------------
+
+    def attach_upstream(self, upstream: FramedSocket) -> None:
+        """Attach an in-process upstream instead of a helper socket. It must
+        offer FramedSocket's interface: send(), messageReceived and
+        disconnected."""
+        self._on_helper(upstream)
 
     def _on_helper(self, sock: FramedSocket) -> None:
         self._state_epoch += 1
@@ -171,7 +202,7 @@ class AmberfaderApp:
         sock.messageReceived.connect(self._on_message)
         sock.disconnected.connect(self._on_helper_gone)
         if self.window is not None:
-            self.window.show_status("Firefox connected")
+            self.window.show_status(self._copy.connected)
         self.request("state.get", {})
 
     def _on_helper_gone(self) -> None:
@@ -180,7 +211,7 @@ class AmberfaderApp:
         self._session_id = self._binding_token = None
         self._binding_state = _BindingState.UNKNOWN
         for rid in list(self._pending):
-            self._settle(rid, False, {"message": "Firefox bridge disconnected"})
+            self._settle(rid, False, {"message": self._copy.disconnected})
         if self.window is not None:
             self.window.set_connection("gui", "disconnected", "helper socket closed")
 

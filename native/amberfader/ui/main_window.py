@@ -11,7 +11,16 @@ from collections import OrderedDict
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QBuffer, QByteArray, QElapsedTimer, QIODevice, QPoint, Qt, QTimer
+from PySide6.QtCore import (
+    QBuffer,
+    QByteArray,
+    QElapsedTimer,
+    QIODevice,
+    QPoint,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import QImageReader, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
@@ -22,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..face_library import BUNDLED_FACE_ERROR, DEFAULT_FACE_ID, Face, FaceError, FaceLibrary
+from ..hosts import HOST_COPY, PlaybackHost
 from .face_surface import (
     READOUT_CONTROLS,
     CoverLabel,
@@ -55,14 +65,20 @@ def _fmt(sec: Any) -> str:
 
 
 class MainWindow(QMainWindow):
+    # Emitted after the player closes. The embedded host quits on it, since
+    # its playback lives in this process.
+    closed = Signal()
+
     def __init__(
         self,
         request: Callable[[str, dict], None],
         scale: float = 1.0,
         faces: FaceLibrary | None = None,
+        host: PlaybackHost = PlaybackHost.FIREFOX,
     ) -> None:
         super().__init__()
         self._request = request
+        self._copy = HOST_COPY[host]
         self._state: dict | None = None
         self._state_at = QElapsedTimer()
         self._seeking = False
@@ -92,7 +108,7 @@ class MainWindow(QMainWindow):
         self._artwork_cache_bytes = 0
         self._title = ElidedLabel("Nothing selected", self._surface)
         self._title.setObjectName("title")
-        self._artists = ElidedLabel("Waiting for Firefox…", self._surface)
+        self._artists = ElidedLabel(self._copy.waiting, self._surface)
         self._artists.setObjectName("artists")
         self._time = ReadoutLabel("–:–– / –:––", self._surface)
         self._time.setObjectName("time")
@@ -116,11 +132,11 @@ class MainWindow(QMainWindow):
         self._vol.setToolTip("Volume")
         self._vol.setAccessibleName("Volume")
         self._btn_search = self._button("Search", "Search songs (Ctrl+F)")
-        self._btn_show = self._button("Show YT", "Show the YouTube Music tab")
-        self._btn_hide = self._button("Hide", "Hide the playback tab (opt-in)")
+        self._btn_show = self._button("Show YT", self._copy.show_tip)
+        self._btn_hide = self._button("Hide", self._copy.hide_tip)
         self._btn_menu = self._button("☰", "Menu and Faces (Ctrl+,)")
         self._btn_minimize = self._button("\u2212", "Minimize")
-        self._btn_close = self._button("\u00d7", "Close Amberfader; music keeps playing")
+        self._btn_close = self._button("\u00d7", self._copy.close_tip)
 
         self._status = ElidedLabel("", self._surface)
         self._status.setObjectName("status")
@@ -192,7 +208,7 @@ class MainWindow(QMainWindow):
         elif self._faces.problems:
             self.show_status("Some faces could not load. Open Faces for details.", error=True)
         else:
-            self.show_status("Waiting for Firefox…")
+            self.show_status(self._copy.waiting)
 
     def _button(self, text: str, description: str) -> FaceButton:
         button = FaceButton(text, self._surface)
@@ -207,6 +223,8 @@ class MainWindow(QMainWindow):
             if window is not None:
                 window.close()
         super().closeEvent(event)
+        if event.isAccepted():
+            self.closed.emit()
 
     # ---- appearance ------------------------------------------------------
 
@@ -338,7 +356,7 @@ class MainWindow(QMainWindow):
             self._artists.setToolTip(sub)
         else:
             self._title.setText("Nothing selected")
-            self._artists.setText("Waiting for Firefox…")
+            self._artists.setText(self._copy.waiting)
             self._artists.setToolTip("")
         self._restore_cover(track)
 
@@ -441,9 +459,9 @@ class MainWindow(QMainWindow):
                 self._search.mark_stale()
 
         if component == "gui" and status == "disconnected":
-            self.show_status("Disconnected from Firefox bridge", error=True)
+            self.show_status(self._copy.lost_status, error=True)
         elif component == "target" and status != "connected":
-            self.show_status(reason or "Playback tab disconnected", error=True)
+            self.show_status(reason or self._copy.target_lost, error=True)
 
     def binding_changed(self) -> None:
         """Disable occurrence-bound actions until a fresh target state arrives."""

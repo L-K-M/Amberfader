@@ -72,6 +72,22 @@ Restart the browser and desktop app after updating.
   YouTube Music action menu and activates its **Start mix** link. An unavailable
   control or unconfirmed outcome is reported instead of retried.
 
+## Embedded prototype (experimental)
+
+A prototype hosts YouTube Music in Amberfader's own QtWebEngine window instead
+of Firefox, with no extension or native-messaging setup. It runs from a
+checkout only:
+
+```sh
+npm ci
+uv sync --extra gui --extra embedded
+npm run embedded:run
+```
+
+Whether this replaces the Firefox integration depends on a manual gate,
+starting with whether Google accepts sign-in from QtWebEngine. See
+[Embedded prototype](docs/embedded-prototype.md).
+
 ## Linux Faces
 
 In the native app, choose **☰ → Faces…** or press **Ctrl+,**. Eighteen original
