@@ -56,6 +56,11 @@ GROUP_REPRESENTATIVES = {
     "transport": "previous", "play": "play", "utility": "show", "chrome": "menu",
 }
 BUTTON_STATES = ("normal", "hover", "pressed", "disabled")
+EXPORTED_SPRITES = frozenset(
+    f"{family}-{state}.png"
+    for family in {*BUTTON_GROUPS, *BUTTON_GROUPS.values()}
+    for state in BUTTON_STATES
+)
 
 
 def _rounded(rect: QRectF, radius: float) -> QPainterPath:
@@ -423,10 +428,13 @@ def main() -> None:
             name: {state: f"{family}-{state}.png" for state in BUTTON_STATES}
             for name, family in families.items()
         }
-        if face.get("buttons") != expected_buttons:
+        declared_buttons = face.get("buttons", {})
+        if declared_buttons != expected_buttons:
             wrong = sorted(
                 f"{name} -> {family}-*.png" for name, family in families.items()
-                if face.get("buttons", {}).get(name) != expected_buttons[name]
+                if declared_buttons.get(name) != expected_buttons[name]
+            ) + sorted(
+                f"no sprites for {name}" for name in declared_buttons.keys() - families.keys()
             )
             raise RuntimeError(f"{face['id']}: declare button sprites as {'; '.join(wrong)}")
         background = render_background(face)
@@ -442,13 +450,11 @@ def main() -> None:
             for state in BUTTON_STATES:
                 image = render_button(face, BUTTON_GROUPS[control], state, control)
                 _save(image, manifest.with_name(f"{family}-{state}.png"))
-        # Drop surfaces a previous layout declared, so packs ship only used files.
-        declared = {"background.png"} | {
-            file for states in expected_buttons.values() for file in states.values()
-        }
-        for stale in sorted(manifest.parent.glob("*.png")):
-            if stale.name not in declared:
-                stale.unlink()
+        # Drop surfaces a previous layout declared, so packs ship only used
+        # files. Never touch files this exporter cannot have written.
+        declared = {file for states in expected_buttons.values() for file in states.values()}
+        for stale in sorted(EXPORTED_SPRITES - declared):
+            manifest.with_name(stale).unlink(missing_ok=True)
         print(
             f"{face['id']}: {background.width()}x{background.height()}, all control regions opaque"
         )
