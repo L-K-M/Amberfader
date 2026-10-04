@@ -15,6 +15,11 @@ dependencies = [
 gui = [
     "PySide6-Essentials>=6.8,<7",
 ]
+# Embedded QtWebEngine prototype (python -m amberfader.embedded). Adds
+# Chromium through Qt WebEngine; the Firefox-mode packages do not use it.
+embedded = [
+    "PySide6-Addons>=6.8,<7",
+]
 
 [project.scripts]
 amberfader = "amberfader.app:main"

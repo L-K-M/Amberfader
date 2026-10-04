@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Experimental embedded QtWebEngine prototype (`npm run embedded:run`):
+  YouTube Music in Amberfader's own window, driven by the unchanged site
+  adapter through an in-process router. Requires the new `embedded` extra.
+  Pending a manual gate; see docs/embedded-prototype.md.
 - CI now repacks the .deb as a Flatpak bundle and smoke-checks the installed
   app in the real runtime (command exists in /app/bin; QApplication import
   probe loads the full PySide6/Qt chain). release.yml installs
