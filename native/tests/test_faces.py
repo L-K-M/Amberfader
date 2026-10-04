@@ -48,8 +48,8 @@ def make_pack(tmp_path):
     data.update(id="my-face", name="My Face", formatVersion=1)
     # This fixture exercises a minimal pack; sprite tests add their own assets.
     data.pop("buttons", None)
-    data.pop("controlShapes", None)
-    data.pop("coverGlass", None)
+    for key in ("controlShapes", "coverGlass", "readoutStyles", "sliderStyle"):
+        data.pop(key, None)
     (directory / "face.json").write_text(json.dumps(data))
     (directory / "background.png").write_bytes(png(*data["size"]))
     return directory, data

@@ -115,13 +115,18 @@ def test_readout_styles_survive_install_and_restart_as_readonly_data(styled_pack
 def test_readout_styles_reset_to_legacy_defaults_after_face_switch(styled_pack, qapp, tmp_path):
     from PySide6.QtCore import Qt
 
-    from amberfader.face_library import DEFAULT_FACE_ID
     from amberfader.ui.face_surface import FONT_FAMILIES
     from amberfader.ui.main_window import MainWindow
 
     directory, _ = styled_pack
     library = FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json")
     info = library.install(directory)
+    # A plain pack, so the reset does not depend on bundled face presentation.
+    (tmp_path / "plain").mkdir()
+    plain_directory, plain_data = make_pack(tmp_path / "plain")
+    plain_data.update(id="plain-face", name="Plain Face")
+    (plain_directory / "face.json").write_text(json.dumps(plain_data))
+    plain = library.install(plain_directory)
     sent = []
     window = MainWindow(lambda method, params: sent.append((method, params)), faces=library)
     original = dict(window._controls)
@@ -140,9 +145,9 @@ def test_readout_styles_reset_to_legacy_defaults_after_face_switch(styled_pack, 
             assert label.font().pixelSize() == style["size"]
             assert label.font().bold() == style.get("bold", False)
 
-        window.select_face(DEFAULT_FACE_ID)
+        window.select_face(plain.id)
         qapp.processEvents()
-        classic = library.load(DEFAULT_FACE_ID)
+        classic = library.load(plain.id)
         for name in READOUT_STYLES:
             label = window._controls[name]
             label.ensurePolished()
@@ -197,6 +202,8 @@ def test_picker_and_native_paint_identical_readout_typography(
 
     directory, data = styled_pack
     data["controls"]["time"][2:] = [140, 26]
+    # Room for PREVIEW in 15 px serif, so neither painter elides the sample.
+    data["controls"]["playback"] = [416, 145, 96, 20]
     data["readoutStyles"]["time"]["size"] = 36
     (directory / "face.json").write_text(json.dumps(data))
     library = FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json")
