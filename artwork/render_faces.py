@@ -55,6 +55,7 @@ READOUT_CONTROLS = frozenset({"title", "artists", "time", "playback", "status"})
 GROUP_REPRESENTATIVES = {
     "transport": "previous", "play": "play", "utility": "show", "chrome": "menu",
 }
+BUTTON_STATES = ("normal", "hover", "pressed", "disabled")
 
 
 def _rounded(rect: QRectF, radius: float) -> QPainterPath:
@@ -313,22 +314,26 @@ def _render_shaped_button(face: dict, control: str, state: str) -> QImage:
     return image
 
 
-def _mismatched_group_sizes(face: dict) -> list[str]:
-    """Each group shares one sprite, which Qt stretches onto every member."""
-    controls = face["controls"]
-    return [
-        f"{name} {controls[name][2]}x{controls[name][3]} differs from {group} sprite "
-        f"{controls[GROUP_REPRESENTATIVES[group]][2]}x{controls[GROUP_REPRESENTATIVES[group]][3]}"
-        for name, group in sorted(BUTTON_GROUPS.items())
-        if controls[name][2:] != controls[GROUP_REPRESENTATIVES[group]][2:]
-    ]
+def _sprite_family(face: dict, name: str) -> str:
+    """Name the surface a button uses; Qt stretches a sprite to its control.
 
-
-def render_button(face: dict, group: str, state: str) -> QImage:
+    Members matching their group representative's size and shape share the
+    group surface. Any other member gets its own surface, so a face can give
+    one button a different socket without distorting corners or rims.
+    """
+    group = BUTTON_GROUPS[name]
     representative = GROUP_REPRESENTATIVES[group]
+    controls, shapes = face["controls"], face.get("controlShapes", {})
+    same_size = controls[name][2:] == controls[representative][2:]
+    same_shape = shapes.get(name) == shapes.get(representative)
+    return group if same_size and same_shape else name
+
+
+def render_button(face: dict, group: str, state: str, control: str | None = None) -> QImage:
+    control = control or GROUP_REPRESENTATIVES[group]
     if face["id"] in SHAPED_FACES:
-        return _render_shaped_button(face, representative, state)
-    _, _, width, height = face["controls"][representative]
+        return _render_shaped_button(face, control, state)
+    _, _, width, height = face["controls"][control]
     image, painter = _canvas(width, height)
     p = face["palette"]
     top, bottom, edge = QColor(p["buttonTop"]), QColor(p["buttonBottom"]), QColor(p["border"])
@@ -412,19 +417,18 @@ def main() -> None:
     app = QGuiApplication.instance() or QGuiApplication([])
     for manifest in manifests:
         face = json.loads(manifest.read_text())
-        # Four shared surface families keep pack size small; host text stays live.
+        # Shared surface families keep pack size small; host text stays live.
+        families = {name: _sprite_family(face, name) for name in BUTTON_GROUPS}
         expected_buttons = {
-            name: {
-                state: f"{group}-{state}.png"
-                for state in ("normal", "hover", "pressed", "disabled")
-            }
-            for name, group in BUTTON_GROUPS.items()
+            name: {state: f"{family}-{state}.png" for state in BUTTON_STATES}
+            for name, family in families.items()
         }
         if face.get("buttons") != expected_buttons:
-            raise RuntimeError(f"{face['id']}: sprite declarations differ from the exporter")
-        mismatched = _mismatched_group_sizes(face)
-        if mismatched:
-            raise RuntimeError(f"{face['id']}: distorted shared sprites: {'; '.join(mismatched)}")
+            wrong = sorted(
+                f"{name} -> {family}-*.png" for name, family in families.items()
+                if face.get("buttons", {}).get(name) != expected_buttons[name]
+            )
+            raise RuntimeError(f"{face['id']}: declare button sprites as {'; '.join(wrong)}")
         background = render_background(face)
         bad = _translucent_regions(face, background)
         if bad:
@@ -432,9 +436,19 @@ def main() -> None:
         if _encode_png(background) != _encode_png(render_background(face)):
             raise RuntimeError(f"{face['id']}: nondeterministic export")
         _save(background, manifest.with_name("background.png"))
-        for group in sorted(set(BUTTON_GROUPS.values())):
-            for state in ("normal", "hover", "pressed", "disabled"):
-                _save(render_button(face, group, state), manifest.with_name(f"{group}-{state}.png"))
+        for family in sorted(set(families.values())):
+            # A group family renders at its representative; an own family is the button.
+            control = GROUP_REPRESENTATIVES.get(family, family)
+            for state in BUTTON_STATES:
+                image = render_button(face, BUTTON_GROUPS[control], state, control)
+                _save(image, manifest.with_name(f"{family}-{state}.png"))
+        # Drop surfaces a previous layout declared, so packs ship only used files.
+        declared = {"background.png"} | {
+            file for states in expected_buttons.values() for file in states.values()
+        }
+        for stale in sorted(manifest.parent.glob("*.png")):
+            if stale.name not in declared:
+                stale.unlink()
         print(
             f"{face['id']}: {background.width()}x{background.height()}, all control regions opaque"
         )

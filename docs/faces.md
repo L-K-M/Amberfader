@@ -215,10 +215,10 @@ inspiration-based originals, not converted Audion or Winamp assets.
 into 2x PNG backgrounds with precise alpha silhouettes, opaque readout wells,
 and normal/hover/pressed/disabled button surfaces. The player owns the text,
 symbols and actions. Re-exporting works offline and needs no API key; font
-rasterization can vary with your Qt build and installed fonts. Each button
-group shares one surface, so the exporter rejects groups whose buttons differ
-in size. Repeat `--face ID` to re-export only those packs. From a checkout
-with the GUI extra installed:
+rasterization can vary with your Qt build and installed fonts. Buttons in a
+group share one surface when they match in size and shape; any other button
+gets its own surface, so nothing is stretched out of shape. Repeat `--face ID`
+to re-export only those packs. From a checkout with the GUI extra installed:
 
 ```sh
 QT_QPA_PLATFORM=offscreen uv run python artwork/render_faces.py
