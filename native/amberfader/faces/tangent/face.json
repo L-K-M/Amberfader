@@ -44,24 +44,24 @@
     "close": "ellipse"
   },
   "controls": {
-    "art": [60, 86, 124, 124],
-    "title": [230, 90, 326, 24],
-    "artists": [230, 120, 326, 20],
-    "time": [230, 144, 220, 32],
-    "playback": [470, 151, 86, 20],
-    "status": [230, 180, 326, 18],
-    "seek": [232, 208, 308, 18],
-    "previous": [60, 222, 34, 28],
-    "play": [104, 218, 48, 38],
-    "next": [164, 224, 34, 28],
-    "like": [210, 228, 42, 26],
-    "volume": [266, 227, 80, 18],
-    "search": [358, 226, 58, 28],
-    "show": [428, 226, 78, 28],
-    "hide": [518, 226, 52, 24],
-    "menu": [594, 106, 24, 24],
-    "minimize": [594, 138, 22, 22],
-    "close": [594, 170, 22, 22]
+    "art": [56, 82, 132, 128],
+    "title": [238, 91, 319, 18],
+    "artists": [238, 111, 319, 18],
+    "time": [238, 131, 233, 28],
+    "playback": [477, 141, 80, 18],
+    "status": [238, 160, 319, 18],
+    "seek": [238, 186, 319, 18],
+    "previous": [104, 224, 40, 26],
+    "play": [148, 220, 42, 34],
+    "next": [194, 224, 40, 26],
+    "like": [238, 224, 40, 26],
+    "volume": [283, 228, 80, 18],
+    "search": [368, 224, 59, 26],
+    "show": [431, 224, 71, 26],
+    "hide": [506, 224, 44, 26],
+    "menu": [581, 95, 24, 24],
+    "minimize": [581, 127, 24, 24],
+    "close": [581, 159, 24, 24]
   },
   "buttons": {
     "previous": {
@@ -89,10 +89,10 @@
       "disabled": "play-disabled.png"
     },
     "search": {
-      "normal": "utility-normal.png",
-      "hover": "utility-hover.png",
-      "pressed": "utility-pressed.png",
-      "disabled": "utility-disabled.png"
+      "normal": "search-normal.png",
+      "hover": "search-hover.png",
+      "pressed": "search-pressed.png",
+      "disabled": "search-disabled.png"
     },
     "show": {
       "normal": "utility-normal.png",
@@ -101,10 +101,10 @@
       "disabled": "utility-disabled.png"
     },
     "hide": {
-      "normal": "utility-normal.png",
-      "hover": "utility-hover.png",
-      "pressed": "utility-pressed.png",
-      "disabled": "utility-disabled.png"
+      "normal": "hide-normal.png",
+      "hover": "hide-hover.png",
+      "pressed": "hide-pressed.png",
+      "disabled": "hide-disabled.png"
     },
     "menu": {
       "normal": "chrome-normal.png",

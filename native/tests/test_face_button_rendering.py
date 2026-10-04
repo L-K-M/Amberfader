@@ -3,6 +3,7 @@ import pytest
 
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 
+from PySide6.QtCore import QPoint
 from PySide6.QtGui import QColor, QImage, QPalette, QPixmap
 from PySide6.QtWidgets import QWidget
 
@@ -87,3 +88,73 @@ def test_minimum_width_like_keeps_unknown_marker(button):
     button.setStyleSheet(face_stylesheet(face, 1))
     button.ensurePolished()
     assert button.fontMetrics().horizontalAdvance(button.text()) + 4 <= button.width()
+
+
+def _ink_center(image: QImage) -> tuple[float, float]:
+    inked = [
+        (x, y) for y in range(image.height()) for x in range(image.width())
+        if image.pixelColor(x, y).alpha()
+    ]
+    assert inked, "transport glyph drew no ink"
+    xs, ys = [x for x, _ in inked], [y for _, y in inked]
+    return (min(xs) + max(xs) + 1) / 2, (min(ys) + max(ys) + 1) / 2
+
+
+@pytest.mark.parametrize("size", [(40, 40), (41, 41), (48, 36), (29, 24)])
+@pytest.mark.parametrize("name,text", [("previous", "⏮"), ("next", "⏭"), ("play", "⏸")])
+def test_transport_glyphs_center_their_ink_on_the_button(qapp, size, name, text):
+    from PySide6.QtCore import QRect, Qt
+    from PySide6.QtGui import QPainter
+
+    from amberfader.ui.face_surface import draw_transport_icon
+
+    image = QImage(*size, QImage.Format.Format_ARGB32)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    draw_transport_icon(painter, name, text, QRect(0, 0, *size), QColor("#000000"))
+    painter.end()
+    x, y = _ink_center(image)
+    # Antialiased edges round to whole pixels; anything beyond that is visible.
+    assert abs(x - size[0] / 2) <= 0.5, (name, size, x)
+    assert abs(y - size[1] / 2) <= 0.5, (name, size, y)
+
+
+@pytest.mark.parametrize("size,expected", [
+    ((22, 22), 12), ((28, 28), 14), ((34, 30), 15), ((40, 40), 18), ((48, 36), 18), ((60, 52), 18),
+])
+def test_like_heart_scales_with_its_button(size, expected):
+    from dataclasses import replace
+    from types import MappingProxyType
+
+    from amberfader.face_library import BUILTIN_DIRECTORY, DEFAULT_FACE_ID, load_face
+    from amberfader.ui.face_surface import like_font_size
+
+    face = load_face(BUILTIN_DIRECTORY / DEFAULT_FACE_ID)
+    controls = dict(face.controls)
+    controls["like"] = (212, 198, *size)
+    assert like_font_size(replace(face, controls=MappingProxyType(controls))) == expected
+
+
+def test_pending_outline_follows_rounded_corners_of_rectangular_buttons(button):
+    from PySide6.QtGui import QPalette
+
+    surface = QPixmap(2, 2)
+    surface.fill(QColor("#000000"))
+    button.setObjectName("like")
+    button.resize(40, 30)
+    button.set_sprites({"normal": surface})
+    # v1 and unshaped buttons keep rectangular hit areas but rounded surfaces.
+    button.set_shape("rectangle", 8)
+    palette = button.palette()
+    palette.setColor(QPalette.ColorRole.Highlight, QColor("#ff0000"))
+    button.setPalette(palette)
+    button.setProperty("pending", True)
+    image = button.grab().toImage()
+
+    def red(x, y):
+        color = logical_pixel(image, x, y)
+        return color.red() > 128 and color.green() < 64
+
+    assert any(red(x, 2) for x in range(14, 26))
+    assert not red(2, 2) and not red(37, 27)
+    assert button.hitButton(QPoint(1, 1))

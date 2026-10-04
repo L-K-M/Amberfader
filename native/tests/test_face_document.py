@@ -242,11 +242,13 @@ def test_removing_an_absent_override_does_not_add_history():
 
 def test_rotated_face_save_reopen_matches_snapshot(tmp_path):
     document = FaceDocument.from_template(TEMPLATE)
-    document.set_rotation("next", -90)
+    # A near-square window button keeps its footprint through a quarter turn,
+    # so the rotated draft stays valid whatever the template's row spacing.
+    document.set_rotation("close", -90)
     assert not document.validate()
     target = document.save(tmp_path / "rotated")
     reopened = FaceDocument.open(target)
-    assert reopened.preview().control_rotations["next"] == -90
+    assert reopened.preview().control_rotations["close"] == -90
 
 
 def test_rotation_overlap_blocks_save_but_retains_draft(tmp_path):

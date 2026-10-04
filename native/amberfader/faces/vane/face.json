@@ -7,8 +7,8 @@
   "background": "background.png",
   "font": "sans",
   "size": [640, 320],
-  "drag": [320, 202, 128, 18],
-  "timeSize": 26,
+  "drag": [360, 89, 115, 18],
+  "timeSize": 22,
   "radius": 6,
   "palette": {
     "window": "#1b2933",
@@ -26,10 +26,9 @@
   "coverGlass": true,
   "sliderStyle": "inset",
   "readoutStyles": {
-    "title": {"size": 14},
-    "artists": {"align": "right"},
+    "title": {"size": 13},
     "playback": {"align": "right", "font": "mono", "size": 11},
-    "status": {"align": "right", "size": 11}
+    "status": {"size": 11}
   },
   "controlShapes": {
     "art": "ellipse",
@@ -45,24 +44,24 @@
     "close": "ellipse"
   },
   "controls": {
-    "art": [29, 153, 60, 60],
-    "title": [166, 124, 204, 22],
-    "artists": [380, 124, 120, 22],
-    "time": [166, 146, 222, 30],
-    "playback": [402, 150, 94, 18],
-    "status": [402, 174, 94, 18],
-    "seek": [208, 178, 184, 18],
-    "previous": [112, 220, 36, 26],
-    "play": [156, 212, 48, 36],
-    "next": [212, 220, 36, 26],
-    "like": [256, 220, 40, 26],
-    "volume": [304, 226, 80, 18],
-    "search": [394, 220, 66, 26],
-    "show": [468, 214, 74, 26],
-    "hide": [550, 210, 50, 26],
-    "menu": [120, 137, 26, 22],
-    "minimize": [122, 160, 22, 22],
-    "close": [128, 190, 22, 22]
+    "art": [30, 152, 64, 64],
+    "title": [230, 121, 137, 18],
+    "artists": [310, 139, 198, 18],
+    "time": [152, 139, 146, 36],
+    "playback": [367, 121, 64, 18],
+    "status": [310, 157, 198, 18],
+    "seek": [191, 175, 279, 18],
+    "previous": [82, 217, 40, 27],
+    "play": [129, 214, 44, 33],
+    "next": [180, 217, 40, 27],
+    "like": [227, 217, 40, 27],
+    "volume": [528, 199, 84, 18],
+    "search": [284, 218, 68, 25],
+    "show": [359, 218, 68, 25],
+    "hide": [434, 218, 68, 25],
+    "menu": [475, 78, 22, 22],
+    "minimize": [501, 74, 22, 22],
+    "close": [527, 69, 22, 22]
   },
   "buttons": {
     "previous": {
