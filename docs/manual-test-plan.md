@@ -142,6 +142,10 @@ tests verify rendering and state preservation, not compositor integration.
   Check saved paths, reject duplicate IDs, and remove the installed folder.
 - Close the GUI and confirm YouTube Music keeps playing.
 
+For Plasma's panel menus, follow the X11/Wayland and Flatpak checks in
+[KDE global menu](global-menu.md#verification). Menu layout and editor checks
+can run without Firefox; playback checks still need a live session.
+
 ## Embedded QtWebEngine prototype
 
 The embedded prototype has its own gate (sign-in, persistence, hidden

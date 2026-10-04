@@ -22,7 +22,7 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QImageReader, QKeySequence, QPixmap, QShortcut
+from PySide6.QtGui import QAction, QImageReader, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -155,13 +155,7 @@ class MainWindow(QMainWindow):
             widget.setObjectName(name)
             if isinstance(widget, QLabel):
                 widget.setTextFormat(Qt.TextFormat.PlainText)
-        self._menu = QMenu(self)
-        self._menu.addAction("Faces…", self.open_faces)
-        self._menu.addAction("Face editor…", self.open_face_editor)
-        self._menu.addAction("Cover view", self.open_cover)
-        self._menu.addAction("Search", self.open_search)
-        self._menu.addSeparator()
-        self._menu.addAction("Close Amberfader", self.close)
+        self._build_menus()
         initial_error = ""
         try:
             face = self._faces.load(self._faces.preferred_id())
@@ -221,6 +215,66 @@ class MainWindow(QMainWindow):
         button.setToolTip(description)
         button.setAccessibleName(description)
         return button
+
+    def _build_menus(self) -> None:
+        self._menu = QMenu(self)
+        faces = self._menu.addAction("Faces…", self.open_faces)
+        editor = self._menu.addAction("Face editor…", self.open_face_editor)
+        cover = self._menu.addAction("Cover view", self.open_cover)
+        search = self._menu.addAction("Search", self.open_search)
+        self._menu.addSeparator()
+        close = self._menu.addAction("Close Amberfader", self.close)
+
+        bar = self.menuBar()
+        bar.setNativeMenuBar(True)
+        file_menu = bar.addMenu("&File")
+        file_menu.addActions([faces, editor])
+        file_menu.addSeparator()
+        file_menu.addAction(close)
+
+        playback = bar.addMenu("&Playback")
+        self._playback_actions: dict[str, QAction] = {}
+        for name, text in (
+            ("previous", "Previous track"), ("play", "Play"),
+            ("next", "Next track"), ("like", "Like song"),
+        ):
+            action = playback.addAction(text, self._controls[name].click)
+            self._playback_actions[name] = action
+
+        view = bar.addMenu("&View")
+        view.addActions([search, cover])
+        view.addSeparator()
+        view.addAction("Show YouTube Music", self._btn_show.click)
+        view.addAction("Hide YouTube Music", self._btn_hide.click)
+        window = bar.addMenu("&Window")
+        window.addAction("Minimize", self._btn_minimize.click)
+
+        # Native menus remain exported when their QWidget is hidden. Keep the
+        # shaped surface at (0, 0), including desktops without a global menu.
+        # The face's popup button remains the local fallback.
+        bar.hide()
+        self._sync_menu_actions()
+
+    def _sync_menu_actions(self) -> None:
+        state = self._state or {}
+        capabilities = state.get("capabilities") or []
+        playing = state.get("status") == "playing"
+        play = self._playback_actions["play"]
+        play.setText("Pause" if playing else "Play")
+        play.setEnabled(
+            not self._pending_transport and ("pause" if playing else "play") in capabilities
+        )
+        for name in ("previous", "next"):
+            self._playback_actions[name].setEnabled(name in capabilities)
+        liked = state.get("liked")
+        occurrence = (state.get("track") or {}).get("occurrenceId")
+        like = self._playback_actions["like"]
+        like.setText("Unlike song" if liked is True else "Like song")
+        like.setEnabled(
+            not self._pending_like and isinstance(liked, bool)
+            and isinstance(occurrence, str) and bool(occurrence)
+            and "setLiked" in capabilities
+        )
 
     def closeEvent(self, event) -> None:
         # Auxiliary top-level windows would otherwise keep the GUI alive after
@@ -546,6 +600,7 @@ class MainWindow(QMainWindow):
         self._play.style().unpolish(self._play)
         self._play.style().polish(self._play)
         self._play.setEnabled(False)
+        self._sync_menu_actions()
 
     def command_settled(self) -> None:
         self._pending_transport = False
@@ -571,6 +626,7 @@ class MainWindow(QMainWindow):
         )
 
     def _render_like(self) -> None:
+        self._sync_menu_actions()
         st = self._state or {}
         liked = st.get("liked")
         known = isinstance(liked, bool)

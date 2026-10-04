@@ -121,6 +121,9 @@ flatpak build-bundle --runtime-repo="$FLATHUB_REPO" "$REPO" "$OUT" "$APP_ID"
 COMMAND_NAME="$(sed -n '/^command:[[:space:]]*/{s///;p;q}' "packaging/flatpak/$APP_ID.yml" | tr -d "\"'[:space:]")"
 [ -n "$COMMAND_NAME" ] || { echo "!! no command: key in manifest" >&2; exit 1; }
 flatpak install --user -y --noninteractive "$OUT"
+flatpak info --user --show-permissions "$APP_ID" |
+  grep -Fxq 'com.canonical.AppMenu.Registrar=talk' ||
+  { echo "!! installed Flatpak lacks the global-menu registrar permission" >&2; exit 1; }
 # `sh -s` reads the probe from stdin so it stays a reviewable multi-line
 # script (not a 700-char one-liner); "$COMMAND_NAME" still lands in $1.
 # The output marker is asserted host-side: if flatpak ever stops
@@ -140,6 +143,7 @@ bad="$(find /app/bin -maxdepth 1 -type f -exec ldd {} \; 2>&1 | grep "not found"
 [ -z "$bad" ] || { printf "unresolved libs in /app/bin:\n%s\n" "$bad" >&2; exit 1; }
 if ! /usr/bin/python3 - <<'PY_SMOKE'
 import sys
+from PySide6 import QtDBus
 from PySide6.QtWidgets import QApplication
 import amberfader.app
 import amberfader.editor_app

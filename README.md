@@ -105,6 +105,13 @@ Install additional JSON/PNG face plugins with **Install face folder…**.
 See [Faces](docs/faces.md) for previews, installation paths and the versioned
 plugin format.
 
+## KDE global menu
+
+The native player and face editor expose menus to Plasma's **Global Menu**
+widget. Enable the widget before starting the app. The player's face and its
+popup menu remain available on every desktop. See the
+[global-menu guide](docs/global-menu.md) for setup and verification.
+
 ## Face editor for Mac and Linux
 
 Create your own face with the visual editor:
