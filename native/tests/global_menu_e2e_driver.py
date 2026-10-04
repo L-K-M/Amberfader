@@ -7,11 +7,13 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import suppress
 from pathlib import Path
 
 REGISTRAR_SCRIPT = Path(__file__).with_name("global_menu_registrar.py")
 SYSTEM_PYTHON = "/usr/bin/python3"
 TIMEOUT_SECONDS = 10
+ACTIVATION_TIMEOUT_SECONDS = 5
 
 
 class MenuClient:
@@ -55,7 +57,10 @@ class MenuClient:
         return response["result"]
 
     def close(self) -> None:
-        self.process.stdin.close()
+        # A crashed child can leave failed writes buffered. Its pipe flush
+        # must not replace the original driver failure report.
+        with suppress(OSError):
+            self.process.stdin.close()
         try:
             self.process.wait(timeout=5)
         except subprocess.TimeoutExpired:
@@ -98,6 +103,19 @@ def _find(layout, label: str):
     if len(matches) != 1:
         raise AssertionError(f"Expected one exported {label!r}, found {matches}")
     return matches[0]
+
+
+def _wait_for(app, condition, *, timeout_s: float = ACTIVATION_TIMEOUT_SECONDS) -> bool:
+    """Observe one menu event's queued QAction without replaying the event."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        app.processEvents()
+        if condition():
+            return True
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(0.01, remaining))
 
 
 def _state(capabilities):
@@ -188,7 +206,11 @@ def main(mode: str) -> int:
                 properties.get("enabled", True),
             ))
             client.request("event", app, **player_endpoint, item=previous)
-            check("D-Bus activation reaches command callback", sent == [("player.previous", {})])
+            # Qt queues platform-menu activation to QAction::trigger. The
+            # D-Bus Event reply confirms receipt, before this queued outcome.
+            check("D-Bus activation reaches command callback", _wait_for(
+                app, lambda: sent == [("player.previous", {})],
+            ))
 
             player.apply_state(_state([]))
             app.processEvents()
@@ -196,6 +218,7 @@ def main(mode: str) -> int:
                 _find(layout(player_endpoint), "Previous track")[1].get("enabled", True),
             ))
             client.request("event", app, **player_endpoint, item=previous)
+            app.processEvents()
             check("disabled exported action cannot send playback work", sent == [
                 ("player.previous", {}),
             ])
@@ -205,9 +228,10 @@ def main(mode: str) -> int:
             player._menu.hide()
             face_editor, _ = _find(layout(player_endpoint), "Face editor…")
             client.request("event", app, **player_endpoint, item=face_editor)
+            check("D-Bus activation opens independent editor", _wait_for(
+                app, lambda: player._face_editor is not None and player._face_editor.isVisible(),
+            ))
             editor = player._face_editor
-            check("D-Bus activation opens independent editor", editor is not None
-                  and editor.isVisible())
             check("editor uses native exporter", editor.menuBar().isNativeMenuBar())
             app.processEvents()
             endpoints = client.request("menus", app)
@@ -229,9 +253,10 @@ def main(mode: str) -> int:
             undo, properties = _find(layout(editor_endpoint), "Undo")
             check("document edit enables exported Undo", bool(properties.get("enabled", True)))
             client.request("event", app, **editor_endpoint, item=undo)
-            check("D-Bus Undo restores document", editor.document.manifest["controls"]["play"]
-                  == original
-                  and not editor.document.manifest.get("controlRotations", {}).get("play"))
+            check("D-Bus Undo restores document", _wait_for(
+                app, lambda: editor.document.manifest["controls"]["play"] == original
+                and not editor.document.manifest.get("controlRotations", {}).get("play"),
+            ))
             check("Undo does not issue playback work", sent == [("player.previous", {})])
             check("Undo disabled after undoing only edit", not bool(
                 _find(layout(editor_endpoint), "Undo")[1].get("enabled", True),

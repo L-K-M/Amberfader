@@ -48,6 +48,47 @@ def test_exported_mnemonic_groups():
     }
 
 
+def test_menu_activation_waits_for_queued_action(qapp):
+    from global_menu_e2e_driver import _wait_for
+    from PySide6.QtCore import QObject, Qt, Signal
+    from PySide6.QtGui import QAction
+
+    class PlatformItem(QObject):
+        activated = Signal()
+
+    item = PlatformItem()
+    action = QAction("Previous track")
+    sent = []
+    action.triggered.connect(lambda: sent.append("previous"))
+    item.activated.connect(action.trigger, Qt.ConnectionType.QueuedConnection)
+
+    item.activated.emit()
+    assert sent == []
+    assert _wait_for(qapp, lambda: sent == ["previous"])
+
+
+def test_menu_activation_wait_has_deadline(qapp):
+    from global_menu_e2e_driver import _wait_for
+
+    assert not _wait_for(qapp, lambda: False, timeout_s=0.02)
+
+
+def test_menu_client_close_preserves_registrar_crash(monkeypatch, tmp_path):
+    import global_menu_e2e_driver as driver
+
+    crashed_registrar = tmp_path / "crashed_registrar.py"
+    crashed_registrar.write_text('print(\'{"ready": true}\', flush=True)\n')
+    monkeypatch.setattr(driver, "SYSTEM_PYTHON", sys.executable)
+    monkeypatch.setattr(driver, "REGISTRAR_SCRIPT", crashed_registrar)
+    client = driver.MenuClient()
+    client.process.wait(timeout=5)
+
+    with pytest.raises(BrokenPipeError):
+        client.request("menus", None)
+    client.close()
+    assert client.process.poll() is not None
+
+
 def _unavailable(reason: str) -> None:
     if os.environ.get("AMBERFADER_REQUIRE_GLOBAL_MENU") == "1":
         pytest.fail(reason)
@@ -86,7 +127,9 @@ def test_global_menu_protocol_and_face_layout(mode):
     reports = [line for line in run.stdout.splitlines() if line.startswith("{")]
     assert reports, f"no driver report\nstdout:\n{run.stdout}\nstderr:\n{run.stderr}"
     report = json.loads(reports[-1])
-    assert report["failures"] == [], report
+    assert report["failures"] == [], (
+        f"driver report:\n{json.dumps(report, indent=2)}\nstderr:\n{run.stderr}"
+    )
     assert run.returncode == 0, (
         f"driver exited {run.returncode}\nstdout:\n{run.stdout}\nstderr:\n{run.stderr}"
     )

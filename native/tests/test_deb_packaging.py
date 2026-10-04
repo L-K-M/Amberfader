@@ -116,9 +116,22 @@ def test_flatpak_allows_only_the_global_menu_registrar_bus_name():
     manifest = (ROOT / "packaging/flatpak/ch.lkmc.amberfader.yml").read_text()
     bus_permissions = [
         line.strip().removeprefix("- ") for line in manifest.splitlines()
-        if "--talk-name=" in line or "--socket=session-bus" in line
+        if any(flag in line for flag in ("--talk-name=", "--own-name=", "--socket=session-bus"))
     ]
     assert bus_permissions == ["--talk-name=com.canonical.AppMenu.Registrar"]
+
+
+def test_flatpak_permission_guard_rejects_unrelated_owned_bus_names(tmp_path, monkeypatch):
+    manifest = ROOT / "packaging/flatpak/ch.lkmc.amberfader.yml"
+    injected = tmp_path / "packaging/flatpak/ch.lkmc.amberfader.yml"
+    injected.parent.mkdir(parents=True)
+    injected.write_text(manifest.read_text().replace(
+        "finish-args:\n", "finish-args:\n  - --own-name=org.example.Evil\n",
+    ))
+    monkeypatch.setitem(globals(), "ROOT", tmp_path)
+
+    with pytest.raises(AssertionError):
+        test_flatpak_allows_only_the_global_menu_registrar_bus_name()
 
 
 @pytest.mark.skipif(DPKG is None, reason="Debian version ordering requires dpkg")
