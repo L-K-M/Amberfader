@@ -187,8 +187,8 @@ face; oversized windows are fitted to the available screen.
 
 `normal` is required when a button has images. Other states fall back to it;
 missing disabled artwork is dimmed. Sprites stretch to the control rectangle,
-so give buttons that share an image the same size; otherwise its corners and
-rims distort.
+so give buttons that share an image the same size; otherwise the image's
+corners and rims distort.
 Host labels are drawn on top, so draw button surfaces rather than transport
 symbols. A face cannot replace actions, hide the unknown heart, or bypass a
 disabled/pending control. Pending indicators remain visible; focus outlines

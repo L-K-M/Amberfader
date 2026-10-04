@@ -90,7 +90,8 @@ def test_bundled_shared_sprites_fit_one_button_size(face_id):
     members = {}
     for name, images in data["buttons"].items():
         outline = (tuple(data["controls"][name][2:]), shapes.get(name, "rectangle"))
-        members.setdefault(images["normal"], {})[name] = outline
+        for sprite in images.values():
+            members.setdefault(sprite, {})[name] = outline
     for sprite, outlines in members.items():
         assert len(set(outlines.values())) == 1, (face_id, sprite, outlines)
 

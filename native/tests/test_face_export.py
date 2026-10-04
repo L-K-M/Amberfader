@@ -41,17 +41,20 @@ def _export(module, monkeypatch):
     module.main()
 
 
-def test_export_removes_only_stale_exporter_sprites(exporter, monkeypatch):
+def test_export_removes_only_stale_exporter_sprites(exporter, monkeypatch, capsys):
     module, directory, face = exporter
     declared = {file for states in face["buttons"].values() for file in states.values()}
-    stale = next(
-        f"{name}-normal.png" for name in [*module.BUTTON_GROUPS, *module.BUTTON_GROUPS.values()]
+    candidates = [
+        f"{name}-normal.png" for name in (*module.BUTTON_GROUPS, *module.BUTTON_GROUPS.values())
         if f"{name}-normal.png" not in declared
-    )
+    ]
+    assert candidates, "every exporter sprite name is declared; nothing stale to plant"
+    stale = candidates[0]
     (directory / stale).write_bytes(b"old layout")
     (directory / "notes.png").write_bytes(b"not exported here")
     _export(module, monkeypatch)
     assert not (directory / stale).exists()
+    assert f"removed stale sprite {stale}" in capsys.readouterr().out
     assert (directory / "notes.png").read_bytes() == b"not exported here"
     assert declared <= {path.name for path in directory.glob("*.png")}
 

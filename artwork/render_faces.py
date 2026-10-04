@@ -654,7 +654,8 @@ def main() -> None:
                 f"{name} -> {family}-*.png" for name, family in families.items()
                 if declared_buttons.get(name) != expected_buttons[name]
             ) + sorted(
-                f"no sprites for {name}" for name in declared_buttons.keys() - families.keys()
+                f"remove unknown button {name}"
+                for name in declared_buttons.keys() - families.keys()
             )
             raise RuntimeError(f"{face['id']}: declare button sprites as {'; '.join(wrong)}")
         background = render_background(face)
@@ -664,9 +665,12 @@ def main() -> None:
         if _encode_png(background) != _encode_png(render_background(face)):
             raise RuntimeError(f"{face['id']}: nondeterministic export")
         _save(background, manifest.with_name("background.png"))
-        for family in sorted(set(families.values())):
-            # A group family renders at its representative; an own family is the button.
-            control = GROUP_REPRESENTATIVES.get(family, family)
+        # A group family renders at its representative; an own family is the button.
+        sources = {}
+        for name, family in families.items():
+            group = BUTTON_GROUPS[name]
+            sources.setdefault(family, GROUP_REPRESENTATIVES[group] if family == group else name)
+        for family, control in sorted(sources.items()):
             for state in BUTTON_STATES:
                 image = render_button(face, BUTTON_GROUPS[control], state, control)
                 _save(image, manifest.with_name(f"{family}-{state}.png"))
@@ -674,7 +678,10 @@ def main() -> None:
         # files. Never touch files this exporter cannot have written.
         declared = {file for states in expected_buttons.values() for file in states.values()}
         for stale in sorted(EXPORTED_SPRITES - declared):
-            manifest.with_name(stale).unlink(missing_ok=True)
+            path = manifest.with_name(stale)
+            if path.exists():
+                path.unlink()
+                print(f"{face['id']}: removed stale sprite {stale}")
         print(
             f"{face['id']}: {background.width()}x{background.height()}, all control regions opaque"
         )
