@@ -52,7 +52,12 @@ cat > "$STAGE/usr/bin/amberfader-helper" <<'EOF'
 #!/bin/sh
 exec env PYTHONPATH=/opt/amberfader/lib /usr/bin/python3 -m amberfader.helper "$@"
 EOF
-chmod 755 "$STAGE/usr/bin/amberfader" "$STAGE/usr/bin/amberfader-helper"
+cat > "$STAGE/usr/bin/amberfader-face-editor" <<'EOF'
+#!/bin/sh
+exec env PYTHONPATH=/opt/amberfader/lib /usr/bin/python3 -m amberfader.editor_app "$@"
+EOF
+chmod 755 "$STAGE/usr/bin/amberfader" "$STAGE/usr/bin/amberfader-helper" \
+  "$STAGE/usr/bin/amberfader-face-editor"
 
 cat > "$STAGE/usr/lib/mozilla/native-messaging-hosts/amberfader.json" <<'EOF'
 {

@@ -17,6 +17,7 @@ from PySide6.QtCore import (
     QElapsedTimer,
     QIODevice,
     QPoint,
+    QSignalBlocker,
     Qt,
     QTimer,
     Signal,
@@ -50,6 +51,7 @@ from .placeholder import placeholder_png
 from .search_window import SearchWindow
 
 if TYPE_CHECKING:
+    from .face_editor import FaceEditorWindow
     from .faces_window import FacesWindow
 
 ARTWORK_CACHE_BYTES = 20 * 1024 * 1024
@@ -90,6 +92,7 @@ class MainWindow(QMainWindow):
         self._cover_window: QDialog | None = None
         self._cover_label: QLabel | None = None
         self._faces_window: FacesWindow | None = None
+        self._face_editor: FaceEditorWindow | None = None
         self._faces = faces or FaceLibrary()
         self._scale = scale
 
@@ -154,6 +157,7 @@ class MainWindow(QMainWindow):
                 widget.setTextFormat(Qt.TextFormat.PlainText)
         self._menu = QMenu(self)
         self._menu.addAction("Faces…", self.open_faces)
+        self._menu.addAction("Face editor…", self.open_face_editor)
         self._menu.addAction("Cover view", self.open_cover)
         self._menu.addAction("Search", self.open_search)
         self._menu.addSeparator()
@@ -180,7 +184,9 @@ class MainWindow(QMainWindow):
         self._btn_hide.clicked.connect(lambda: self._request("browser.hidePlayer", {}))
         self._btn_search.clicked.connect(self.open_search)
         self._btn_menu.clicked.connect(lambda: self._menu.popup(
-            self._btn_menu.mapToGlobal(QPoint(0, self._btn_menu.height()))
+            self._surface.control_global_position(
+                "menu", self._btn_menu, QPoint(0, self._btn_menu.height()),
+            )
         ))
         self._btn_minimize.clicked.connect(self.showMinimized)
         self._btn_close.clicked.connect(self.close)
@@ -242,7 +248,23 @@ class MainWindow(QMainWindow):
         self.setMask(artwork.scaled_mask(size))
         # Move the same widgets, preserving focus, pending commands and gestures.
         for name, widget in self._controls.items():
-            widget.setGeometry(*(round(value * effective_scale) for value in face.controls[name]))
+            rotation = face.control_rotations.get(name, 0)
+            if self._surface.needs_rehosting(name, rotation):
+                if isinstance(widget, FaceSlider) and widget.isSliderDown():
+                    # A proxy cannot inherit an in-flight native mouse grab.
+                    # Cancel rather than committing a partial seek or volume.
+                    with QSignalBlocker(widget):
+                        widget.setSliderDown(False)
+                    if name == "seek":
+                        self._seeking = False
+                        self._seek_occ = None
+                elif isinstance(widget, FaceButton):
+                    widget.setDown(False)
+            rect = tuple(round(value * effective_scale) for value in face.controls[name])
+            self._surface.place_control(
+                name, widget, rect,
+                rotation, self.styleSheet(),
+            )
             if isinstance(widget, FaceButton):
                 widget.set_sprites(artwork.buttons.get(name, {}))
                 widget.set_shape(
@@ -264,6 +286,28 @@ class MainWindow(QMainWindow):
         if self._cover_window is not None:
             self._cover_window.setStyleSheet(self.styleSheet())
 
+    def open_face_editor(self, face_id: str | None = None) -> None:
+        """Author a copy without changing the playing face or sending commands."""
+        from ..face_document import FaceDocument
+        from .face_editor import FaceEditorWindow
+
+        try:
+            source = self._faces.load(face_id or self._face_id).info.source
+            if self._face_editor is not None and self._face_editor.isVisible():
+                if face_id is not None and not self._face_editor.new_from_template(source):
+                    return
+            else:
+                if self._face_editor is not None:
+                    self._face_editor.deleteLater()
+                document = FaceDocument.from_template(source)
+                self._face_editor = FaceEditorWindow(document=document)
+        except FaceError as exc:
+            self.show_status(f"Could not open face editor: {exc}", error=True)
+            return
+        self._face_editor.show()
+        self._face_editor.raise_()
+        self._face_editor.activateWindow()
+
     def select_face(self, face_id: str) -> None:
         """Apply and persist a face without issuing a player command."""
         # Validate/decode before saving so a broken pack cannot poison startup.
@@ -276,7 +320,9 @@ class MainWindow(QMainWindow):
         from .faces_window import FacesWindow
 
         if self._faces_window is None:
-            self._faces_window = FacesWindow(self._faces, self.select_face, self)
+            self._faces_window = FacesWindow(
+                self._faces, self.select_face, self, edit=self.open_face_editor,
+            )
         self._faces_window.refresh(self._face_id)
         self._faces_window.show()
         self._faces_window.raise_()

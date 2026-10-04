@@ -24,6 +24,7 @@ embedded = [
 [project.scripts]
 amberfader = "amberfader.app:main"
 amberfader-helper = "amberfader.helper:main"
+amberfader-face-editor = "amberfader.editor_app:main"
 
 [dependency-groups]
 dev = [

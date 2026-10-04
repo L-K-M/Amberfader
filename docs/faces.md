@@ -132,6 +132,13 @@ my-face/
 - `sliderStyle` (version 2): `classic` (default) or `inset`. The inset rail and
   thumb use the face palette while retaining native slider input and signals.
   Place the full straight track within one panel, clear of bevels and seams.
+- `controlRotations` (version 2): optional angles from -180 to 180 degrees for
+  any control, including buttons, sliders, labels and artwork. Positive angles
+  rotate clockwise around the center of the unrotated control rectangle.
+  Drawing and pointer interaction follow that transform. The rotated footprint
+  must fit within the opaque face and avoid other controls and the drag region.
+  Omitted angles remain zero; the window drag region cannot rotate. Author these
+  layouts in the [visual face editor](face-editor.md).
 
 ### Required host controls
 

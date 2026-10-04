@@ -9,8 +9,11 @@ from __future__ import annotations
 import json
 import os
 import struct
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from enum import Enum
 from functools import lru_cache
+from math import cos, isfinite, radians, sin
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import MappingProxyType
@@ -25,6 +28,7 @@ MAX_MANIFEST_BYTES = 64 * 1024
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
 MAX_PACK_BYTES = 16 * 1024 * 1024
 MAX_IMAGE_DIMENSION = 2048
+MAX_DRAFT_GEOMETRY = 2048
 MAX_USER_FACES = 64
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 PNG_HEADER = struct.Struct(">8sI4sII5BI")
@@ -34,6 +38,12 @@ PNG_HEADER_DATA_BYTES = 13
 PACK_LIMIT_ERROR = "Face images exceed the 16 MiB pack limit"
 BUILTIN_DIRECTORY = Path(__file__).with_name("faces")
 Rect = tuple[int, int, int, int]
+Polygon = tuple[tuple[float, float], ...]
+
+
+class FaceValidation(Enum):
+    STRICT = "strict"
+    DRAFT = "draft"
 
 
 class FaceError(ValueError):
@@ -67,6 +77,9 @@ class Face:
         default_factory=lambda: MappingProxyType({}),
     )
     slider_style: str = "classic"
+    control_rotations: MappingProxyType[str, float] = field(
+        default_factory=lambda: MappingProxyType({}),
+    )
 
 
 def _read_bounded(path: Path, limit: int) -> bytes:
@@ -85,18 +98,43 @@ def _manifest(directory: Path) -> dict[str, Any]:
         data = json.loads(_read_bounded(path, MAX_MANIFEST_BYTES))
     except (ValueError, RecursionError) as exc:
         raise FaceError(f"Invalid face.json: {exc}") from exc
-    problem = next(_validator(BUILTIN_DIRECTORY / "schema.json").iter_errors(data), None)
+    _validate_manifest(data)
+    return data
+
+
+def _validate_manifest(
+    data: dict[str, Any], validation: FaceValidation = FaceValidation.STRICT,
+) -> None:
+    validator = _validator(BUILTIN_DIRECTORY / "schema.json", validation)
+    problem = next(validator.iter_errors(data), None)
     if problem is not None:
         location = ".".join(str(part) for part in problem.absolute_path) or "face.json"
         # Do not echo potentially huge or malformed field values into the UI.
         raise FaceError(f"Invalid {location}: {problem.validator} constraint")
-    return data
+    for name, rotation in data.get("controlRotations", {}).items():
+        if not isfinite(rotation):
+            raise FaceError(f"Invalid controlRotations.{name}: rotation must be finite")
 
 
-@lru_cache(maxsize=1)
-def _validator(path: Path) -> Draft202012Validator:
+@lru_cache(maxsize=2)
+def _validator(
+    path: Path, validation: FaceValidation = FaceValidation.STRICT,
+) -> Draft202012Validator:
     # The schema is a bundled program resource, not part of an editable pack.
-    return Draft202012Validator(json.loads(path.read_text(encoding="utf-8")))
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    if validation is FaceValidation.DRAFT:
+        # Dragging can temporarily put a control outside the shell. Its bounds
+        # remain finite and typed; the production schema stays unchanged.
+        origin = {
+            "type": "integer", "minimum": -MAX_DRAFT_GEOMETRY,
+            "maximum": MAX_DRAFT_GEOMETRY,
+        }
+        extent = {"type": "integer", "minimum": 1, "maximum": MAX_DRAFT_GEOMETRY}
+        schema["$defs"]["rect"] = {
+            "type": "array", "prefixItems": [origin, origin, extent, extent],
+            "items": False, "minItems": 4, "maxItems": 4,
+        }
+    return Draft202012Validator(schema)
 
 
 def _image_path(directory: Path, name: str) -> Path:
@@ -123,17 +161,60 @@ def _image(directory: Path, name: str) -> tuple[bytes, tuple[int, int]]:
     return data, (width, height)
 
 
-def _intersects(left: Rect, right: Rect) -> bool:
-    x, y, width, height = left
-    rx, ry, rw, rh = right
-    return x < rx + rw and rx < x + width and y < ry + rh and ry < y + height
+def control_polygon(rect: Rect, rotation: float = 0.0) -> Polygon:
+    """Clockwise screen-space corners around the unrotated rectangle's center."""
+    x, y, width, height = rect
+    cx, cy = x + width / 2, y + height / 2
+    angle = radians(rotation)
+    cosine, sine = cos(angle), sin(angle)
+    return tuple(
+        (cx + dx * cosine - dy * sine, cy + dx * sine + dy * cosine)
+        for dx, dy in (
+            (-width / 2, -height / 2), (width / 2, -height / 2),
+            (width / 2, height / 2), (-width / 2, height / 2),
+        )
+    )
+
+
+def control_bounds(rect: Rect, rotation: float = 0.0) -> tuple[float, float, float, float]:
+    polygon = control_polygon(rect, rotation)
+    left, right = min(x for x, _ in polygon), max(x for x, _ in polygon)
+    top, bottom = min(y for _, y in polygon), max(y for _, y in polygon)
+    return left, top, right - left, bottom - top
+
+
+def _intersects(left: Polygon, right: Polygon) -> bool:
+    # Separating axes keep angled controls independent even when their bounding
+    # boxes overlap. Touching edges are allowed, as in the original layout rules.
+    for polygon in (left, right):
+        for index, point in enumerate(polygon):
+            following = polygon[(index + 1) % len(polygon)]
+            axis = (point[1] - following[1], following[0] - point[0])
+            projections = [
+                [x * axis[0] + y * axis[1] for x, y in corners]
+                for corners in (left, right)
+            ]
+            if (
+                max(projections[0]) <= min(projections[1]) + 1e-7
+                or max(projections[1]) <= min(projections[0]) + 1e-7
+            ):
+                return False
+    return True
 
 
 def _check_layout(data: dict) -> None:
     width, height = data["size"]
     regions = {**data["controls"], "drag": data["drag"]}
-    for name, (x, y, w, h) in regions.items():
-        if not w or not h or x + w > width or y + h > height:
+    rotations = data.get("controlRotations", {})
+    polygons = {
+        name: control_polygon(tuple(rect), rotations.get(name, 0))
+        for name, rect in regions.items()
+    }
+    for name, (_x, _y, w, h) in regions.items():
+        if not w or not h or any(
+            px < -1e-7 or py < -1e-7 or px > width + 1e-7 or py > height + 1e-7
+            for px, py in polygons[name]
+        ):
             raise FaceError(f"{name} must fit inside the face")
         minimum = (22, 22)
         if name == "art":
@@ -151,7 +232,7 @@ def _check_layout(data: dict) -> None:
     names = list(regions)
     for index, name in enumerate(names):
         for other in names[index + 1:]:
-            if _intersects(tuple(regions[name]), tuple(regions[other])):
+            if _intersects(polygons[name], polygons[other]):
                 raise FaceError(f"{name} overlaps {other}")
 
 
@@ -191,6 +272,75 @@ def _probe_face(directory: Path) -> FaceInfo:
         raise FaceError(str(exc)) from exc
 
 
+def load_face_snapshot(
+    manifest: dict[str, Any], images: Mapping[str, bytes], source: Path,
+    *, validation: FaceValidation = FaceValidation.STRICT,
+) -> Face:
+    """Build a bounded data-only face from an editor's in-memory snapshot.
+
+    DRAFT permits bounded unfinished rectangles for editing. Other schema and
+    image constraints still apply; install and player paths use STRICT.
+    """
+    try:
+        encoded = json.dumps(manifest).encode("utf-8")
+        if len(encoded) > MAX_MANIFEST_BYTES:
+            raise FaceError("face.json exceeds its 64 KiB limit")
+        _validate_manifest(manifest, validation)
+        if validation is FaceValidation.STRICT:
+            _check_layout(manifest)
+        elif validation is not FaceValidation.DRAFT:
+            raise FaceError("Unknown face validation mode")
+        names = {manifest["background"]}
+        for states in manifest.get("buttons", {}).values():
+            names.update(states.values())
+        validated = {}
+        total_bytes = 0
+        for name in sorted(names):
+            image = images.get(name)
+            if not isinstance(image, bytes):
+                raise FaceError(f"Missing PNG image: {name}")
+            if len(image) > MAX_IMAGE_BYTES:
+                raise FaceError(f"{name} exceeds its {MAX_IMAGE_BYTES // 1024} KiB limit")
+            total_bytes += len(image)
+            if total_bytes > MAX_PACK_BYTES:
+                raise FaceError(PACK_LIMIT_ERROR)
+            validated[name] = image, _png_dimensions(image, name)
+        if validation is FaceValidation.STRICT:
+            _check_background_size(manifest["size"], validated[manifest["background"]][1])
+        return Face(
+            info=FaceInfo(
+                manifest["id"], manifest["name"], manifest["author"],
+                manifest["description"], source,
+            ),
+            size=tuple(manifest["size"]),
+            drag=tuple(manifest["drag"]),
+            controls=MappingProxyType({
+                name: tuple(rect) for name, rect in manifest["controls"].items()
+            }),
+            palette=MappingProxyType(dict(manifest["palette"])),
+            font=manifest.get("font", "sans"),
+            time_size=manifest.get("timeSize", 24),
+            radius=manifest.get("radius", 4),
+            background=validated[manifest["background"]][0],
+            buttons=MappingProxyType({
+                control: MappingProxyType({
+                    state: validated[name][0] for state, name in states.items()
+                })
+                for control, states in manifest.get("buttons", {}).items()
+            }),
+            control_shapes=MappingProxyType(dict(manifest.get("controlShapes", {}))),
+            cover_glass=manifest.get("coverGlass", False),
+            readout_styles=MappingProxyType({
+                name: MappingProxyType(dict(style))
+                for name, style in manifest.get("readoutStyles", {}).items()
+            }),
+            slider_style=manifest.get("sliderStyle", "classic"),
+            control_rotations=MappingProxyType(dict(manifest.get("controlRotations", {}))),
+        )
+    except (TypeError, ValueError, RecursionError, struct.error) as exc:
+        raise FaceError(str(exc)) from exc
+
+
 def load_face(directory: Path) -> Face:
     """Validate a pack again on use, including file confinement and budgets."""
     try:
@@ -199,40 +349,12 @@ def load_face(directory: Path) -> Face:
         images = {}
         total_bytes = 0
         for name in names:
-            images[name] = _image(directory, name)
-            total_bytes += len(images[name][0])
+            image = _image(directory, name)[0]
+            total_bytes += len(image)
             if total_bytes > MAX_PACK_BYTES:
                 raise FaceError(PACK_LIMIT_ERROR)
-        size = tuple(data["size"])
-        image_size = images[data["background"]][1]
-        _check_background_size(data["size"], image_size)
-
-        return Face(
-            info=FaceInfo(data["id"], data["name"], data["author"], data["description"], directory),
-            size=size,
-            drag=tuple(data["drag"]),
-            controls=MappingProxyType({
-                name: tuple(rect) for name, rect in data["controls"].items()
-            }),
-            palette=MappingProxyType(data["palette"]),
-            font=data.get("font", "sans"),
-            time_size=data.get("timeSize", 24),
-            radius=data.get("radius", 4),
-            background=images[data["background"]][0],
-            buttons=MappingProxyType({
-                control: MappingProxyType({
-                    state: images[name][0] for state, name in states.items()
-                })
-                for control, states in data.get("buttons", {}).items()
-            }),
-            control_shapes=MappingProxyType(data.get("controlShapes", {})),
-            cover_glass=data.get("coverGlass", False),
-            readout_styles=MappingProxyType({
-                name: MappingProxyType(style)
-                for name, style in data.get("readoutStyles", {}).items()
-            }),
-            slider_style=data.get("sliderStyle", "classic"),
-        )
+            images[name] = image
+        return load_face_snapshot(data, images, directory)
     except (OSError, ValueError, RecursionError, struct.error) as exc:
         raise FaceError(str(exc)) from exc
 

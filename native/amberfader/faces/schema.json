@@ -36,6 +36,11 @@
         }
       }
     },
+    "controlRotations": {
+      "type": "object",
+      "propertyNames": {"enum": ["art", "title", "artists", "time", "playback", "previous", "play", "next", "like", "seek", "volume", "search", "show", "hide", "menu", "status", "minimize", "close"]},
+      "additionalProperties": {"type": "number", "minimum": -180, "maximum": 180}
+    },
     "controlShapes": {
       "type": "object",
       "propertyNames": {"enum": ["art", "previous", "play", "next", "like", "search", "show", "hide", "menu", "minimize", "close"]},
@@ -81,7 +86,7 @@
   },
   "allOf": [{
     "if": {"properties": {"formatVersion": {"const": 1}}},
-    "then": {"not": {"anyOf": [{"required": ["controlShapes"]}, {"required": ["coverGlass"]}, {"required": ["readoutStyles"]}, {"required": ["sliderStyle"]}]}}
+    "then": {"not": {"anyOf": [{"required": ["controlShapes"]}, {"required": ["coverGlass"]}, {"required": ["readoutStyles"]}, {"required": ["sliderStyle"]}, {"required": ["controlRotations"]}]}}
   }],
   "$defs": {
     "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},

@@ -544,15 +544,20 @@ def test_picker_and_runtime_use_inset_slider_presentation(slider_window, qapp, m
     calls = []
     original = face_surface.draw_slider
 
-    def record(target):
-        def draw(*args, **kwargs):
-            calls.append((target, args[1], args[2], dict(args[3])))
-            return original(*args, **kwargs)
+    def record(*args, **kwargs):
+        target = "native" if isinstance(args[0].device(), face_surface.FaceSlider) else "picker"
+        calls.append((target, args[1], args[2], dict(args[3])))
+        return original(*args, **kwargs)
 
-        return draw
+    original_preview = faces_window.draw_face_preview
 
-    monkeypatch.setattr(face_surface, "draw_slider", record("native"))
-    monkeypatch.setattr(faces_window, "draw_slider", record("picker"))
+    def repainting_preview(*args, **kwargs):
+        # Nested/queued native repaint must not be attributed to the preview.
+        window._seek.grab()
+        return original_preview(*args, **kwargs)
+
+    monkeypatch.setattr(faces_window, "draw_face_preview", repainting_preview)
+    monkeypatch.setattr(face_surface, "draw_slider", record)
     parent = QWidget()
     preview = faces_window.FacePreview(parent)
     preview.resize(face.size[0] + 24, face.size[1] + 24)
@@ -564,7 +569,11 @@ def test_picker_and_runtime_use_inset_slider_presentation(slider_window, qapp, m
         preview.grab()
         native = [call for call in calls if call[0] == "native"]
         picker = [call for call in calls if call[0] == "picker"]
-        assert len(native) == len(picker) == 2
+        assert len(native) == 3
+        assert len(picker) == 2
+        # The first two native paints cover seek and volume; the third is the
+        # deliberate seek repaint nested within the preview's paint.
+        native = native[:2]
         native.sort(key=lambda call: call[1].width())
         picker.sort(key=lambda call: call[1].width())
         for runtime, thumbnail in zip(native, picker, strict=True):
