@@ -8,6 +8,7 @@ from PySide6.QtCore import QRect, QRectF, Qt, QUrl
 from PySide6.QtGui import (
     QColor,
     QDesktopServices,
+    QFont,
     QLinearGradient,
     QPainter,
     QPen,
@@ -93,9 +94,7 @@ class FacePreview(QWidget):
             if name in READOUT_CONTROLS:
                 font = readout_font(face, name)
             else:
-                font = painter.font()
-                font.setFamily(FONT_FAMILIES[face.font])
-                font.setBold(False)
+                font = QFont(FONT_FAMILIES[face.font])
                 font.setPixelSize(like_font_size(face) if name == "like" else 12)
             if name == "time":
                 font = fit_readout_font(font, PREVIEW_LABELS["time"], rect)

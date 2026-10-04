@@ -251,6 +251,50 @@ def test_picker_and_native_paint_identical_readout_typography(
         qapp.processEvents()
 
 
+def test_picker_mono_readout_does_not_restyle_native_button_font(qapp, tmp_path, monkeypatch):
+    from PySide6.QtGui import QFont, QFontInfo, QPainter
+    from PySide6.QtWidgets import QWidget
+
+    from amberfader.ui import face_surface, faces_window
+    from amberfader.ui.main_window import MainWindow
+
+    draws = {}
+
+    def recording_painter(target):
+        class RecordingPainter(QPainter):
+            def drawText(self, rect, flags, text):
+                draws[target, text] = QFont(self.font())
+                return super().drawText(rect, flags, text)
+
+        return RecordingPainter
+
+    monkeypatch.setattr(face_surface, "QPainter", recording_painter("native"))
+    monkeypatch.setattr(faces_window, "QPainter", recording_painter("picker"))
+    library = FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json")
+    window = MainWindow(lambda *_: None, faces=library)
+    parent = QWidget()
+    preview = faces_window.FacePreview(parent)
+    try:
+        window.select_face("viridian")
+        face = library.load("viridian")
+        preview.resize(face.size[0] + 24, face.size[1] + 24)
+        button = window._controls["search"]
+        button.ensurePolished()
+        button.grab()
+        preview.set_face(face, face_surface.prepare_face(face))
+        preview.grab()
+        native = QFontInfo(draws["native", button.text()])
+        picker = QFontInfo(draws["picker", faces_window.PREVIEW_LABELS["search"]])
+        assert picker.fixedPitch() == native.fixedPitch()
+        assert picker.family() == native.family()
+    finally:
+        window.close()
+        parent.close()
+        window.deleteLater()
+        parent.deleteLater()
+        qapp.processEvents()
+
+
 @pytest.mark.parametrize("value", [None, True, {}, "round", "inset; color:red"])
 def test_slider_style_is_a_constrained_token(styled_pack, value):
     directory, data = styled_pack
