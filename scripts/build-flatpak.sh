@@ -51,7 +51,14 @@ exec env PYTHONPATH=/app/lib \
   LD_LIBRARY_PATH="/app/lib/PySide6/Qt/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
   /usr/bin/python3 -m amberfader.helper "$@"
 EOF
-chmod 755 "$STAGE/app/bin/amberfader" "$STAGE/app/bin/amberfader-helper"
+cat > "$STAGE/app/bin/amberfader-face-editor" <<'EOF'
+#!/bin/sh
+exec env PYTHONPATH=/app/lib \
+  LD_LIBRARY_PATH="/app/lib/PySide6/Qt/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  /usr/bin/python3 -m amberfader.editor_app "$@"
+EOF
+chmod 755 "$STAGE/app/bin/amberfader" "$STAGE/app/bin/amberfader-helper" \
+  "$STAGE/app/bin/amberfader-face-editor"
 # Run this installer on the host to register the bundled helper with the
 # browser, without a second Python installation or wider app permissions.
 install -Dm755 scripts/install-user "$STAGE/app/share/amberfader/install-user"
@@ -131,8 +138,23 @@ command -v ldd >/dev/null 2>&1 ||
   { echo "!! ldd not available in runtime; cannot verify libs" >&2; exit 1; }
 bad="$(find /app/bin -maxdepth 1 -type f -exec ldd {} \; 2>&1 | grep "not found" | sort -u || true)"
 [ -z "$bad" ] || { printf "unresolved libs in /app/bin:\n%s\n" "$bad" >&2; exit 1; }
-/usr/bin/python3 -c "import sys;from PySide6.QtWidgets import QApplication;a=QApplication(sys.argv);import amberfader.app,amberfader.helper" ||
-  { echo "!! python smoke import failed" >&2; exit 1; }
+if ! /usr/bin/python3 - <<'PY_SMOKE'
+import sys
+from PySide6.QtWidgets import QApplication
+import amberfader.app
+import amberfader.editor_app
+import amberfader.helper
+from amberfader.ui.face_editor import FaceEditorWindow
+app = QApplication(sys.argv)
+window = FaceEditorWindow()
+window.deleteLater()
+PY_SMOKE
+then
+  echo "!! python smoke import failed" >&2
+  exit 1
+fi
+test -x /app/bin/amberfader-face-editor ||
+  { echo "!! face editor launcher missing" >&2; exit 1; }
 test -d "$XDG_RUNTIME_DIR/amberfader" ||
   { echo "!! shared control socket directory absent at sandbox startup" >&2; exit 1; }
 test -x /app/share/amberfader/install-user ||

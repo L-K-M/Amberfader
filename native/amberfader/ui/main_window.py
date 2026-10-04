@@ -11,7 +11,17 @@ from collections import OrderedDict
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from PySide6.QtCore import QBuffer, QByteArray, QElapsedTimer, QIODevice, QPoint, Qt, QTimer
+from PySide6.QtCore import (
+    QBuffer,
+    QByteArray,
+    QElapsedTimer,
+    QIODevice,
+    QPoint,
+    QSignalBlocker,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import QImageReader, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
@@ -22,6 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..face_library import BUNDLED_FACE_ERROR, DEFAULT_FACE_ID, Face, FaceError, FaceLibrary
+from ..hosts import HOST_COPY, PlaybackHost
 from .face_surface import (
     READOUT_CONTROLS,
     CoverLabel,
@@ -40,6 +51,7 @@ from .placeholder import placeholder_png
 from .search_window import SearchWindow
 
 if TYPE_CHECKING:
+    from .face_editor import FaceEditorWindow
     from .faces_window import FacesWindow
 
 ARTWORK_CACHE_BYTES = 20 * 1024 * 1024
@@ -55,14 +67,20 @@ def _fmt(sec: Any) -> str:
 
 
 class MainWindow(QMainWindow):
+    # Emitted after the player closes. The embedded host quits on it, since
+    # its playback lives in this process.
+    closed = Signal()
+
     def __init__(
         self,
         request: Callable[[str, dict], None],
         scale: float = 1.0,
         faces: FaceLibrary | None = None,
+        host: PlaybackHost = PlaybackHost.FIREFOX,
     ) -> None:
         super().__init__()
         self._request = request
+        self._copy = HOST_COPY[host]
         self._state: dict | None = None
         self._state_at = QElapsedTimer()
         self._seeking = False
@@ -74,6 +92,7 @@ class MainWindow(QMainWindow):
         self._cover_window: QDialog | None = None
         self._cover_label: QLabel | None = None
         self._faces_window: FacesWindow | None = None
+        self._face_editor: FaceEditorWindow | None = None
         self._faces = faces or FaceLibrary()
         self._scale = scale
 
@@ -92,7 +111,7 @@ class MainWindow(QMainWindow):
         self._artwork_cache_bytes = 0
         self._title = ElidedLabel("Nothing selected", self._surface)
         self._title.setObjectName("title")
-        self._artists = ElidedLabel("Waiting for Firefox…", self._surface)
+        self._artists = ElidedLabel(self._copy.waiting, self._surface)
         self._artists.setObjectName("artists")
         self._time = ReadoutLabel("–:–– / –:––", self._surface)
         self._time.setObjectName("time")
@@ -116,11 +135,11 @@ class MainWindow(QMainWindow):
         self._vol.setToolTip("Volume")
         self._vol.setAccessibleName("Volume")
         self._btn_search = self._button("Search", "Search songs (Ctrl+F)")
-        self._btn_show = self._button("Show YT", "Show the YouTube Music tab")
-        self._btn_hide = self._button("Hide", "Hide the playback tab (opt-in)")
+        self._btn_show = self._button("Show YT", self._copy.show_tip)
+        self._btn_hide = self._button("Hide", self._copy.hide_tip)
         self._btn_menu = self._button("☰", "Menu and Faces (Ctrl+,)")
         self._btn_minimize = self._button("\u2212", "Minimize")
-        self._btn_close = self._button("\u00d7", "Close Amberfader; music keeps playing")
+        self._btn_close = self._button("\u00d7", self._copy.close_tip)
 
         self._status = ElidedLabel("", self._surface)
         self._status.setObjectName("status")
@@ -138,6 +157,7 @@ class MainWindow(QMainWindow):
                 widget.setTextFormat(Qt.TextFormat.PlainText)
         self._menu = QMenu(self)
         self._menu.addAction("Faces…", self.open_faces)
+        self._menu.addAction("Face editor…", self.open_face_editor)
         self._menu.addAction("Cover view", self.open_cover)
         self._menu.addAction("Search", self.open_search)
         self._menu.addSeparator()
@@ -164,7 +184,9 @@ class MainWindow(QMainWindow):
         self._btn_hide.clicked.connect(lambda: self._request("browser.hidePlayer", {}))
         self._btn_search.clicked.connect(self.open_search)
         self._btn_menu.clicked.connect(lambda: self._menu.popup(
-            self._btn_menu.mapToGlobal(QPoint(0, self._btn_menu.height()))
+            self._surface.control_global_position(
+                "menu", self._btn_menu, QPoint(0, self._btn_menu.height()),
+            )
         ))
         self._btn_minimize.clicked.connect(self.showMinimized)
         self._btn_close.clicked.connect(self.close)
@@ -192,7 +214,7 @@ class MainWindow(QMainWindow):
         elif self._faces.problems:
             self.show_status("Some faces could not load. Open Faces for details.", error=True)
         else:
-            self.show_status("Waiting for Firefox…")
+            self.show_status(self._copy.waiting)
 
     def _button(self, text: str, description: str) -> FaceButton:
         button = FaceButton(text, self._surface)
@@ -207,6 +229,8 @@ class MainWindow(QMainWindow):
             if window is not None:
                 window.close()
         super().closeEvent(event)
+        if event.isAccepted():
+            self.closed.emit()
 
     # ---- appearance ------------------------------------------------------
 
@@ -224,7 +248,23 @@ class MainWindow(QMainWindow):
         self.setMask(artwork.scaled_mask(size))
         # Move the same widgets, preserving focus, pending commands and gestures.
         for name, widget in self._controls.items():
-            widget.setGeometry(*(round(value * effective_scale) for value in face.controls[name]))
+            rotation = face.control_rotations.get(name, 0)
+            if self._surface.needs_rehosting(name, rotation):
+                if isinstance(widget, FaceSlider) and widget.isSliderDown():
+                    # A proxy cannot inherit an in-flight native mouse grab.
+                    # Cancel rather than committing a partial seek or volume.
+                    with QSignalBlocker(widget):
+                        widget.setSliderDown(False)
+                    if name == "seek":
+                        self._seeking = False
+                        self._seek_occ = None
+                elif isinstance(widget, FaceButton):
+                    widget.setDown(False)
+            rect = tuple(round(value * effective_scale) for value in face.controls[name])
+            self._surface.place_control(
+                name, widget, rect,
+                rotation, self.styleSheet(),
+            )
             if isinstance(widget, FaceButton):
                 widget.set_sprites(artwork.buttons.get(name, {}))
                 widget.set_shape(
@@ -246,6 +286,28 @@ class MainWindow(QMainWindow):
         if self._cover_window is not None:
             self._cover_window.setStyleSheet(self.styleSheet())
 
+    def open_face_editor(self, face_id: str | None = None) -> None:
+        """Author a copy without changing the playing face or sending commands."""
+        from ..face_document import FaceDocument
+        from .face_editor import FaceEditorWindow
+
+        try:
+            source = self._faces.load(face_id or self._face_id).info.source
+            if self._face_editor is not None and self._face_editor.isVisible():
+                if face_id is not None and not self._face_editor.new_from_template(source):
+                    return
+            else:
+                if self._face_editor is not None:
+                    self._face_editor.deleteLater()
+                document = FaceDocument.from_template(source)
+                self._face_editor = FaceEditorWindow(document=document)
+        except FaceError as exc:
+            self.show_status(f"Could not open face editor: {exc}", error=True)
+            return
+        self._face_editor.show()
+        self._face_editor.raise_()
+        self._face_editor.activateWindow()
+
     def select_face(self, face_id: str) -> None:
         """Apply and persist a face without issuing a player command."""
         # Validate/decode before saving so a broken pack cannot poison startup.
@@ -258,7 +320,9 @@ class MainWindow(QMainWindow):
         from .faces_window import FacesWindow
 
         if self._faces_window is None:
-            self._faces_window = FacesWindow(self._faces, self.select_face, self)
+            self._faces_window = FacesWindow(
+                self._faces, self.select_face, self, edit=self.open_face_editor,
+            )
         self._faces_window.refresh(self._face_id)
         self._faces_window.show()
         self._faces_window.raise_()
@@ -338,7 +402,7 @@ class MainWindow(QMainWindow):
             self._artists.setToolTip(sub)
         else:
             self._title.setText("Nothing selected")
-            self._artists.setText("Waiting for Firefox…")
+            self._artists.setText(self._copy.waiting)
             self._artists.setToolTip("")
         self._restore_cover(track)
 
@@ -441,9 +505,9 @@ class MainWindow(QMainWindow):
                 self._search.mark_stale()
 
         if component == "gui" and status == "disconnected":
-            self.show_status("Disconnected from Firefox bridge", error=True)
+            self.show_status(self._copy.lost_status, error=True)
         elif component == "target" and status != "connected":
-            self.show_status(reason or "Playback tab disconnected", error=True)
+            self.show_status(reason or self._copy.target_lost, error=True)
 
     def binding_changed(self) -> None:
         """Disable occurrence-bound actions until a fresh target state arrives."""

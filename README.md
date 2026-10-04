@@ -13,7 +13,8 @@ artwork and track information, controls playback, and searches YouTube Music
 from a detached extension window — and, once native mode is enabled, from a
 small PySide6 desktop application connected through Firefox Native Messaging.
 
-Linux only. Works with Firefox installed as a deb/rpm or as a Flatpak.
+The playback bridge targets Linux, with Firefox installed as a deb/rpm or as a
+Flatpak. The standalone face editor runs on macOS and Linux.
 
 ## Status
 
@@ -72,6 +73,22 @@ Restart the browser and desktop app after updating.
   YouTube Music action menu and activates its **Start mix** link. An unavailable
   control or unconfirmed outcome is reported instead of retried.
 
+## Embedded prototype (experimental)
+
+A prototype hosts YouTube Music in Amberfader's own QtWebEngine window instead
+of Firefox, with no extension or native-messaging setup. It runs from a
+checkout only:
+
+```sh
+npm ci
+uv sync --extra gui --extra embedded
+npm run embedded:run
+```
+
+Whether this replaces the Firefox integration depends on a manual gate,
+starting with whether Google accepts sign-in from QtWebEngine. See
+[Embedded prototype](docs/embedded-prototype.md).
+
 ## Linux Faces
 
 In the native app, choose **☰ → Faces…** or press **Ctrl+,**. Eighteen original
@@ -87,6 +104,20 @@ Click the cover for **Cover view**.
 Install additional JSON/PNG face plugins with **Install face folder…**.
 See [Faces](docs/faces.md) for previews, installation paths and the versioned
 plugin format.
+
+## Face editor for Mac and Linux
+
+Create your own face with the visual editor:
+
+```sh
+uv sync --extra gui
+uv run amberfader-face-editor
+uv run amberfader-face-editor path/to/your/face
+```
+
+Drag controls into place, resize and rotate them, adjust their appearance,
+and save a portable JSON/PNG face folder. The editor works independently of
+Firefox and playback. See the [editor guide](docs/face-editor.md).
 
 ## Connect an installed Flatpak app
 

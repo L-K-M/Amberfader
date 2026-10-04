@@ -84,8 +84,10 @@ def test_deb_installs_for_launcher_interpreter_and_declares_its_abi(
         assert invocation[:4] == ["/usr/bin/python3", "-m", "pip", "install"]
     assert invocation[invocation.index("--target") + 1] == "dist/deb/stage/opt/amberfader/lib"
 
-    for name in ("amberfader", "amberfader-helper"):
+    for name in ("amberfader", "amberfader-helper", "amberfader-face-editor"):
         assert "/usr/bin/python3 -m amberfader." in (stage / "usr/bin" / name).read_text()
+        assert (stage / "usr/bin" / name).stat().st_mode & 0o111
+    assert "amberfader.editor_app" in (stage / "usr/bin/amberfader-face-editor").read_text()
 
 
 def test_deb_rejects_unsupported_launcher_python_before_installing(build_environment):

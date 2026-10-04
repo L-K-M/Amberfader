@@ -8,7 +8,8 @@ import { FakeAdapter } from "../adapter/fakeAdapter";
 import { YouTubeMusicAdapter } from "../adapter/youtubeMusic";
 import type { SiteAdapter } from "../adapter/types";
 import { runProbes } from "../probe/probe";
-import { CommandExecutor } from "./executor";
+import { executorFor } from "./executor";
+import type { CommandExecutor } from "./executor";
 
 
 // Fresh per document lifetime; the router binds commands to it so a command
@@ -66,23 +67,7 @@ async function startAdapter(): Promise<{ adapter: SiteAdapter; executor: Command
     });
   });
 
-  const executor = new CommandExecutor(
-    adapter,
-    (q) =>
-      "runSearch" in adapter
-        ? (adapter as YouTubeMusicAdapter | FakeAdapter).runSearch(q)
-        : Promise.reject(new Error("adapter has no search")),
-    (t, r) =>
-      "runPlayResult" in adapter
-        ? (adapter as YouTubeMusicAdapter | FakeAdapter).runPlayResult(t, r)
-        : Promise.resolve({
-            ok: false as const,
-            error: {
-              code: "unsupported_operation" as const,
-              message: "adapter has no playResult",
-            },
-          }),
-  );
+  const executor = executorFor(adapter);
 
   await adapter.start();
   return { adapter, executor };

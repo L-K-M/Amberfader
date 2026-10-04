@@ -143,3 +143,8 @@ tests verify rendering and state preservation, not compositor integration.
 - Install a local face folder through the native and Flatpak file choosers.
   Check saved paths, reject duplicate IDs, and remove the installed folder.
 - Close the GUI and confirm YouTube Music keeps playing.
+
+## Embedded QtWebEngine prototype
+
+The embedded prototype has its own gate (sign-in, persistence, hidden
+playback, memory) in [`embedded-prototype.md`](embedded-prototype.md#gate).

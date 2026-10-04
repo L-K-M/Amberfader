@@ -96,6 +96,16 @@ def test_register_flatpak_app_from_packaged_script_on_stdin(install_environment)
     assert (home / ".mozilla/native-messaging-hosts/amberfader.json").is_file()
 
 
+def test_flatpak_editor_launcher_preserves_folder_arguments(install_environment):
+    home, _, env = install_environment
+    result = run_installer(env)
+    assert result.returncode == 0, result.stderr
+    editor = home / ".local/share/amberfader/bin/amberfader-face-editor"
+    subprocess.run([str(editor), "a face folder"], env=env, check=True)
+    invocation = json.loads(Path(env["TEST_FLATPAK_LOG"]).read_text().strip())
+    assert invocation == ["run", "--command=amberfader-face-editor", APP_ID, "a face folder"]
+
+
 def test_existing_source_install_mode_still_registers_the_python_helper(install_environment):
     home, _, env = install_environment
     (home / ".zen").mkdir()
@@ -108,6 +118,9 @@ def test_existing_source_install_mode_still_registers_the_python_helper(install_
     helper = Path(manifest["path"])
     assert 'amberfader.helper' in helper.read_text()
     assert 'flatpak run' not in helper.read_text()
+    editor = home / ".local/share/amberfader/bin/amberfader-face-editor"
+    assert editor.stat().st_mode & 0o111
+    assert 'amberfader.editor_app' in editor.read_text()
 
 
 def test_missing_manifest_writer_fails_before_changing_the_installation(install_environment):

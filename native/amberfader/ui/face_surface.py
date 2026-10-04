@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import ceil, floor
 
 from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt, Signal
 from PySide6.QtGui import (
@@ -21,6 +22,10 @@ from PySide6.QtGui import (
     QRegion,
 )
 from PySide6.QtWidgets import (
+    QFrame,
+    QGraphicsProxyWidget,
+    QGraphicsScene,
+    QGraphicsView,
     QLabel,
     QPushButton,
     QSlider,
@@ -30,11 +35,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..face_library import Face, FaceError
+from ..face_library import Face, FaceError, Rect, control_polygon
 
 FONT_FAMILIES = {"sans": "sans-serif", "mono": "monospace", "serif": "serif"}
 TRANSPORT_CONTROLS = frozenset(("previous", "play", "next"))
 READOUT_CONTROLS = frozenset(("title", "artists", "time", "playback", "status"))
+PREVIEW_LABELS = {
+    "title": "A face for your music", "artists": "Amberfader · Face preview",
+    "time": "03:48 / 04:30", "playback": "PREVIEW", "previous": "⏮", "play": "▶",
+    "next": "⏭", "like": "♥", "search": "Search", "show": "Show YT", "hide": "Hide",
+    "menu": "☰", "minimize": "\u2212", "close": "\u00d7", "status": "Firefox keeps playing",
+}
+
 READOUT_ALIGNMENT = {
     "left": Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
     "center": Qt.AlignmentFlag.AlignCenter,
@@ -262,15 +274,121 @@ def _decode(data: bytes) -> QPixmap:
 
 def prepare_face(face: Face) -> FaceArtwork:
     """Decode before committing a selection; invisible controls are invalid."""
+    artwork = prepare_face_preview(face)
+    for name, rect in {**face.controls, "drag": face.drag}.items():
+        rotation = face.control_rotations.get(name, 0)
+        if rotation:
+            polygon = QPolygonF([QPointF(x, y) for x, y in control_polygon(rect, rotation)])
+            footprint = QRegion(polygon.toPolygon())
+        else:
+            footprint = QRegion(QRect(*rect))
+        if not footprint.subtracted(artwork.mask).isEmpty():
+            raise FaceError(f"{name} must sit on the opaque face, not a transparent cutout")
+    return artwork
+
+
+def prepare_face_preview(face: Face) -> FaceArtwork:
+    """Decode an unfinished editor draft without accepting it for installation."""
     background = _decode(face.background)
     mask = _alpha_mask(background, face.size)
-    for name, rect in {**face.controls, "drag": face.drag}.items():
-        if not QRegion(QRect(*rect)).subtracted(mask).isEmpty():
-            raise FaceError(f"{name} must sit on the opaque face, not a transparent cutout")
     return FaceArtwork(background, mask, {
         name: {state: _decode(data) for state, data in images.items()}
         for name, images in face.buttons.items()
     })
+
+
+def draw_face_preview(
+    painter: QPainter, face: Face, artwork: FaceArtwork, cover: QPixmap,
+    labels: dict[str, str] | None = None,
+) -> None:
+    """Paint the picker and editor using one logical-coordinate face renderer."""
+    labels = PREVIEW_LABELS if labels is None else {**PREVIEW_LABELS, **labels}
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+    painter.drawPixmap(QRect(0, 0, *face.size), artwork.background)
+    for name, coordinates in face.controls.items():
+        painter.save()
+        rect = QRect(*coordinates)
+        rotation = face.control_rotations.get(name, 0)
+        if rotation:
+            center = QRectF(rect).center()
+            painter.translate(center)
+            painter.rotate(rotation)
+            painter.translate(-center)
+        _draw_preview_control(painter, face, artwork, cover, labels, name, coordinates)
+        painter.restore()
+    painter.restore()
+
+
+def _draw_preview_control(painter, face, artwork, cover, labels, name, coordinates) -> None:
+    p = face.palette
+    rect = QRect(*coordinates)
+    painter.setPen(QColor(p["readout"]))
+    if name in READOUT_CONTROLS:
+        font = readout_font(face, name)
+    else:
+        font = QFont(FONT_FAMILIES[face.font])
+        font.setPixelSize(like_font_size(face) if name == "like" else 12)
+    if name == "time":
+        font = fit_readout_font(font, labels["time"], rect)
+    painter.setFont(font)
+    if name == "art":
+        draw_cover(
+            painter, cover, QRectF(rect), face.control_shapes.get("art", "rectangle"),
+            face.radius, face.cover_glass,
+        )
+        return
+    if name in ("seek", "volume"):
+        if face.slider_style == "inset":
+            groove = QRectF(rect.x(), rect.y() + (rect.height() - 4) / 2, rect.width(), 4)
+            # The 12px QSS handle has a 1px border on either side.
+            handle = QRectF(
+                rect.center().x() - 6, rect.y() + (rect.height() - 14) / 2, 14, 14,
+            )
+            draw_slider(painter, groove, handle, p)
+            return
+        groove = rect.adjusted(4, rect.height() // 2 - 2, -4, -(rect.height() // 2 - 2))
+        painter.fillRect(groove, QColor(p["display"]))
+        groove.setWidth(groove.width() // 2)
+        painter.fillRect(groove, QColor(p["accent"]))
+        return
+    button = name in (
+        "previous", "play", "next", "like", "search", "show", "hide", "menu",
+        "minimize", "close",
+    )
+    if button:
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = control_path(
+            QRectF(rect), face.control_shapes.get(name, "rectangle"), face.radius,
+        )
+        painter.setClipPath(path, Qt.ClipOperation.IntersectClip)
+        if name in artwork.buttons:
+            painter.drawPixmap(rect, artwork.buttons[name]["normal"])
+        else:
+            gradient = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+            gradient.setColorAt(0, QColor(p["buttonTop"]))
+            gradient.setColorAt(1, QColor(p["buttonBottom"]))
+            painter.setBrush(gradient)
+            painter.setPen(QColor(p["border"]))
+            painter.drawPath(path)
+        painter.restore()
+        painter.setPen(QColor(p["text"]))
+    elif name == "status":
+        painter.setPen(QColor(p["muted"]))
+    if name in TRANSPORT_CONTROLS:
+        draw_transport_icon(painter, name, labels[name], rect, QColor(p["text"]))
+        return
+    text = labels.get(name, "")
+    if name != "time":
+        text = painter.fontMetrics().elidedText(
+            text, Qt.TextElideMode.ElideRight, rect.width()
+        )
+    alignment = (
+        readout_style(face, name).alignment if name in READOUT_CONTROLS
+        else Qt.AlignmentFlag.AlignCenter
+    )
+    painter.drawText(rect, alignment, text)
 
 
 def like_font_size(face: Face) -> int:
@@ -406,6 +524,7 @@ class CoverLabel(KeyboardFocusRing, QLabel):
         self._shape = "rectangle"
         self._radius = 0.0
         self._glass = False
+        self._pressed = False
 
     def set_shape(self, shape: str, radius: float, glass: bool) -> None:
         self._shape, self._radius, self._glass = shape, radius, glass
@@ -426,12 +545,24 @@ class CoverLabel(KeyboardFocusRing, QLabel):
                 QRectF(self.rect()).adjusted(2, 2, -2, -2), self._shape, self._radius,
             ))
 
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        self._pressed = (
+            event.button() == Qt.MouseButton.LeftButton
+            and self._cover_path().contains(event.position())
+        )
+        if self._pressed:
+            self.setFocus(Qt.FocusReason.MouseFocusReason)
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if (
-            event.button() == Qt.MouseButton.LeftButton
+            self._pressed and event.button() == Qt.MouseButton.LeftButton
             and self._cover_path().contains(event.position())
         ):
             self.activated.emit()
+        self._pressed = False
         super().mouseReleaseEvent(event)
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
@@ -514,6 +645,65 @@ class FaceButton(KeyboardFocusRing, QPushButton):
             painter.drawPath(self._indicator_path())
 
 
+class RotatedControl(QGraphicsView):
+    """Embed the real native control; Qt maps pointer and keyboard events back."""
+
+    def __init__(self, widget: QWidget, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self.setRenderHints(
+            QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform,
+        )
+        self.setStyleSheet("QGraphicsView { background: transparent; border: none; }")
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.viewport().setAutoFillBackground(False)
+        self.viewport().setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self._scene = QGraphicsScene(self)
+        self.setScene(self._scene)
+        widget.hide()
+        widget.setParent(None)
+        widget.setGeometry(0, 0, widget.width(), widget.height())
+        self._proxy: QGraphicsProxyWidget = self._scene.addWidget(widget)
+        widget.show()
+        self.setFocusPolicy(widget.focusPolicy())
+
+    def apply_geometry(self, rect: Rect, rotation: float) -> None:
+        x, y, width, height = rect
+        polygon = QPolygonF([QPointF(px, py) for px, py in control_polygon(rect, rotation)])
+        bounds = polygon.boundingRect()
+        left, top = floor(bounds.left()), floor(bounds.top())
+        right, bottom = ceil(bounds.right()), ceil(bounds.bottom())
+        self.setGeometry(left, top, right - left, bottom - top)
+        self.setSceneRect(0, 0, right - left, bottom - top)
+        self._proxy.setRotation(0)
+        self._proxy.widget().resize(width, height)
+        self._proxy.setTransformOriginPoint(width / 2, height / 2)
+        self._proxy.setPos(x - left, y - top)
+        self._proxy.setRotation(rotation)
+        polygon.translate(-left, -top)
+        # Bounding-box corners remain available to the shell and adjacent
+        # controls, rather than forming an invisible rectangular click blocker.
+        self.setMask(QRegion(polygon.toPolygon()))
+        self.show()
+
+    def map_control_to_global(self, point: QPoint) -> QPoint:
+        position = self.mapFromScene(self._proxy.mapToScene(QPointF(point)))
+        return self.viewport().mapToGlobal(position)
+
+    def detach(self, parent: QWidget) -> QWidget:
+        widget = self._proxy.widget()
+        self._proxy.setWidget(None)
+        widget.setParent(parent)
+        widget.setStyleSheet("")
+        widget.show()
+        self.hide()
+        self.deleteLater()
+        return widget
+
+
 class FaceSurface(QWidget):
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
@@ -521,11 +711,44 @@ class FaceSurface(QWidget):
         self._background = QPixmap()
         self._drag = QRect()
         self._drag_offset: QPoint | None = None
+        self._rotated: dict[str, RotatedControl] = {}
 
     def apply_face(self, face: Face, artwork: FaceArtwork, scale: float) -> None:
         self._background = artwork.background
         self._drag = QRect(*(round(value * scale) for value in face.drag))
         self.update()
+
+    def place_control(
+        self, name: str, widget: QWidget, rect: Rect, rotation: float, stylesheet: str,
+    ) -> None:
+        wrapper = self._rotated.get(name)
+        focused = widget.hasFocus()
+        if rotation:
+            if wrapper is None:
+                wrapper = RotatedControl(widget, self)
+                self._rotated[name] = wrapper
+            # The embedded top-level widget needs the same constrained style
+            # as its siblings; it no longer inherits from the player window.
+            widget.setStyleSheet(stylesheet)
+            wrapper.apply_geometry(rect, rotation)
+            if focused:
+                wrapper.setFocus()
+                wrapper._proxy.setFocus()
+                widget.setFocus()
+            return
+        if wrapper is not None:
+            wrapper.detach(self)
+            del self._rotated[name]
+        widget.setGeometry(*rect)
+        if focused:
+            widget.setFocus()
+
+    def needs_rehosting(self, name: str, rotation: float) -> bool:
+        return (name in self._rotated) != bool(rotation)
+
+    def control_global_position(self, name: str, widget: QWidget, point: QPoint) -> QPoint:
+        wrapper = self._rotated.get(name)
+        return wrapper.map_control_to_global(point) if wrapper else widget.mapToGlobal(point)
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)

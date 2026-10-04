@@ -4,6 +4,8 @@
 // IDs never execute twice. This is not exactly-once across browser crashes —
 // clients reconnect with fresh state instead of retrying non-idempotent ops.
 import type { CommandResult, SiteAdapter } from "../adapter/types";
+import type { FakeAdapter } from "../adapter/fakeAdapter";
+import type { YouTubeMusicAdapter } from "../adapter/youtubeMusic";
 import type { Method } from "../protocol/types";
 
 const DEDUP_CAP = 500;
@@ -89,4 +91,27 @@ export class CommandExecutor {
   get size(): number {
     return this.cache.size;
   }
+}
+
+// Search and result playback use narrower adapter APIs than exec(). Both page
+// hosts (the Firefox content script and the embedded QtWebEngine bridge) wire
+// them through this one factory so their command paths cannot drift apart.
+export function executorFor(adapter: SiteAdapter): CommandExecutor {
+  return new CommandExecutor(
+    adapter,
+    (q) =>
+      "runSearch" in adapter
+        ? (adapter as YouTubeMusicAdapter | FakeAdapter).runSearch(q)
+        : Promise.reject(new Error("adapter has no search")),
+    (t, r) =>
+      "runPlayResult" in adapter
+        ? (adapter as YouTubeMusicAdapter | FakeAdapter).runPlayResult(t, r)
+        : Promise.resolve({
+            ok: false as const,
+            error: {
+              code: "unsupported_operation" as const,
+              message: "adapter has no playResult",
+            },
+          }),
+  );
 }
