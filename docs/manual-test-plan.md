@@ -148,6 +148,25 @@ For Plasma's panel menus, follow the X11/Wayland and Flatpak checks in
 [KDE global menu](global-menu.md#verification). Menu layout and editor checks
 can run without Firefox; playback checks still need a live session.
 
+## Audion face import
+
+- On macOS and Linux, choose **File → Import Audion face…** in the editor.
+  Browse a converted face folder, a collection folder, and a collection ZIP.
+  Check filtering, original credits, conversion notes and the selected preview.
+- Cancel importing with an edited document open, including uncommitted inspector
+  text. Confirm the draft remains intact. Accept an import and save to a new
+  folder; move the source away, reopen the saved copy and install it on Linux.
+- Check original sprites, bitmap clocks and soft alpha edges at 1x, 1.5x and 2x.
+  Move, resize and rotate the clock and a button in the editor. Check unavailable
+  legacy fonts use a local fallback without a download prompt.
+- In the player, test popup seek and volume, Escape cancellation, disabled
+  controls, track changes during a gesture and switching back to bundled faces.
+  Check the right-click menu exposes commands absent from the original artwork.
+  Playback acceptance still requires the live YouTube Music session gate.
+- In Flatpak, select the containing folder through the native file picker,
+  then a ZIP. Verify access includes the selected face's images. An unreadable
+  source must show an error and leave the existing document intact.
+
 ## Embedded QtWebEngine prototype
 
 The embedded prototype has its own gate (sign-in, persistence, hidden

@@ -7,22 +7,25 @@
   "required": ["formatVersion", "id", "name", "author", "description", "size", "background", "drag", "palette", "controls"],
   "properties": {
     "$schema": {"type": "string", "maxLength": 256},
-    "formatVersion": {"enum": [1, 2]},
+    "formatVersion": {"enum": [1, 2, 3]},
     "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,47}$"},
     "name": {"type": "string", "minLength": 1, "maxLength": 64},
     "author": {"type": "string", "minLength": 1, "maxLength": 96},
     "description": {"type": "string", "minLength": 1, "maxLength": 240},
+    "sourceCredit": {"type": "string", "maxLength": 4096},
+    "spriteLabels": {"type": "boolean"},
     "size": {
-      "type": "array", "prefixItems": [{"type": "integer", "minimum": 360, "maximum": 1024}, {"type": "integer", "minimum": 180, "maximum": 768}],
+      "type": "array", "prefixItems": [{"type": "integer", "minimum": 1, "maximum": 2048}, {"type": "integer", "minimum": 1, "maximum": 2048}],
       "items": false, "minItems": 2
     },
     "background": {"$ref": "#/$defs/image"},
+    "alphaMask": {"$ref": "#/$defs/image"},
     "drag": {"$ref": "#/$defs/rect"},
     "font": {"enum": ["sans", "mono", "serif"]},
     "timeSize": {"type": "integer", "minimum": 16, "maximum": 36},
     "radius": {"type": "integer", "minimum": 0, "maximum": 24},
     "coverGlass": {"type": "boolean"},
-    "sliderStyle": {"enum": ["classic", "inset"]},
+    "sliderStyle": {"enum": ["classic", "inset", "popup"]},
     "readoutStyles": {
       "type": "object",
       "propertyNames": {"enum": ["title", "artists", "time", "playback", "status"]},
@@ -31,8 +34,11 @@
         "properties": {
           "align": {"enum": ["left", "center", "right"]},
           "font": {"enum": ["sans", "mono", "serif"]},
-          "size": {"type": "integer", "minimum": 10, "maximum": 36},
-          "bold": {"type": "boolean"}
+          "size": {"type": "integer", "minimum": 6, "maximum": 36},
+          "bold": {"type": "boolean"},
+          "italic": {"type": "boolean"},
+          "fontFamily": {"type": "string", "minLength": 1, "maxLength": 96},
+          "color": {"$ref": "#/$defs/color"}
         }
       }
     },
@@ -60,7 +66,6 @@
     },
     "controls": {
       "type": "object", "additionalProperties": false,
-      "required": ["art", "title", "artists", "time", "playback", "previous", "play", "next", "like", "seek", "volume", "search", "show", "hide", "menu", "status", "minimize", "close"],
       "properties": {
         "art": {"$ref": "#/$defs/rect"}, "title": {"$ref": "#/$defs/rect"},
         "artists": {"$ref": "#/$defs/rect"}, "time": {"$ref": "#/$defs/rect"},
@@ -74,12 +79,24 @@
       }
     },
     "buttons": {
-      "type": "object", "propertyNames": {"enum": ["previous", "play", "next", "like", "search", "show", "hide", "menu", "minimize", "close"]},
+      "type": "object", "propertyNames": {"enum": ["previous", "play", "next", "like", "search", "show", "hide", "menu", "minimize", "close", "seek", "volume"]},
       "additionalProperties": {
         "type": "object", "additionalProperties": false, "required": ["normal"],
         "properties": {
           "normal": {"$ref": "#/$defs/image"}, "hover": {"$ref": "#/$defs/image"},
-          "pressed": {"$ref": "#/$defs/image"}, "disabled": {"$ref": "#/$defs/image"}
+          "pressed": {"$ref": "#/$defs/image"}, "disabled": {"$ref": "#/$defs/image"},
+          "playing": {"$ref": "#/$defs/image"}, "playing-hover": {"$ref": "#/$defs/image"},
+          "playing-pressed": {"$ref": "#/$defs/image"}, "playing-disabled": {"$ref": "#/$defs/image"}
+        }
+      }
+    },
+    "timeDigits": {
+      "type": "array", "maxItems": 4,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["rect", "images"],
+        "properties": {
+          "rect": {"$ref": "#/$defs/rect"},
+          "images": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"$ref": "#/$defs/image"}}
         }
       }
     }
@@ -87,11 +104,43 @@
   "allOf": [{
     "if": {"properties": {"formatVersion": {"const": 1}}},
     "then": {"not": {"anyOf": [{"required": ["controlShapes"]}, {"required": ["coverGlass"]}, {"required": ["readoutStyles"]}, {"required": ["sliderStyle"]}, {"required": ["controlRotations"]}]}}
+  }, {
+    "if": {"properties": {"formatVersion": {"enum": [1, 2]}}},
+    "then": {
+      "not": {"anyOf": [{"required": ["sourceCredit"]}, {"required": ["spriteLabels"]}, {"required": ["timeDigits"]}, {"required": ["alphaMask"]}]},
+      "properties": {
+        "size": {
+          "prefixItems": [{"type": "integer", "minimum": 360, "maximum": 1024}, {"type": "integer", "minimum": 180, "maximum": 768}]
+        },
+        "drag": {"$ref": "#/$defs/legacyRect"},
+        "sliderStyle": {"enum": ["classic", "inset"]},
+        "controls": {
+          "required": ["art", "title", "artists", "time", "playback", "previous", "play", "next", "like", "seek", "volume", "search", "show", "hide", "menu", "status", "minimize", "close"],
+          "additionalProperties": {"$ref": "#/$defs/legacyRect"}
+        },
+        "readoutStyles": {
+          "additionalProperties": {
+            "not": {"anyOf": [{"required": ["italic"]}, {"required": ["fontFamily"]}, {"required": ["color"]}]},
+            "properties": {"size": {"minimum": 10}}
+          }
+        },
+        "buttons": {
+          "propertyNames": {"enum": ["previous", "play", "next", "like", "search", "show", "hide", "menu", "minimize", "close"]},
+          "additionalProperties": {
+            "not": {"anyOf": [{"required": ["playing"]}, {"required": ["playing-hover"]}, {"required": ["playing-pressed"]}, {"required": ["playing-disabled"]}]}
+          }
+        }
+      }
+    }
   }],
   "$defs": {
     "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{6}$"},
     "image": {"type": "string", "pattern": "^[a-zA-Z0-9_-]+\\.png$", "maxLength": 96},
     "rect": {
+      "type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 2048},
+      "minItems": 4, "maxItems": 4
+    },
+    "legacyRect": {
       "type": "array", "items": {"type": "integer", "minimum": 0, "maximum": 1024},
       "minItems": 4, "maxItems": 4
     }

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtGui import QAction, QColor, QKeySequence, QLinearGradient, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -31,7 +33,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..face_document import FaceDocument
+from ..face_document import SPRITE_CONTROLS, FaceDocument
 from ..face_library import (
     BUILTIN_DIRECTORY,
     DEFAULT_FACE_ID,
@@ -41,6 +43,9 @@ from ..face_library import (
 )
 from .face_editor_canvas import FaceEditorCanvas
 from .face_surface import READOUT_CONTROLS, FaceArtwork, prepare_face, prepare_face_preview
+
+if TYPE_CHECKING:
+    from ..audion_import import AudionImportResult
 
 BUTTON_CONTROLS = frozenset(
     (
@@ -95,6 +100,7 @@ class FaceEditorWindow(QMainWindow):
         self._document = document or FaceDocument.from_template(BUILTIN_DIRECTORY / DEFAULT_FACE_ID)
         self._syncing = False
         self._metadata_model_values: dict[str, str] = {}
+        self._readout_family_model: tuple[str, str] | None = None
         self._artwork: FaceArtwork | None = None
         self._artwork_key = None
         self._cover = self._sample_cover()
@@ -154,6 +160,7 @@ class FaceEditorWindow(QMainWindow):
         self._open_action = self._action(
             "Open face folder…", QKeySequence.StandardKey.Open, self._open
         )
+        self._audion_import_action = self._action("Import Audion face…", None, self._import_audion)
         self._save_action = self._action("Save", QKeySequence.StandardKey.Save, self.save)
         self._save_as_action = self._action(
             "Save as…", QKeySequence.StandardKey.SaveAs, self.save_as
@@ -165,10 +172,13 @@ class FaceEditorWindow(QMainWindow):
         self._actual_action = self._action(
             "Actual size", QKeySequence("Ctrl+0"), lambda: self._canvas.set_zoom(1)
         )
+        self._add_element_action = self._action("Add element…", None, self._add_element)
+        self._remove_element_action = self._action("Remove element", None, self._remove_element)
         file_menu = self.menuBar().addMenu("&File")
         for action in (
             self._new_action,
             self._open_action,
+            self._audion_import_action,
             self._save_action,
             self._save_as_action,
             self._export_action,
@@ -181,6 +191,9 @@ class FaceEditorWindow(QMainWindow):
         edit_menu = self.menuBar().addMenu("&Edit")
         edit_menu.addAction(self._undo_action)
         edit_menu.addAction(self._redo_action)
+        edit_menu.addSeparator()
+        edit_menu.addAction(self._add_element_action)
+        edit_menu.addAction(self._remove_element_action)
         view_menu = self.menuBar().addMenu("&View")
         view_menu.addAction(self._fit_action)
         view_menu.addAction(self._actual_action)
@@ -231,6 +244,12 @@ class FaceEditorWindow(QMainWindow):
         title.setStyleSheet("font-weight: bold;")
         left.addWidget(title)
         left.addWidget(self._layers)
+        self._add_element_button = QPushButton("Add element…", layers_panel)
+        self._add_element_button.clicked.connect(self._add_element)
+        left.addWidget(self._add_element_button)
+        self._remove_element_button = QPushButton("Remove element", layers_panel)
+        self._remove_element_button.clicked.connect(self._remove_element)
+        left.addWidget(self._remove_element_button)
         left.addWidget(
             QLabel("Arrow keys: 1 px\nShift + arrows: 10 px\nShift + rotate: 15°", layers_panel)
         )
@@ -291,7 +310,7 @@ class FaceEditorWindow(QMainWindow):
         self._text_font.currentTextChanged.connect(lambda value: self._edit_readout("font", value))
         text_layout.addRow("Font", self._text_font)
         self._text_size = QSpinBox(self._readout_group)
-        self._text_size.setRange(10, 36)
+        self._text_size.setRange(6, 36)
         self._text_size.setSuffix(" px")
         self._text_size.setKeyboardTracking(False)
         self._text_size.valueChanged.connect(lambda value: self._edit_readout("size", value))
@@ -305,6 +324,17 @@ class FaceEditorWindow(QMainWindow):
         self._text_bold = QCheckBox("Bold", self._readout_group)
         self._text_bold.toggled.connect(lambda value: self._edit_readout("bold", value))
         text_layout.addRow(self._text_bold)
+        self._text_family = QLineEdit(self._readout_group)
+        self._text_family.setMaxLength(96)
+        self._text_family.setPlaceholderText("Use the face font")
+        self._text_family.editingFinished.connect(self._edit_font_family)
+        text_layout.addRow("Font family", self._text_family)
+        self._text_italic = QCheckBox("Italic", self._readout_group)
+        self._text_italic.toggled.connect(lambda value: self._edit_readout("italic", value))
+        text_layout.addRow(self._text_italic)
+        self._text_color = QPushButton(self._readout_group)
+        self._text_color.clicked.connect(self._pick_readout_color)
+        text_layout.addRow("Text color", self._text_color)
         reset = QPushButton("Use face defaults", self._readout_group)
         reset.clicked.connect(self._reset_readout)
         text_layout.addRow(reset)
@@ -373,7 +403,7 @@ class FaceEditorWindow(QMainWindow):
         self._radius.valueChanged.connect(lambda value: self._edit_value(("radius",), value))
         metadata.addRow("Corner radius", self._radius)
         self._slider_style = QComboBox(panel)
-        self._slider_style.addItems(["classic", "inset"])
+        self._slider_style.addItems(["classic", "inset", "popup"])
         self._slider_style.currentTextChanged.connect(
             lambda value: self._edit_value(("sliderStyle",), value),
         )
@@ -381,7 +411,17 @@ class FaceEditorWindow(QMainWindow):
         self._glass = QCheckBox("Reflection over album artwork", panel)
         self._glass.toggled.connect(lambda value: self._edit_value(("coverGlass",), value))
         metadata.addRow(self._glass)
+        self._sprite_labels = QCheckBox("Draw labels over button artwork", panel)
+        self._sprite_labels.toggled.connect(
+            lambda value: self._edit_value(("spriteLabels",), value),
+        )
+        metadata.addRow(self._sprite_labels)
         layout.addLayout(metadata)
+        self._source_credit = QPlainTextEdit(panel)
+        self._source_credit.setReadOnly(True)
+        self._source_credit.setAccessibleName("Original face credits")
+        self._source_credit.setMaximumHeight(140)
+        layout.addWidget(self._source_credit)
         background_group = QGroupBox("Background", panel)
         background_layout = QVBoxLayout(background_group)
         self._background_name = QLabel(background_group)
@@ -397,6 +437,16 @@ class FaceEditorWindow(QMainWindow):
             "When unchecked, the PNG must match the face at 1x or 2x."
         )
         background_layout.addWidget(self._adopt_background)
+        self._alpha_mask_name = QLabel(background_group)
+        self._alpha_mask_name.setTextFormat(Qt.TextFormat.PlainText)
+        self._alpha_mask_name.setWordWrap(True)
+        background_layout.addWidget(self._alpha_mask_name)
+        mask_import = QPushButton("Import window mask PNG…", background_group)
+        mask_import.clicked.connect(self._import_alpha_mask)
+        background_layout.addWidget(mask_import)
+        self._clear_alpha_mask_button = QPushButton("Remove window mask", background_group)
+        self._clear_alpha_mask_button.clicked.connect(self._clear_alpha_mask)
+        background_layout.addWidget(self._clear_alpha_mask_button)
         layout.addWidget(background_group)
         palette_group = QGroupBox("Palette", panel)
         palette_layout = QFormLayout(palette_group)
@@ -417,15 +467,32 @@ class FaceEditorWindow(QMainWindow):
         self._canvas.set_document(document)
         self._artwork_key = None
         self._artwork = None
-        self._layers.clear()
-        for name in [*document.manifest["controls"], "drag"]:
-            item = QListWidgetItem(CONTROL_LABELS[name])
-            item.setData(Qt.ItemDataRole.UserRole, name)
-            self._layers.addItem(item)
-            if name == "play":
-                self._layers.setCurrentItem(item)
+        self._refresh_layers()
         self._changed()
         self._canvas.fit_face()
+
+    def _refresh_layers(self) -> None:
+        names = [*self._document.manifest["controls"], "drag"]
+        selected = self._canvas.selected
+        if selected not in names:
+            selected = "play" if "play" in names else names[0]
+            self._canvas.select(selected)
+        existing = [
+            self._layers.item(index).data(Qt.ItemDataRole.UserRole)
+            for index in range(self._layers.count())
+        ]
+        blocker = QSignalBlocker(self._layers)
+        if existing != names:
+            self._layers.clear()
+            for name in names:
+                item = QListWidgetItem(CONTROL_LABELS[name])
+                item.setData(Qt.ItemDataRole.UserRole, name)
+                self._layers.addItem(item)
+        for index, name in enumerate(names):
+            if name == selected:
+                self._layers.setCurrentRow(index)
+                break
+        del blocker
 
     def _select_layer(self, item: QListWidgetItem | None, previous=None) -> None:
         if item is None:
@@ -465,7 +532,24 @@ class FaceEditorWindow(QMainWindow):
                 )
                 self._text_align.setCurrentText(style.get("align", "left"))
                 self._text_bold.setChecked(style.get("bold", name == "title"))
-            self._sprite_group.setVisible(name in BUTTON_CONTROLS)
+                family = style.get("fontFamily", "")
+                if not self._text_family.hasFocus() or self._readout_family_model != (name, family):
+                    self._text_family.setText(family)
+                self._readout_family_model = (name, family)
+                self._text_italic.setChecked(style.get("italic", False))
+                self._text_color.setText(style.get("color", "Use face color"))
+            self._sprite_group.setVisible(self._uses_button_artwork(name))
+            states = ["normal", "hover", "pressed", "disabled"]
+            if name == "play":
+                states += ["playing", "playing-hover", "playing-pressed", "playing-disabled"]
+            current_states = [
+                self._sprite_state.itemText(index) for index in range(self._sprite_state.count())
+            ]
+            if states != current_states:
+                state = self._sprite_state.currentText()
+                self._sprite_state.clear()
+                self._sprite_state.addItems(states)
+                self._sprite_state.setCurrentText(state if state in states else "normal")
             self._sprite_description()
             for key, field in self._metadata.items():
                 value = data[key]
@@ -475,13 +559,30 @@ class FaceEditorWindow(QMainWindow):
                 if not field.hasFocus() or self._metadata_model_values.get(key) != value:
                     field.setText(value)
                 self._metadata_model_values[key] = value
-            for field, value in zip(self._face_size, data["size"], strict=True):
+            compact = data["formatVersion"] >= 3
+            for index, (field, value) in enumerate(zip(self._face_size, data["size"], strict=True)):
+                if compact:
+                    field.setRange(1, MAX_DRAFT_GEOMETRY)
+                else:
+                    field.setRange(360 if index == 0 else 180, 1024 if index == 0 else 768)
                 field.setValue(value)
             self._face_font.setCurrentText(data.get("font", "sans"))
             self._radius.setValue(data.get("radius", 4))
             self._slider_style.setCurrentText(data.get("sliderStyle", "classic"))
             self._glass.setChecked(data.get("coverGlass", False))
+            self._sprite_labels.setChecked(data.get("spriteLabels", True))
+            self._source_credit.setPlainText(data.get("sourceCredit", ""))
+            self._source_credit.setVisible(bool(data.get("sourceCredit")))
+            self._remove_element_action.setEnabled(name != "drag")
+            self._remove_element_button.setEnabled(name != "drag")
+            can_add = any(
+                control not in data["controls"] for control in CONTROL_LABELS if control != "drag"
+            )
+            self._add_element_action.setEnabled(can_add)
+            self._add_element_button.setEnabled(can_add)
             self._background_name.setText(data["background"])
+            self._alpha_mask_name.setText(data.get("alphaMask", "No separate window mask"))
+            self._clear_alpha_mask_button.setEnabled("alphaMask" in data)
             for key, button in self._colors.items():
                 color = data["palette"][key]
                 button.setText(color)
@@ -491,12 +592,15 @@ class FaceEditorWindow(QMainWindow):
             self._syncing = False
 
     def _changed(self) -> None:
+        self._refresh_layers()
         problems = list(self._document.validate())
         try:
             face = self._document.preview()
             key = (
                 face.background,
+                face.alpha_mask,
                 tuple((name, tuple(images.items())) for name, images in face.buttons.items()),
+                face.time_digits,
             )
             if key != self._artwork_key or self._artwork is None:
                 self._artwork = prepare_face_preview(face)
@@ -531,8 +635,7 @@ class FaceEditorWindow(QMainWindow):
         data = self._document.manifest
         self.setWindowTitle(f"{data['name']}[*] · Amberfader Face Editor")
         self.setWindowModified(self._document.dirty)
-        if self._document.path is not None:
-            self.setWindowFilePath(str(self._document.path))
+        self.setWindowFilePath(str(self._document.path) if self._document.path is not None else "")
 
     def _edit_rect(self) -> None:
         if self._syncing:
@@ -557,6 +660,21 @@ class FaceEditorWindow(QMainWindow):
     def _reset_readout(self) -> None:
         self._edit_value(("readoutStyles", self._canvas.selected), None)
 
+    def _edit_font_family(self) -> None:
+        if self._syncing or self._canvas.selected not in READOUT_CONTROLS:
+            return
+        self._edit_readout("fontFamily", self._text_family.text().strip() or None)
+
+    def _pick_readout_color(self) -> None:
+        data = self._document.manifest
+        style = data.get("readoutStyles", {}).get(self._canvas.selected, {})
+        color = QColorDialog.getColor(
+            QColor(style.get("color", data["palette"]["readout"])),
+            self, "Choose screen text color",
+        )
+        if color.isValid():
+            self._edit_readout("color", color.name())
+
     def _edit_metadata(self, key: str) -> None:
         self._edit_value((key,), self._metadata[key].text())
 
@@ -577,6 +695,48 @@ class FaceEditorWindow(QMainWindow):
     def _redo(self) -> None:
         self._canvas.finish_gesture()
         self._document.redo()
+        self._changed()
+
+    def _add_element(self) -> None:
+        missing = [
+            name for name in CONTROL_LABELS
+            if name != "drag" and name not in self._document.manifest["controls"]
+        ]
+        if not missing:
+            return
+        labels = [CONTROL_LABELS[name] for name in missing]
+        label, accepted = QInputDialog.getItem(
+            self, "Add element", "Choose a playback control or readout", labels, 0, False,
+        )
+        if not accepted:
+            return
+        name = missing[labels.index(label)]
+        self._flush_inspector()
+        self._canvas.finish_gesture()
+        width, height = self._document.manifest["size"]
+        if name in BUTTON_CONTROLS:
+            control_width, control_height = 48, 32
+        elif name == "art":
+            control_width, control_height = 64, 64
+        elif name in ("seek", "volume"):
+            control_width, control_height = 120, 16
+        else:
+            control_width, control_height = 160, 28
+        control_width, control_height = min(control_width, width), min(control_height, height)
+        self._document.set_rect(name, [
+            (width - control_width) // 2, (height - control_height) // 2,
+            control_width, control_height,
+        ])
+        self._canvas.select(name)
+        self._changed()
+
+    def _remove_element(self) -> None:
+        name = self._canvas.selected
+        if name == "drag":
+            return
+        self._flush_inspector()
+        self._canvas.finish_gesture()
+        self._document.set_value(("controls", name), None)
         self._changed()
 
     def _zoom_changed(self, scale: float) -> None:
@@ -620,13 +780,33 @@ class FaceEditorWindow(QMainWindow):
         if path is not None:
             self._apply_import(path)
 
+    def _import_alpha_mask(self) -> None:
+        path = self._choose_png("Import window mask PNG")
+        if path is None:
+            return
+        try:
+            self._document.import_alpha_mask(path)
+        except (FaceError, OSError) as exc:
+            self._show_error("Could not import window mask", exc)
+            return
+        self._changed()
+
+    def _clear_alpha_mask(self) -> None:
+        self._document.import_alpha_mask(None)
+        self._changed()
+
     def _import_sprite(self) -> None:
         path = self._choose_png("Import button PNG")
         if path is not None:
             self._apply_import(path, self._canvas.selected, self._sprite_state.currentText())
 
     def _drop_image(self, filename: str, control: str) -> None:
-        self._apply_import(Path(filename), control if control in BUTTON_CONTROLS else None)
+        self._apply_import(Path(filename), control if self._uses_button_artwork(control) else None)
+
+    def _uses_button_artwork(self, name: str) -> bool:
+        return name in BUTTON_CONTROLS or (
+            name in SPRITE_CONTROLS and self._document.manifest.get("sliderStyle") == "popup"
+        )
 
     def _apply_import(self, path: Path, control: str | None = None, state: str = "normal") -> None:
         try:
@@ -649,6 +829,12 @@ class FaceEditorWindow(QMainWindow):
         for key, field in self._metadata.items():
             if field.text() != self._document.manifest[key]:
                 self._document.set_value((key,), field.text())
+        name = self._canvas.selected
+        if name in READOUT_CONTROLS:
+            family = self._text_family.text().strip() or None
+            style = self._document.manifest.get("readoutStyles", {}).get(name, {})
+            if family != style.get("fontFamily"):
+                self._document.set_value(("readoutStyles", name, "fontFamily"), family)
         for field in [
             *self._rect_fields,
             self._rotation,
@@ -710,6 +896,31 @@ class FaceEditorWindow(QMainWindow):
         directory = QFileDialog.getExistingDirectory(self, "Open face folder")
         if directory:
             self.open_face(Path(directory))
+
+    def _import_audion(self) -> None:
+        from .audion_import_dialog import AudionImportDialog
+
+        dialog = AudionImportDialog(self)
+        try:
+            if dialog.exec() == dialog.DialogCode.Accepted and dialog.import_result is not None:
+                self.import_audion_result(dialog.import_result)
+        finally:
+            dialog.deleteLater()
+
+    def import_audion_result(self, result: AudionImportResult) -> bool:
+        """Apply a prepared conversion only after preserving the current working face."""
+        try:
+            prepare_face(result.document.preview(validate_layout=True))
+        except (FaceError, OSError, ValueError) as exc:
+            self._show_error("Could not import Audion face", exc)
+            return False
+        if not self._confirm_discard():
+            return False
+        self._set_document(result.document)
+        self.statusBar().showMessage(
+            "Imported an editable copy. Save it to a new folder before installing it.", 10000,
+        )
+        return True
 
     def open_face(self, directory: Path) -> bool:
         """Open a pack safely, preserving the current document on any failure."""

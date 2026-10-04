@@ -1,15 +1,18 @@
 """Image-backed presentation of the host's existing Qt controls."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from math import ceil, floor
 
-from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt, Signal
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSignalBlocker, Qt, Signal
 from PySide6.QtGui import (
     QBitmap,
     QColor,
     QFont,
+    QFontDatabase,
     QFontMetrics,
+    QGuiApplication,
     QImage,
     QKeyEvent,
     QLinearGradient,
@@ -23,6 +26,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QFrame,
+    QGraphicsEffect,
     QGraphicsProxyWidget,
     QGraphicsScene,
     QGraphicsView,
@@ -32,10 +36,11 @@ from PySide6.QtWidgets import (
     QStyle,
     QStyleOptionButton,
     QStyleOptionSlider,
+    QVBoxLayout,
     QWidget,
 )
 
-from ..face_library import Face, FaceError, Rect, control_polygon
+from ..face_library import FACE_FORMAT_VERSION, Face, FaceError, Rect, control_polygon
 
 FONT_FAMILIES = {"sans": "sans-serif", "mono": "monospace", "serif": "serif"}
 TRANSPORT_CONTROLS = frozenset(("previous", "play", "next"))
@@ -69,6 +74,9 @@ class ReadoutStyle:
     font: str
     size: int
     bold: bool
+    font_family: str | None = None
+    color: str | None = None
+    italic: bool = False
 
 
 def readout_style(face: Face, name: str) -> ReadoutStyle:
@@ -79,29 +87,51 @@ def readout_style(face: Face, name: str) -> ReadoutStyle:
         font=style.get("font", "mono" if name == "time" else face.font),
         size=style.get("size", face.time_size if name == "time" else 12),
         bold=style.get("bold", name == "title"),
+        font_family=style.get("fontFamily"),
+        color=style.get("color"),
+        italic=style.get("italic", False),
     )
 
 
 def readout_font(face: Face, name: str, scale: float = 1.0) -> QFont:
     style = readout_style(face, name)
-    font = QFont(FONT_FAMILIES[style.font])
-    if style.font == "mono":
+    font = _readout_base_font(style)
+    if style.font == "mono" and style.font_family is None:
         # macOS may resolve the generic family to a proportional system font.
         font.setStyleHint(QFont.StyleHint.Monospace)
     # Large plugin fonts fit their allotted row instead of clipping into a bevel.
     size = min(style.size, face.controls[name][3] - 2)
-    font.setPixelSize(max(10, round(size * scale)))
+    font.setPixelSize(max(6 if face.format_version >= 3 else 10, round(size * scale)))
     font.setBold(style.bold)
+    font.setItalic(style.italic)
     return font
 
 
-def fit_readout_font(font: QFont, text: str, rect: QRect) -> QFont:
+def _readout_base_font(style: ReadoutStyle) -> QFont:
+    if style.font_family is None:
+        return QFont(FONT_FAMILIES[style.font])
+    # An obsolete imported family can make CoreText attempt a synchronous
+    # font download. Match only Qt's available families; retain the requested
+    # name in the document for another machine with that font installed.
+    requested = style.font_family.casefold()
+    family = next((family for family in QFontDatabase.families()
+                   if family.casefold() == requested), None)
+    if family is not None:
+        return QFont(family)
+    system = (
+        QFontDatabase.SystemFont.FixedFont if style.font == "mono"
+        else QFontDatabase.SystemFont.GeneralFont
+    )
+    return QFontDatabase.systemFont(system)
+
+
+def fit_readout_font(font: QFont, text: str, rect: QRect, minimum_size: int = 10) -> QFont:
     """Keep every time digit visible in the player and the face chooser."""
     fitted = QFont(font)
     fitted.setPixelSize(min(fitted.pixelSize(), rect.height() - 2))
     width = QFontMetrics(fitted).horizontalAdvance(text)
     if width > rect.width():
-        fitted.setPixelSize(max(10, int(fitted.pixelSize() * rect.width() / width)))
+        fitted.setPixelSize(max(minimum_size, int(fitted.pixelSize() * rect.width() / width)))
     return fitted
 
 
@@ -225,18 +255,204 @@ class KeyboardFocusRing:
         return self.hasFocus() and self._keyboard_focus
 
 
+class _SliderPopup(QFrame):
+    dismissed = Signal()
+
+    def hideEvent(self, event) -> None:
+        self.dismissed.emit()
+        super().hideEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.hide()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
+class _PopupSlider(QSlider):
+    """Commit changed keyboard values through the owner's native gesture path."""
+
+    def __init__(self, owner: FaceSlider, parent: QWidget) -> None:
+        super().__init__(Qt.Orientation.Horizontal, parent)
+        self._owner = owner
+        self._keyboard_action = False
+        self.actionTriggered.connect(self._begin_keyboard_gesture)
+
+    def _begin_keyboard_gesture(self, _action: int) -> None:
+        # Qt adjusts sliderPosition before actionTriggered and propagates value
+        # afterwards. Start here so unchanged keys at a bound do not commit.
+        if self._keyboard_action and self.sliderPosition() != self.value():
+            self.setSliderDown(True)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() not in (
+            Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down,
+            Qt.Key.Key_Home, Qt.Key.Key_End, Qt.Key.Key_PageUp, Qt.Key.Key_PageDown,
+        ):
+            super().keyPressEvent(event)
+            return
+        if (
+            not self._owner.isEnabled() or not self.isEnabled() or not self.isVisible()
+            or self.isSliderDown() or self._owner.isSliderDown()
+        ):
+            event.accept()
+            return
+        self._keyboard_action = True
+        try:
+            super().keyPressEvent(event)
+        finally:
+            self._keyboard_action = False
+        # Disabling, dismissal or a face change during the gesture cancels both
+        # sliders. Release only a gesture which survived those existing guards.
+        if self.isSliderDown():
+            self.setSliderDown(False)
+
+
 class FaceSlider(KeyboardFocusRing, QSlider):
     """Face painting keeps QSlider's input, accessibility and signal behavior."""
+
+    gestureCancelled = Signal()
 
     def __init__(self, orientation: Qt.Orientation, parent: QWidget) -> None:
         super().__init__(orientation, parent)
         self._face: Face | None = None
+        self._sprites: dict[str, QPixmap] = {}
+        self._popup_parent = parent.window()
+        self._popup: _SliderPopup | None = None
+        self._popup_slider: QSlider | None = None
+        self._popup_anchor: Callable[[], QPoint] | None = None
+        self.valueChanged.connect(self._sync_popup_value)
 
-    def set_face(self, face: Face) -> None:
+    def set_face(self, face: Face, sprites: dict[str, QPixmap] | None = None) -> None:
+        if self._face is not None and (
+            self._face.info.id != face.info.id
+            or self._face.slider_style != face.slider_style
+        ) and (self._face.slider_style == "popup" or face.slider_style == "popup"):
+            self.cancel_popup()
         self._face = face
+        self._sprites = sprites or {}
         self.update()
 
+    def set_popup_anchor(self, anchor: Callable[[], QPoint]) -> None:
+        self._popup_anchor = anchor
+
+    def _sync_popup_value(self, value: int) -> None:
+        if self._popup_slider is not None:
+            with QSignalBlocker(self._popup_slider):
+                self._popup_slider.setValue(value)
+
+    def _cancel_popup_gesture(self) -> None:
+        if self._popup_slider is not None:
+            with QSignalBlocker(self._popup_slider):
+                self._popup_slider.setSliderDown(False)
+        if self.isSliderDown():
+            with QSignalBlocker(self):
+                self.setSliderDown(False)
+            self.gestureCancelled.emit()
+
+    def cancel_popup(self) -> None:
+        self._cancel_popup_gesture()
+        if self._popup is not None:
+            self._popup.hide()
+
+    def _show_popup(self) -> None:
+        if not self.isEnabled():
+            return
+        if self._popup is None:
+            self._popup = _SliderPopup(
+                self._popup_parent, Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint,
+            )
+            self._popup.setFrameShape(QFrame.Shape.StyledPanel)
+            layout = QVBoxLayout(self._popup)
+            layout.setContentsMargins(8, 8, 8, 8)
+            self._popup_slider = _PopupSlider(self, self._popup)
+            self._popup_slider.setMinimumWidth(192)
+            layout.addWidget(self._popup_slider)
+            self._popup_slider.sliderPressed.connect(lambda: self.setSliderDown(True))
+            self._popup_slider.sliderMoved.connect(self.setSliderPosition)
+            self._popup_slider.valueChanged.connect(self.setValue)
+            self._popup_slider.sliderReleased.connect(lambda: self.setSliderDown(False))
+            self._popup.dismissed.connect(self._cancel_popup_gesture)
+        self._popup_slider.setRange(self.minimum(), self.maximum())
+        self._popup_slider.setSingleStep(self.singleStep())
+        self._popup_slider.setPageStep(self.pageStep())
+        self._popup_slider.setAccessibleName(self.accessibleName())
+        self._popup_slider.setToolTip(self.toolTip())
+        self._sync_popup_value(self.value())
+        self._popup.adjustSize()
+        anchor = (
+            self._popup_anchor() if self._popup_anchor is not None
+            else self.mapToGlobal(QPoint(0, self.height()))
+        )
+        # A reused popup retains its previous screen until it moves. Rotated
+        # controls are embedded widgets, so use their actual global anchor.
+        screen = QGuiApplication.screenAt(anchor) or self._popup_parent.screen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            anchor.setX(max(
+                available.left(), min(anchor.x(), available.right() - self._popup.width()),
+            ))
+            anchor.setY(max(
+                available.top(), min(anchor.y(), available.bottom() - self._popup.height()),
+            ))
+        self._popup.move(anchor)
+        self._popup.show()
+        self._popup_slider.setFocus(Qt.FocusReason.PopupFocusReason)
+
+    def changeEvent(self, event) -> None:
+        if event.type() == QEvent.Type.EnabledChange and not self.isEnabled():
+            self.cancel_popup()
+        super().changeEvent(event)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if (
+            self._face is not None and self._face.slider_style == "popup"
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
+            self._drop_keyboard_ring()
+            self._show_popup()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self._face is not None and self._face.slider_style == "popup":
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if self._face is not None and self._face.slider_style == "popup":
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if (
+            self._face is not None and self._face.slider_style == "popup"
+            and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space)
+        ):
+            self._show_popup()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
     def paintEvent(self, event) -> None:
+        if self._face is not None and self._face.slider_style == "popup":
+            painter = QPainter(self)
+            if self._sprites:
+                state = "disabled" if not self.isEnabled() else (
+                    "pressed" if self._popup is not None and self._popup.isVisible()
+                    else "hover" if self.underMouse() else "normal"
+                )
+                if state == "disabled" and state not in self._sprites:
+                    painter.setOpacity(0.5)
+                painter.drawPixmap(self.rect(), self._sprites.get(state, self._sprites["normal"]))
+            if self.focus_ring_visible():
+                painter.setPen(QPen(self.palette().highlight().color(), 1, Qt.PenStyle.DashLine))
+                painter.drawRect(self.rect().adjusted(1, 1, -1, -1))
+            return
         if self._face is None or self._face.slider_style == "classic":
             super().paintEvent(event)
             return
@@ -257,22 +473,41 @@ class FaceSlider(KeyboardFocusRing, QSlider):
 
 
 @dataclass(frozen=True)
+class DigitArtwork:
+    rect: Rect
+    images: tuple[QPixmap, ...]
+
+
+@dataclass(frozen=True)
 class FaceArtwork:
     background: QPixmap
     mask: QRegion
     buttons: dict[str, dict[str, QPixmap]]
+    time_digits: tuple[DigitArtwork, ...] = ()
+    alpha_mask: QPixmap | None = None
+    format_version: int = FACE_FORMAT_VERSION
+    _hit_source: QPixmap | None = None
 
     def scaled_mask(self, size: tuple[int, int]) -> QRegion:
-        return _alpha_mask(self.background, size)
+        source = self.alpha_mask or self._hit_source or self.background
+        return _alpha_mask(source, size, self.format_version)
 
 
-def _alpha_mask(background: QPixmap, size: tuple[int, int]) -> QRegion:
+def _alpha_mask(background: QPixmap, size: tuple[int, int], format_version: int) -> QRegion:
     # QPixmap.mask() is empty for fully opaque images. An explicit alpha mask
     # keeps rectangular and sculpted faces on the same hit-testing path.
     image = background.toImage().scaled(*size)
     if not image.hasAlphaChannel():
         return QRegion(QRect(0, 0, *size))
-    alpha = image.createAlphaMask(Qt.ImageConversionFlag.ThresholdAlphaDither)
+    if format_version >= 3:
+        # Imported screens may be intentionally almost transparent. Premultiply
+        # first so alpha-zero RGB data cannot create invisible native hit areas.
+        image = image.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
+        # QBitmap/QRegion treat black pixels as set; MaskInColor paints the
+        # matching transparent-zero pixels white and every visible pixel black.
+        alpha = image.createMaskFromColor(0, Qt.MaskMode.MaskInColor)
+    else:
+        alpha = image.createAlphaMask(Qt.ImageConversionFlag.ThresholdAlphaDither)
     return QRegion(QBitmap.fromImage(alpha))
 
 
@@ -293,19 +528,113 @@ def prepare_face(face: Face) -> FaceArtwork:
             footprint = QRegion(polygon.toPolygon())
         else:
             footprint = QRegion(QRect(*rect))
-        if not footprint.subtracted(artwork.mask).isEmpty():
+        if face.format_version >= 3:
+            invisible = footprint.intersected(artwork.mask).isEmpty()
+        else:
+            invisible = not footprint.subtracted(artwork.mask).isEmpty()
+        if invisible:
             raise FaceError(f"{name} must sit on the opaque face, not a transparent cutout")
     return artwork
 
 
 def prepare_face_preview(face: Face) -> FaceArtwork:
     """Decode an unfinished editor draft without accepting it for installation."""
-    background = _decode(face.background)
-    mask = _alpha_mask(background, face.size)
-    return FaceArtwork(background, mask, {
-        name: {state: _decode(data) for state, data in images.items()}
+    decoded: dict[bytes, QPixmap] = {}
+
+    def decode(data: bytes) -> QPixmap:
+        if data not in decoded:
+            decoded[data] = _decode(data)
+        return decoded[data]
+
+    background = decode(face.background)
+    alpha_mask = decode(face.alpha_mask) if face.alpha_mask is not None else None
+    buttons = {
+        name: {state: decode(data) for state, data in images.items()}
         for name, images in face.buttons.items()
-    })
+    }
+    digits = tuple(DigitArtwork(digit.rect, tuple(decode(data) for data in digit.images))
+                   for digit in face.time_digits)
+    hit_source = (
+        _assembled_hit_source(face, background, buttons)
+        if face.format_version >= 3 and alpha_mask is None else None
+    )
+    mask = _alpha_mask(alpha_mask or hit_source or background, face.size, face.format_version)
+    return FaceArtwork(
+        background=background, mask=mask, buttons=buttons, time_digits=digits,
+        alpha_mask=alpha_mask, format_version=face.format_version, _hit_source=hit_source,
+    )
+
+
+def _assembled_hit_source(face: Face, background: QPixmap, buttons) -> QPixmap:
+    """Keep maskless shells hittable across sprites, changing text and cover art."""
+    composite = QPixmap(*face.size)
+    composite.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(composite)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+    painter.drawPixmap(QRect(0, 0, *face.size), background)
+    for name, coordinates in face.controls.items():
+        painter.save()
+        rect = QRect(*coordinates)
+        rotation = face.control_rotations.get(name, 0)
+        if rotation:
+            center = QRectF(rect).center()
+            painter.translate(center)
+            painter.rotate(rotation)
+            painter.translate(-center)
+        if name in READOUT_CONTROLS or name == "art":
+            # Text and artwork change shape independently of the shell. All
+            # clock glyphs (including textual fallback) fit their time region.
+            painter.fillRect(rect, Qt.GlobalColor.black)
+        elif name in buttons:
+            if name not in ("seek", "volume"):
+                painter.setClipPath(control_path(
+                    QRectF(rect), face.control_shapes.get(name, "rectangle"), face.radius,
+                ))
+            # A pause/pressed/disabled sprite may extend beyond normal's alpha.
+            for image in buttons[name].values():
+                painter.drawPixmap(rect, image)
+        elif name not in ("seek", "volume"):
+            painter.fillPath(control_path(
+                QRectF(rect), face.control_shapes.get(name, "rectangle"), face.radius,
+            ), Qt.GlobalColor.black)
+        elif face.slider_style != "popup":
+            painter.fillRect(rect, Qt.GlobalColor.black)
+        painter.restore()
+    painter.end()
+    return composite
+
+
+def _elapsed_digits(text: str) -> tuple[int, int, int, int] | None:
+    elapsed = text.split("/", 1)[0].strip()
+    minutes, separator, seconds = elapsed.partition(":")
+    if not separator or not minutes.isdecimal() or not seconds.isdecimal():
+        return None
+    minute, second = int(minutes), int(seconds)
+    if not 0 <= minute < 100 or not 0 <= second < 60:
+        return None
+    return minute // 10, minute % 10, second // 10, second % 10
+
+
+def draw_time_digits(
+    painter: QPainter, digits: tuple[DigitArtwork, ...], text: str, rect: QRect,
+) -> bool:
+    """Preserve Audion's four elapsed-time sprites and its baked-in colon."""
+    values = _elapsed_digits(text)
+    if len(digits) != 4 or values is None:
+        return False
+    bounds = QRectF()
+    for digit in digits:
+        bounds = bounds.united(QRectF(*digit.rect))
+    if bounds.isEmpty() or rect.isEmpty():
+        return False
+    painter.save()
+    painter.translate(rect.x(), rect.y())
+    painter.scale(rect.width() / bounds.width(), rect.height() / bounds.height())
+    painter.translate(-bounds.x(), -bounds.y())
+    for digit, value in zip(digits, values, strict=True):
+        painter.drawPixmap(QRect(*digit.rect), digit.images[value])
+    painter.restore()
+    return True
 
 
 def draw_face_preview(
@@ -314,6 +643,22 @@ def draw_face_preview(
 ) -> None:
     """Paint the picker and editor using one logical-coordinate face renderer."""
     labels = PREVIEW_LABELS if labels is None else {**PREVIEW_LABELS, **labels}
+    if artwork.alpha_mask is not None:
+        # Audion masks its assembled view once, after sprites and readouts.
+        # Applying it to individual layers changes antialiased edge opacity.
+        composite = QPixmap(*face.size)
+        composite.fill(Qt.GlobalColor.transparent)
+        layers = QPainter(composite)
+        _draw_face_layers(layers, face, artwork, cover, labels)
+        layers.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+        layers.drawPixmap(QRect(0, 0, *face.size), artwork.alpha_mask)
+        layers.end()
+        painter.drawPixmap(0, 0, composite)
+        return
+    _draw_face_layers(painter, face, artwork, cover, labels)
+
+
+def _draw_face_layers(painter, face, artwork, cover, labels) -> None:
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
     painter.drawPixmap(QRect(0, 0, *face.size), artwork.background)
@@ -334,14 +679,18 @@ def draw_face_preview(
 def _draw_preview_control(painter, face, artwork, cover, labels, name, coordinates) -> None:
     p = face.palette
     rect = QRect(*coordinates)
-    painter.setPen(QColor(p["readout"]))
+    style = readout_style(face, name) if name in READOUT_CONTROLS else None
+    painter.setPen(QColor(style.color if style and style.color else p["readout"]))
     if name in READOUT_CONTROLS:
         font = readout_font(face, name)
     else:
         font = QFont(FONT_FAMILIES[face.font])
         font.setPixelSize(like_font_size(face) if name == "like" else 12)
     if name == "time":
-        font = fit_readout_font(font, labels["time"], rect)
+        if draw_time_digits(painter, artwork.time_digits, labels["time"], rect):
+            return
+        text = labels["time"].split("/", 1)[0].strip() if artwork.time_digits else labels["time"]
+        font = fit_readout_font(font, text, rect, 1 if artwork.time_digits else 10)
     painter.setFont(font)
     if name == "art":
         draw_cover(
@@ -350,6 +699,10 @@ def _draw_preview_control(painter, face, artwork, cover, labels, name, coordinat
         )
         return
     if name in ("seek", "volume"):
+        if face.slider_style == "popup":
+            if name in artwork.buttons:
+                painter.drawPixmap(rect, artwork.buttons[name]["normal"])
+            return
         if face.slider_style == "inset":
             groove = QRectF(rect.x(), rect.y() + (rect.height() - 4) / 2, rect.width(), 4)
             # The 12px QSS handle has a 1px border on either side.
@@ -375,7 +728,9 @@ def _draw_preview_control(painter, face, artwork, cover, labels, name, coordinat
         )
         painter.setClipPath(path, Qt.ClipOperation.IntersectClip)
         if name in artwork.buttons:
-            painter.drawPixmap(rect, artwork.buttons[name]["normal"])
+            sprites = artwork.buttons[name]
+            state = "playing" if name == "play" and labels[name] == "⏸" else "normal"
+            painter.drawPixmap(rect, sprites.get(state, sprites["normal"]))
         else:
             gradient = QLinearGradient(rect.topLeft(), rect.bottomLeft())
             gradient.setColorAt(0, QColor(p["buttonTop"]))
@@ -384,13 +739,17 @@ def _draw_preview_control(painter, face, artwork, cover, labels, name, coordinat
             painter.setPen(QColor(p["border"]))
             painter.drawPath(path)
         painter.restore()
+        if name in artwork.buttons and not face.sprite_labels:
+            return
         painter.setPen(QColor(p["text"]))
-    elif name == "status":
+    elif name == "status" and not (style and style.color):
         painter.setPen(QColor(p["muted"]))
     if name in TRANSPORT_CONTROLS:
         draw_transport_icon(painter, name, labels[name], rect, QColor(p["text"]))
         return
     text = labels.get(name, "")
+    if name == "time" and artwork.time_digits:
+        text = text.split("/", 1)[0].strip()
     if name != "time":
         text = painter.fontMetrics().elidedText(
             text, Qt.TextElideMode.ElideRight, rect.width()
@@ -405,7 +764,7 @@ def _draw_preview_control(painter, face, artwork, cover, labels, name, coordinat
 def like_font_size(face: Face) -> int:
     # Scale the heart with its button like the drawn transport glyphs. The
     # 12 px floor still fits the unknown-state "♡?" in a 22 px v1 button.
-    _, _, width, height = face.controls["like"]
+    _, _, width, height = face.controls.get("like", (0, 0, 40, 22))
     return max(12, min(18, round(min(width, height) / 2)))
 
 
@@ -415,9 +774,12 @@ def face_stylesheet(face: Face, scale: float) -> str:
     font_size = max(10, round(12 * scale))
     radius = round(face.radius * scale)
     handle = round(12 * scale)
+    family_rule = (
+        f"font-family: {FONT_FAMILIES[face.font]};" if face.format_version < 3 else ""
+    )
     stylesheet = f"""
     QWidget {{
-      color: {p['text']}; font-family: {FONT_FAMILIES[face.font]}; font-size: {font_size}px;
+      color: {p['text']}; {family_rule} font-size: {font_size}px;
     }}
     QMainWindow, QWidget#faceSurface {{ background: transparent; }}
     QDialog, QMenu {{ background: {p['window']}; }}
@@ -457,14 +819,16 @@ def face_stylesheet(face: Face, scale: float) -> str:
     QToolTip {{ background: {p['panel']}; color: {p['text']}; border: 1px solid {p['border']}; }}
     """
     for name, (_, _, width, height) in face.controls.items():
-        corner = round(min(face.radius, width // 2 - 1, height // 2 - 1) * scale)
+        corner = max(0, round(min(face.radius, width // 2 - 1, height // 2 - 1) * scale))
         stylesheet += f"QPushButton#{name} {{ border-radius: {corner}px; }}\n"
-    for name in sorted(READOUT_CONTROLS):
+    for name in sorted(READOUT_CONTROLS.intersection(face.controls)):
         font = readout_font(face, name, scale)
         weight = "bold" if font.bold() else "normal"
+        family = f"font-family: {font.family()}; " if face.format_version < 3 else ""
+        italic = "italic" if font.italic() else "normal"
         stylesheet += (
-            f"QLabel#{name} {{ font-family: {font.family()}; "
-            f"font-size: {font.pixelSize()}px; font-weight: {weight}; }}\n"
+            f"QLabel#{name} {{ {family}font-size: {font.pixelSize()}px; "
+            f"font-weight: {weight}; font-style: {italic}; }}\n"
         )
     return stylesheet
 
@@ -507,7 +871,8 @@ class ElidedLabel(QLabel):
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
-        painter.setPen(self.palette().windowText().color())
+        color = self.property("readoutColor")
+        painter.setPen(QColor(color) if color else self.palette().windowText().color())
         text = self.fontMetrics().elidedText(self.text(), Qt.TextElideMode.ElideRight, self.width())
         painter.drawText(self.rect(), self.alignment(), text)
 
@@ -515,12 +880,27 @@ class ElidedLabel(QLabel):
 class ReadoutLabel(QLabel):
     """Fit the complete position/duration readout instead of clipping digits."""
 
+    def __init__(self, text: str, parent: QWidget) -> None:
+        super().__init__(text, parent)
+        self._digits: tuple[DigitArtwork, ...] = ()
+
+    def set_time_digits(self, digits: tuple[DigitArtwork, ...]) -> None:
+        self._digits = digits
+        self.update()
+
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
-        font = fit_readout_font(self.font(), self.text(), self.rect())
+        if draw_time_digits(painter, self._digits, self.text(), self.rect()):
+            return
+        text = self.text().split("/", 1)[0].strip() if self._digits else self.text()
+        font = fit_readout_font(
+            self.font(), text, self.rect(),
+            1 if self._digits else (self.property("minimumReadoutSize") or 10),
+        )
         painter.setFont(font)
-        painter.setPen(self.palette().windowText().color())
-        painter.drawText(self.rect(), self.alignment(), self.text())
+        color = self.property("readoutColor")
+        painter.setPen(QColor(color) if color else self.palette().windowText().color())
+        painter.drawText(self.rect(), self.alignment(), text)
 
 
 class CoverLabel(KeyboardFocusRing, QLabel):
@@ -593,6 +973,7 @@ class FaceButton(KeyboardFocusRing, QPushButton):
         self._sprites: dict[str, QPixmap] = {}
         self._shape = "rectangle"
         self._radius = 0.0
+        self._sprite_labels = True
 
     def set_shape(self, shape: str, radius: float) -> None:
         self._shape, self._radius = shape, radius
@@ -612,8 +993,9 @@ class FaceButton(KeyboardFocusRing, QPushButton):
         corner = max(0.0, min(self._radius, self.width() / 2 - 1, self.height() / 2 - 1) - 2)
         return control_path(inner, "rounded", corner)
 
-    def set_sprites(self, sprites: dict[str, QPixmap]) -> None:
+    def set_sprites(self, sprites: dict[str, QPixmap], *, labels: bool = True) -> None:
         self._sprites = sprites
+        self._sprite_labels = labels
         self.update()
 
     def paintEvent(self, event) -> None:
@@ -633,9 +1015,14 @@ class FaceButton(KeyboardFocusRing, QPushButton):
         painter.setClipPath(control_path(QRectF(self.rect()), self._shape, self._radius))
         if self._sprites:
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-            if state == "disabled" and state not in self._sprites:
+            playing = self.objectName() == "play" and self.property("playing")
+            base = "playing" if playing and "playing" in self._sprites else "normal"
+            key = base if state == "normal" else (
+                f"playing-{state}" if base == "playing" else state
+            )
+            if state == "disabled" and key not in self._sprites:
                 painter.setOpacity(0.5)
-            painter.drawPixmap(self.rect(), self._sprites.get(state, self._sprites["normal"]))
+            painter.drawPixmap(self.rect(), self._sprites.get(key, self._sprites[base]))
             # Dimming belongs to the artist surface; host labels and state
             # indicators keep the contrast chosen by the disabled palette.
             painter.setOpacity(1.0)
@@ -647,7 +1034,9 @@ class FaceButton(KeyboardFocusRing, QPushButton):
             self.style().drawControl(QStyle.ControlElement.CE_PushButton, option, painter, self)
         color = self.palette().buttonText().color()
         label_rect = self.rect().translated(0, 1) if self.isDown() else self.rect()
-        if transport:
+        if self._sprites and not self._sprite_labels:
+            pass
+        elif transport:
             draw_transport_icon(painter, self.objectName(), self.text(), label_rect, color)
         else:
             painter.setPen(color)
@@ -717,7 +1106,43 @@ class RotatedControl(QGraphicsView):
         return widget
 
 
+class _FaceMaskEffect(QGraphicsEffect):
+    """Mask the shell and all child controls in one composition, including proxies."""
+
+    def __init__(self, surface: QWidget) -> None:
+        super().__init__(surface)
+        self._surface = surface
+        self._mask = QPixmap()
+
+    def set_mask(self, mask: QPixmap) -> None:
+        self._mask = mask
+        self.update()
+
+    def draw(self, painter: QPainter) -> None:
+        offset = QPoint()
+        source = self.sourcePixmap(
+            Qt.CoordinateSystem.LogicalCoordinates, offset, QGraphicsEffect.PixmapPadMode.NoPad,
+        )
+        if source.isNull():
+            return
+        # sourcePixmap retains its physical DPR; mask placement uses logical
+        # coordinates so 1x and 2x displays retain the same source geometry.
+        mask = QPixmap(source.size())
+        mask.setDevicePixelRatio(source.devicePixelRatio())
+        mask.fill(Qt.GlobalColor.transparent)
+        mask_painter = QPainter(mask)
+        mask_painter.drawPixmap(self._surface.rect().translated(-offset), self._mask)
+        mask_painter.end()
+        composition = QPainter(source)
+        composition.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+        composition.drawPixmap(0, 0, mask)
+        composition.end()
+        painter.drawPixmap(offset, source)
+
+
 class FaceSurface(QWidget):
+    menuRequested = Signal(QPoint)
+
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
         self.setObjectName("faceSurface")
@@ -729,6 +1154,15 @@ class FaceSurface(QWidget):
     def apply_face(self, face: Face, artwork: FaceArtwork, scale: float) -> None:
         self._background = artwork.background
         self._drag = QRect(*(round(value * scale) for value in face.drag))
+        if artwork.alpha_mask is None:
+            if self.graphicsEffect() is not None:
+                self.setGraphicsEffect(None)
+        else:
+            effect = self.graphicsEffect()
+            if not isinstance(effect, _FaceMaskEffect):
+                effect = _FaceMaskEffect(self)
+                self.setGraphicsEffect(effect)
+            effect.set_mask(artwork.alpha_mask)
         self.update()
 
     def place_control(
@@ -753,11 +1187,18 @@ class FaceSurface(QWidget):
             wrapper.detach(self)
             del self._rotated[name]
         widget.setGeometry(*rect)
+        widget.show()
         if focused:
             widget.setFocus()
 
     def needs_rehosting(self, name: str, rotation: float) -> bool:
         return (name in self._rotated) != bool(rotation)
+
+    def hide_control(self, name: str, widget: QWidget) -> None:
+        wrapper = self._rotated.pop(name, None)
+        if wrapper is not None:
+            wrapper.detach(self)
+        widget.hide()
 
     def control_global_position(self, name: str, widget: QWidget, point: QPoint) -> QPoint:
         wrapper = self._rotated.get(name)
@@ -767,6 +1208,10 @@ class FaceSurface(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         painter.drawPixmap(self.rect(), self._background)
+
+    def contextMenuEvent(self, event) -> None:
+        self.menuRequested.emit(event.globalPos())
+        event.accept()
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if (

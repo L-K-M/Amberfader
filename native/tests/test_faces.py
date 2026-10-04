@@ -97,7 +97,7 @@ def test_bundled_shared_sprites_fit_one_button_size(face_id):
 
 
 @pytest.mark.parametrize("change", [
-    lambda d: d.update(formatVersion=3),
+    lambda d: d.update(formatVersion=4),
     lambda d: d.update(code="plugin.py"),
     lambda d: d.update(background="../outside.png"),
     lambda d: d["palette"].update(accent="red; background: url(https://example.org)"),

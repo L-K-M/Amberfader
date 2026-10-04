@@ -126,6 +126,9 @@ Drag controls into place, resize and rotate them, adjust their appearance,
 and save a portable JSON/PNG face folder. The editor works independently of
 Firefox and playback. See the [editor guide](docs/face-editor.md).
 
+Choose **File → Import Audion face…** to turn a converted Audion face folder or
+collection ZIP into an editable copy, retaining its artwork and original credits.
+
 ## Connect an installed Flatpak app
 
 Installing the app does not register its helper with your browser. Run the

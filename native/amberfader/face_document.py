@@ -20,6 +20,7 @@ from amberfader import face_library
 from amberfader.face_library import (
     BUILTIN_DIRECTORY,
     FACE_FORMAT_VERSION,
+    IMPORT_FACE_FORMAT_VERSION,
     MAX_IMAGE_BYTES,
     MAX_MANIFEST_BYTES,
     MAX_PACK_BYTES,
@@ -33,6 +34,7 @@ MAX_HISTORY_BYTES = 64 * 1024 * 1024
 BUTTONS = frozenset({
     "previous", "play", "next", "like", "search", "show", "hide", "menu", "minimize", "close",
 })
+SPRITE_CONTROLS = BUTTONS | {"seek", "volume"}
 READOUTS = frozenset({"title", "artists", "time", "playback", "status"})
 CONTROLS = BUTTONS | READOUTS | {"art", "seek", "volume"}
 PALETTE_KEYS = frozenset({
@@ -41,13 +43,18 @@ PALETTE_KEYS = frozenset({
 })
 SIMPLE_FIELDS = frozenset({
     "id", "name", "author", "description", "size", "drag", "font", "timeSize", "radius",
-    "coverGlass", "sliderStyle",
+    "coverGlass", "sliderStyle", "sourceCredit", "spriteLabels",
 })
-OPTIONAL_FIELDS = frozenset({"font", "timeSize", "radius", "coverGlass", "sliderStyle"})
+OPTIONAL_FIELDS = frozenset({
+    "font", "timeSize", "radius", "coverGlass", "sliderStyle", "sourceCredit", "spriteLabels",
+})
 VERSION_TWO_FIELDS = frozenset({
     "coverGlass", "sliderStyle", "controlShapes", "controlRotations", "readoutStyles",
 })
 BUTTON_STATES = frozenset({"normal", "hover", "pressed", "disabled"})
+IMPORT_BUTTON_STATES = BUTTON_STATES | {
+    "playing", "playing-hover", "playing-pressed", "playing-disabled",
+}
 
 
 @dataclass(frozen=True)
@@ -60,10 +67,7 @@ class _Snapshot:
 
 
 def _declared_names(data: dict[str, Any]) -> set[str]:
-    names = {data["background"]}
-    for states in data.get("buttons", {}).values():
-        names.update(states.values())
-    return names
+    return face_library.declared_image_names(data)
 
 
 def _snapshot(data: dict[str, Any], assets: Mapping[str, bytes]) -> _Snapshot:
@@ -147,12 +151,12 @@ class FaceDocument:
     def from_template(
         cls, folder: Path, *, face_id: str | None = None, name: str | None = None,
     ) -> FaceDocument:
-        """Clone a pack as an unsaved version 2 face with a custom identity."""
+        """Clone a pack with a custom identity, preserving imported presentation."""
         source = Path(folder).resolve()
         try:
             snapshot = _read_snapshot(source)
             data = snapshot.data()
-            data["formatVersion"] = FACE_FORMAT_VERSION
+            data["formatVersion"] = max(data["formatVersion"], FACE_FORMAT_VERSION)
             data["id"] = (
                 face_id if face_id is not None
                 else data["id"][:31] + "-custom-" + uuid4().hex[:8]
@@ -162,6 +166,20 @@ class FaceDocument:
             document.preview(validate_layout=True)
             return document
         except (OSError, ValueError) as exc:
+            raise FaceError(f"Cannot create face: {exc}") from exc
+
+    @classmethod
+    def from_snapshot(
+        cls, manifest: Mapping[str, Any], assets: Mapping[str, bytes],
+    ) -> FaceDocument:
+        """Create an unsaved document without staging or modifying source files."""
+        try:
+            data = dict(manifest)
+            face_library._validate_manifest(data)
+            document = cls(_snapshot(data, assets))
+            document.preview(validate_layout=True)
+            return document
+        except (TypeError, ValueError, KeyError) as exc:
             raise FaceError(f"Cannot create face: {exc}") from exc
 
     @property
@@ -204,8 +222,25 @@ class FaceDocument:
             target.pop(path[-1], None)
         else:
             target[path[-1]] = value
+        version = data["formatVersion"]
         if path[0] in VERSION_TWO_FIELDS:
-            data["formatVersion"] = FACE_FORMAT_VERSION
+            version = max(version, FACE_FORMAT_VERSION)
+        imported_field = (
+            path[0] in {"sourceCredit", "spriteLabels"}
+            or (path[0] == "sliderStyle" and value == "popup")
+            or (path[0] == "readoutStyles" and len(path) == 3
+                and (path[-1] in {"fontFamily", "color", "italic"}
+                     or (path[-1] == "size" and isinstance(value, int) and value < 10)))
+        )
+        if path[0] == "controls" and value is None:
+            for group in ("buttons", "controlShapes", "controlRotations", "readoutStyles"):
+                data.get(group, {}).pop(path[-1], None)
+            if path[-1] == "time":
+                data.pop("timeDigits", None)
+            imported_field = True
+        data["formatVersion"] = (
+            max(version, IMPORT_FACE_FORMAT_VERSION) if imported_field else version
+        )
         self._apply(_snapshot(data, self.assets))
 
     @staticmethod
@@ -224,12 +259,12 @@ class FaceDocument:
             group, control, key = path
             allowed = (
                 group == "readoutStyles" and control in READOUTS
-                and key in {"align", "font", "size", "bold"}
+                and key in {"align", "font", "size", "bold", "fontFamily", "color", "italic"}
             )
         if not allowed:
             raise FaceError("This field cannot be edited directly; import PNG assets instead")
         if value is None and (
-            path[0] in {"controls", "palette"}
+            path[0] == "palette"
             or (len(path) == 1 and path[0] not in OPTIONAL_FIELDS)
         ):
             raise FaceError("Required face fields cannot be removed")
@@ -322,14 +357,31 @@ class FaceDocument:
         self._apply(_snapshot(data, {**self.assets, name: image}))
 
     def import_button(self, control: str, state: str, source: Path) -> None:
-        if control not in BUTTONS or state not in BUTTON_STATES:
+        if control not in SPRITE_CONTROLS or state not in IMPORT_BUTTON_STATES:
             raise FaceError("Choose a supported button and sprite state")
         data = self.manifest
+        if control not in data["controls"]:
+            raise FaceError(f"Add the {control} control before importing its sprites")
         states = data.setdefault("buttons", {}).setdefault(control, {})
         if state != "normal" and "normal" not in states:
             raise FaceError("Import the normal button sprite before its other states")
         name, image, _ = self._import_image(source, control + "-" + state)
         states[state] = name
+        if control in {"seek", "volume"} or state not in BUTTON_STATES:
+            data["formatVersion"] = IMPORT_FACE_FORMAT_VERSION
+        self._apply(_snapshot(data, {**self.assets, name: image}))
+
+    def import_alpha_mask(self, source: Path | None) -> None:
+        """Snapshot or remove the global mask applied after face composition."""
+        data = self.manifest
+        if source is None:
+            data.pop("alphaMask", None)
+            self._apply(_snapshot(data, self.assets))
+            return
+        name, image, dimensions = self._import_image(source, "alpha-mask")
+        face_library._check_background_size(data["size"], dimensions, name="Alpha mask")
+        data["alphaMask"] = name
+        data["formatVersion"] = IMPORT_FACE_FORMAT_VERSION
         self._apply(_snapshot(data, {**self.assets, name: image}))
 
     def preview(self, *, validate_layout: bool = False) -> Face:

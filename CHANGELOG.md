@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Audion face import in the visual editor: preview converted JSON/PNG folders
+  and ZIP collections, then edit a portable copy with original sprites, bitmap
+  clocks, transparency and credits. Version 3 faces support compact layouts,
+  optional controls and popup seek/volume controls.
 - Experimental embedded QtWebEngine prototype (`npm run embedded:run`):
   YouTube Music in Amberfader's own window, driven by the unchanged site
   adapter through an in-process router. Requires the new `embedded` extra.
