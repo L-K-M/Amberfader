@@ -70,6 +70,19 @@ def main(argv: list[str] | None = None) -> int:
     if try_activate_existing(socket_path):
         return 0
 
+    # Ctrl+C or SIGTERM quits through Qt, so Chromium can flush the sign-in
+    # cookies instead of being killed mid-write. Installed before startup;
+    # quit() is a no-op until exec() runs, so remember an early request.
+    quit_requested = False
+
+    def request_quit(*_args: object) -> None:
+        nonlocal quit_requested
+        quit_requested = True
+        app.quit()
+
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(signum, request_quit)
+
     options = RuntimeOptions(
         mode=PageMode.TEST_PAGE if args.test_page else PageMode.YOUTUBE_MUSIC,
         socket_path=socket_path,
@@ -86,6 +99,8 @@ def main(argv: list[str] | None = None) -> int:
         if not started:
             print(f"amberfader: cannot listen on {socket_path}", file=sys.stderr)
             return 2
+        if quit_requested:
+            return 0
 
         assert runtime.amber.window is not None
         # Playback lives in this process: closing the player quits and stops it.
@@ -93,10 +108,6 @@ def main(argv: list[str] | None = None) -> int:
         if not args.background:
             runtime.host.set_visible(True)
 
-        # Ctrl+C or SIGTERM quits through Qt, so Chromium can flush the
-        # sign-in cookies instead of being killed mid-write.
-        for signum in (signal.SIGINT, signal.SIGTERM):
-            signal.signal(signum, lambda *_: app.quit())
         poll = QTimer()
         poll.timeout.connect(lambda: None)
         poll.start(SIGNAL_POLL_MS)

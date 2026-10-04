@@ -143,3 +143,24 @@ def test_main_window_reports_close(qapp):
     window.close()
 
     assert closed == [True]
+
+
+def test_main_window_stays_silent_when_close_is_vetoed(qapp, monkeypatch):
+    from PySide6.QtWidgets import QMainWindow
+
+    from amberfader.ui.main_window import MainWindow
+
+    window = MainWindow(lambda _method, _params: None)
+    closed = []
+    window.closed.connect(lambda: closed.append(True))
+    window.show()
+
+    # A veto further up the chain keeps the window, and so the music, alive.
+    monkeypatch.setattr(QMainWindow, "closeEvent", lambda _self, event: event.ignore())
+    window.close()
+    assert closed == []
+    assert window.isVisible()
+
+    monkeypatch.undo()
+    window.close()
+    assert closed == [True]

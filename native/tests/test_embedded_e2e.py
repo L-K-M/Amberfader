@@ -42,14 +42,19 @@ def test_embedded_stack_end_to_end():
         # containers often deny. The test page loads no remote content.
         "QTWEBENGINE_DISABLE_SANDBOX": "1",
     }
-    run = subprocess.run(
-        [sys.executable, str(DRIVER)],
-        capture_output=True, text=True, timeout=180, env=env, check=False,
-    )
+    try:
+        run = subprocess.run(
+            [sys.executable, str(DRIVER)],
+            capture_output=True, text=True, timeout=180, env=env, check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        pytest.fail(f"driver timed out\nstdout:\n{exc.stdout}\nstderr:\n{exc.stderr}")
     reports = [line for line in run.stdout.splitlines() if line.startswith("{")]
     assert reports, f"driver produced no report\nstdout:\n{run.stdout}\nstderr:\n{run.stderr}"
     report = json.loads(reports[-1])
 
     assert report["failures"] == [], report
-    assert run.returncode == 0
+    assert run.returncode == 0, (
+        f"driver exited {run.returncode}\nstdout:\n{run.stdout}\nstderr:\n{run.stderr}"
+    )
     assert len(report["checks"]) >= 23

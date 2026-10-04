@@ -97,6 +97,8 @@ class SearchHistoryStore:
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
                 json.dump(history.as_result(), handle, ensure_ascii=False)
+                handle.flush()
+                os.fsync(handle.fileno())
             os.replace(temp, self._path)
         except BaseException:
             with contextlib.suppress(OSError):

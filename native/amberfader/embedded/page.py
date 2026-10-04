@@ -112,16 +112,27 @@ def create_profile(mode: PageMode, storage: Path, cache: Path) -> QWebEngineProf
     return profile
 
 
-class GuardedPage(QWebEnginePage):
-    """Keeps top-level navigation on YouTube Music and Google sign-in, sends
-    other web links to the system browser, and denies every permission
-    prompt (notifications, camera, location, ...)."""
+class _QuietPage(QWebEnginePage):
+    """Denies every permission prompt (notifications, camera, location, ...)
+    and keeps page console output, which can contain track names and
+    queries, off stderr. Every page this module creates derives from it."""
+
+    def __init__(self, profile: QWebEngineProfile, parent: QObject | None = None) -> None:
+        super().__init__(profile, parent)
+        self.permissionRequested.connect(lambda permission: permission.deny())
+
+    def javaScriptConsoleMessage(self, *_args: object) -> None:
+        pass
+
+
+class GuardedPage(_QuietPage):
+    """Keeps top-level navigation on YouTube Music and Google sign-in and
+    sends other web links to the system browser."""
 
     def __init__(self, profile: QWebEngineProfile, home_origin: str) -> None:
         super().__init__(profile)
         self.home_origin = home_origin
         self._expect_test_page = False
-        self.permissionRequested.connect(lambda permission: permission.deny())
 
     def load_test_page(self) -> None:
         # setHtml arrives at acceptNavigationRequest as a data: URL.
@@ -136,6 +147,8 @@ class GuardedPage(QWebEnginePage):
         if self._expect_test_page and url.scheme() == "data":
             self._expect_test_page = False
             return True
+        # The allowance covers only the navigation load_test_page started.
+        self._expect_test_page = False
         return self.route(url)
 
     def route(self, url: QUrl) -> bool:
@@ -150,12 +163,8 @@ class GuardedPage(QWebEnginePage):
     def createWindow(self, _window_type: QWebEnginePage.WebWindowType) -> QWebEnginePage:
         return _PopupCatcher(self)
 
-    def javaScriptConsoleMessage(self, *_args: object) -> None:
-        # Page logs can contain track names and queries; keep them off stderr.
-        pass
 
-
-class _PopupCatcher(QWebEnginePage):
+class _PopupCatcher(_QuietPage):
     """New windows (target=_blank, window.open) never become a second page.
     Their first navigation goes through the opener's policy: allowed URLs
     load in the main view, other web links open in the system browser."""

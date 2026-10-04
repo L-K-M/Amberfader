@@ -75,6 +75,8 @@ def normalize_artwork(data: bytes) -> NormalizedArtwork | None:
     source.setData(QByteArray(data))
     source.open(QIODevice.OpenModeFlag.ReadOnly)
     reader = QImageReader(source)
+    # Browsers honor EXIF orientation, so the page shows covers upright.
+    reader.setAutoTransform(True)
     size = reader.size()
     # Check the declared size before decoding so a tiny file cannot claim a
     # huge canvas.

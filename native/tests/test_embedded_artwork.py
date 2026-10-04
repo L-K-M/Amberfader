@@ -26,6 +26,11 @@ from amberfader.embedded.artwork import (
 )
 
 
+def idle(fetcher):
+    # Every download, redirect and rejection has finished.
+    return not fetcher._active and not fetcher._queue
+
+
 def png_bytes(qapp, width, height):
     from PySide6.QtCore import QBuffer, QByteArray, QIODevice
     from PySide6.QtGui import QColor, QImage
@@ -166,8 +171,7 @@ def test_follows_allowed_redirects_only(qapp, server, fetcher):
     fetcher.request(f"{server.base}/ok/escape", "art-escape", None)
     fetcher.request(f"{server.base}/ok/hop", "art-hop", None)
 
-    assert pump(qapp, lambda: fetcher.assets)
-    pump(qapp, lambda: False, timeout_s=0.3)
+    assert pump(qapp, lambda: fetcher.assets and idle(fetcher))
     assert [a["artworkId"] for a in fetcher.assets] == ["art-hop"]
     assert "/blocked/cover" not in server.hits
 
@@ -175,7 +179,7 @@ def test_follows_allowed_redirects_only(qapp, server, fetcher):
 @pytest.mark.parametrize("path", ["/ok/text", "/ok/huge", "/blocked/cover"])
 def test_rejects_wrong_type_oversize_and_disallowed_urls(qapp, server, fetcher, path):
     fetcher.request(f"{server.base}{path}", "art-x", None)
-    pump(qapp, lambda: False, timeout_s=0.5)
+    assert pump(qapp, lambda: idle(fetcher))
 
     assert fetcher.assets == []
     # A failed cover can be proposed again later.

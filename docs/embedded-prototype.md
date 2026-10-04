@@ -82,7 +82,9 @@ Run these on your desktop and record each result in the PR or below.
 - [ ] **Sign-in.** Press Show YT, choose Sign in and complete Google sign-in,
       including two-step verification. Record whether it is accepted or what
       Google shows instead, for example "This browser or app may not be
-      secure". The toolbar shows the origin of the page you are on.
+      secure". The toolbar shows the origin of the page you are on. If any
+      step opens your system browser instead, record that address: the view
+      only allows the hosts listed under [Security and privacy](#security-and-privacy).
 - [ ] **Persistence.** Quit with the player's close button, relaunch, and
       check that YouTube Music is still signed in.
 - [ ] **Playback.** Play several songs from Amberfader's search, including a
@@ -148,8 +150,9 @@ playback memory, and desktop X11 or Wayland behavior.
   `@match` and by an origin check in the bundle. The host also accepts page
   messages only while the top-level page is on that origin.
 - Top-level navigation stays on YouTube Music, other `youtube.com` hosts,
-  `google.com` and Google's country domains, which sign-in uses. Other web
-  links open in your system browser. Pop-ups never become a second window.
+  `google.com`, and the `accounts.` host of Google's country domains (such as
+  `accounts.google.ch`), which sign-in can pass through. Other web links open
+  in your system browser. Pop-ups never become a second window.
 - Every permission prompt is denied (notifications, camera, microphone,
   location and others). Downloads are cancelled. WebRTC is limited to public
   network interfaces.

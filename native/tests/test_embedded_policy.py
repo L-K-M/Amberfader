@@ -65,8 +65,9 @@ def test_history_write_failures_are_raised(tmp_path):
     "https://accounts.youtube.com/accounts/SetSID",
     "https://consent.youtube.com/m",
     "https://accounts.google.ch/accounts/SetSID",
-    "https://www.google.co.uk/",
-    "https://google.com.au/",
+    "https://accounts.google.co.uk/accounts/SetSID",
+    "https://accounts.google.com.au/accounts/SetSID",
+    "https://www.google.com/",
     "https://music.youtube.com:443/",
 ])
 def test_sign_in_and_music_pages_stay_in_the_view(url):
@@ -81,6 +82,11 @@ def test_sign_in_and_music_pages_stay_in_the_view(url):
     "https://notgoogle.com/",
     "https://google.example.com/",
     "https://google.xyz/",
+    "https://accounts.google.xyz/",
+    "https://www.google.co.uk/",
+    "https://google.com.au/",
+    "https://mail.google.ch/",
+    "https://accounts.google.com.example.net/",
     "https://music.youtube.com@example.net/",
     "https://www.example.org/artist",
     "file:///etc/passwd",

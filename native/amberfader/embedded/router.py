@@ -258,8 +258,9 @@ class EmbeddedRouter:
             return
 
         self._last_state = stamped
-        self._record_artists(stamped)
+        # Deliver first: best-effort history I/O must not delay or block state.
         self._emit(event)
+        self._record_artists(stamped)
         self._propose_artwork(stamped, artwork_url)
 
     def _accept_notice(self, notice: Any) -> None:

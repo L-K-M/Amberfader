@@ -223,7 +223,8 @@ class MainWindow(QMainWindow):
             if window is not None:
                 window.close()
         super().closeEvent(event)
-        self.closed.emit()
+        if event.isAccepted():
+            self.closed.emit()
 
     # ---- appearance ------------------------------------------------------
 

@@ -79,6 +79,7 @@ of Firefox, with no extension or native-messaging setup. It runs from a
 checkout only:
 
 ```sh
+npm ci
 uv sync --extra gui --extra embedded
 npm run embedded:run
 ```
