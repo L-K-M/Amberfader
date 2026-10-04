@@ -25,7 +25,8 @@ if (( PYTHON_MAJOR < 3 || (PYTHON_MAJOR == 3 && PYTHON_MINOR < 11) )); then
   echo "error: $BUILD_PYTHON must be Python 3.11 or newer (found $PYTHON_VERSION)" >&2
   exit 1
 fi
-NEXT_PYTHON_VERSION="$PYTHON_MAJOR.$((PYTHON_MINOR + 1))"
+# Debian sorts a prerelease before its stable version; exclude that ABI too.
+NEXT_PYTHON_VERSION="$PYTHON_MAJOR.$((PYTHON_MINOR + 1))~"
 
 echo "-- staging .deb tree (version $VERSION, arch $ARCH)"
 rm -rf "$DIST/deb"

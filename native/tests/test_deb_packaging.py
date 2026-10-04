@@ -1,5 +1,6 @@
 """Exercise Debian staging with isolated dependency installers and archive tools."""
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -7,6 +8,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
+DPKG = shutil.which("dpkg")
 
 
 @pytest.fixture()
@@ -70,7 +72,7 @@ def test_deb_installs_for_launcher_interpreter_and_declares_its_abi(
     stage = root / "dist/deb/stage"
     control = (stage / "DEBIAN/control").read_text()
     assert (
-        f"Depends: python3 (>= 3.{minor}), python3 (<< 3.{minor + 1})\n" in control
+        f"Depends: python3 (>= 3.{minor}), python3 (<< 3.{minor + 1}~)\n" in control
     )
 
     invocation = Path(env["AF_TEST_INSTALL_LOG"]).read_text().splitlines()
@@ -94,3 +96,36 @@ def test_deb_rejects_unsupported_launcher_python_before_installing(build_environ
     assert "Python 3.11" in result.stderr
     assert not Path(env["AF_TEST_INSTALL_LOG"]).exists()
     assert not (root / "dist/deb").exists()
+
+
+@pytest.mark.skipif(DPKG is None, reason="Debian version ordering requires dpkg")
+@pytest.mark.parametrize(
+    ("version", "accepted"),
+    [
+        ("3.12", True),
+        ("3.12.3-1", True),
+        ("3.13~a1-1", False),
+        ("3.13~rc1-1", False),
+        ("3.13", False),
+        ("3.11", False),
+    ],
+)
+def test_deb_python_bounds_reject_next_minor_prereleases(build_environment, version, accepted):
+    root, env = build_environment
+    env.update(AF_TEST_BACKEND="uv", AF_TEST_SYSTEM_VERSION="3.12")
+    result = run_builder(root, env)
+    assert result.returncode == 0, result.stderr
+    control = (root / "dist/deb/stage/DEBIAN/control").read_text()
+    bounds = re.search(
+        r"^Depends: python3 \(>= ([^)]+)\), python3 \(<< ([^)]+)\)$", control, re.MULTILINE,
+    )
+    assert bounds is not None
+    comparisons = []
+    for operator, bound in zip(("ge", "lt"), bounds.groups(), strict=True):
+        comparison = subprocess.run(
+            [DPKG, "--compare-versions", version, operator, bound],
+            capture_output=True, text=True, timeout=10,
+        )
+        assert comparison.returncode in (0, 1), comparison.stderr
+        comparisons.append(comparison.returncode == 0)
+    assert all(comparisons) == accepted
