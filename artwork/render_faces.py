@@ -651,13 +651,21 @@ def main() -> None:
         declared_buttons = face.get("buttons", {})
         if declared_buttons != expected_buttons:
             wrong = sorted(
-                f"{name} -> {family}-*.png" for name, family in families.items()
+                f"declare {name} sprites as {family}-*.png"
+                for name, family in families.items()
                 if declared_buttons.get(name) != expected_buttons[name]
             ) + sorted(
                 f"remove unknown button {name}"
                 for name in declared_buttons.keys() - families.keys()
             )
-            raise RuntimeError(f"{face['id']}: declare button sprites as {'; '.join(wrong)}")
+            raise RuntimeError(f"{face['id']}: {'; '.join(wrong)}")
+        plate_width = FACE_PLATE_WIDTH.get(face["id"])
+        if plate_width is not None and plate_width > face["drag"][2]:
+            # A plate wider than the drag region would look like a title bar
+            # that does not move the window.
+            raise RuntimeError(
+                f"{face['id']}: plate width {plate_width} exceeds drag width {face['drag'][2]}"
+            )
         background = render_background(face)
         bad = _translucent_regions(face, background)
         if bad:

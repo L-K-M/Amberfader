@@ -65,3 +65,10 @@ def test_unknown_button_declaration_is_named(exporter, monkeypatch):
     (directory / "face.json").write_text(json.dumps(face))
     with pytest.raises(RuntimeError, match="shuffle"):
         _export(module, monkeypatch)
+
+
+def test_plate_wider_than_drag_region_is_rejected(exporter, monkeypatch):
+    module, _, face = exporter
+    monkeypatch.setitem(module.FACE_PLATE_WIDTH, FACE_ID, face["drag"][2] + 1)
+    with pytest.raises(RuntimeError, match="exceeds drag width"):
+        _export(module, monkeypatch)
