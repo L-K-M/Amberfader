@@ -93,6 +93,25 @@ def _read_snapshot(source: Path) -> _Snapshot:
     return snapshot
 
 
+def _is_bundled_path(path: Path) -> bool:
+    """Recognize physical ancestry, including case aliases on macOS volumes."""
+    try:
+        root = BUILTIN_DIRECTORY.resolve()
+        location = path.resolve()
+        if location.is_relative_to(root):
+            return True
+        for ancestor in (location, *location.parents):
+            try:
+                if ancestor.samefile(root):
+                    return True
+            except FileNotFoundError:
+                # Save As can choose an absent child of an existing alias.
+                continue
+    except OSError as exc:
+        raise FaceError(f"Cannot inspect face folder protection: {exc}") from exc
+    return False
+
+
 class FaceDocument:
     """An editable face with undoable commands and a saved checkpoint.
 
@@ -113,7 +132,7 @@ class FaceDocument:
     def open(cls, folder: Path) -> FaceDocument:
         """Load a validated snapshot; opening a bundled pack makes a custom copy."""
         source = Path(folder).resolve()
-        if source.is_relative_to(BUILTIN_DIRECTORY.resolve()):
+        if _is_bundled_path(source):
             return cls.from_template(source)
         try:
             return cls(_read_snapshot(source), source)
@@ -347,7 +366,7 @@ class FaceDocument:
         if chosen.is_symlink():
             raise FaceError("A face destination cannot be a symbolic link")
         target = chosen.resolve()
-        if target.is_relative_to(BUILTIN_DIRECTORY.resolve()):
+        if _is_bundled_path(target):
             raise FaceError("Save custom faces outside the bundled face folder")
         replace_current = allow_current and target == self._path
         try:

@@ -476,3 +476,85 @@ def test_negative_coordinate_draft_is_visible_but_not_savable_and_undo_restores(
     assert document.preview().controls["play"] == tuple(original)
     assert not document.dirty
     assert not document.validate()
+
+
+@pytest.fixture()
+def temporary_bundle(tmp_path, monkeypatch):
+    directory = tmp_path / "bundled-faces"
+    directory.mkdir()
+    source = FaceDocument.from_template(TEMPLATE).export(directory / "template")
+    monkeypatch.setattr(document_module, "BUILTIN_DIRECTORY", directory)
+    return directory, source
+
+
+def case_alias(directory):
+    alias = directory.with_name(directory.name.upper())
+    if not alias.exists() or not alias.samefile(directory):
+        pytest.skip("The temporary filesystem is case sensitive")
+    return alias
+
+
+def test_open_physical_case_alias_of_bundle_creates_custom_copy(temporary_bundle):
+    directory, source = temporary_bundle
+    alias_source = case_alias(directory) / source.name
+    original = (source / "face.json").read_bytes()
+    document = FaceDocument.open(alias_source)
+    assert document.path is None
+    assert document.manifest["id"] != json.loads(original)["id"]
+    assert (source / "face.json").read_bytes() == original
+
+
+def test_save_cannot_overwrite_bundle_through_case_alias(temporary_bundle):
+    directory, source = temporary_bundle
+    alias_source = case_alias(directory) / source.name
+    original = (source / "face.json").read_bytes()
+    document = FaceDocument.open(alias_source)
+    document.set_value(("name",), "Edited copy")
+    with pytest.raises(FaceError, match="bundled"):
+        document.save(alias_source)
+    assert (source / "face.json").read_bytes() == original
+
+
+@pytest.mark.parametrize("operation", ["save", "export"])
+def test_absent_destination_under_case_alias_of_bundle_is_protected(
+    temporary_bundle, operation,
+):
+    directory, source = temporary_bundle
+    target = case_alias(directory) / "new-face"
+    document = FaceDocument.from_template(source)
+    with pytest.raises(FaceError, match="bundled"):
+        getattr(document, operation)(target)
+    assert not target.exists()
+
+
+def test_case_sensitive_distinct_directory_remains_a_valid_destination(temporary_bundle):
+    directory, source = temporary_bundle
+    distinct = directory.with_name(directory.name.upper())
+    if distinct.exists():
+        pytest.skip("The temporary filesystem is case insensitive")
+    distinct.mkdir()
+    document = FaceDocument.from_template(source)
+    target = document.save(distinct / "custom")
+    assert load_face(target).info.id == document.manifest["id"]
+    assert not distinct.samefile(directory)
+
+
+@pytest.mark.parametrize("operation", ["open", "save"])
+def test_bundle_identity_inspection_error_never_bypasses_protection(
+    tmp_path, monkeypatch, operation,
+):
+    document = FaceDocument.from_template(TEMPLATE)
+    existing = document.save(tmp_path / "working")
+    original = (existing / "face.json").read_bytes()
+
+    def unreadable_identity(path, other):
+        raise PermissionError("Folder identity cannot be read")
+
+    monkeypatch.setattr(Path, "samefile", unreadable_identity)
+    with pytest.raises(FaceError, match="Cannot inspect face folder"):
+        if operation == "open":
+            FaceDocument.open(existing)
+        else:
+            document.save(tmp_path / "new")
+    assert (existing / "face.json").read_bytes() == original
+    assert not (tmp_path / "new").exists()
