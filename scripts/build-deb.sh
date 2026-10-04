@@ -7,7 +7,8 @@
 #   /usr/lib/mozilla/native-messaging-hosts/amberfader.json
 #   /usr/share/applications/ch.lkmc.amberfader.desktop
 #   /usr/share/icons/hicolor/96x96/apps/amberfader.png
-# Depends: python3 only — PySide6 arrives inside the pip --target tree.
+# Depends: the launcher's Python ABI and libdbus for native menus. PySide6
+# arrives inside the pip --target tree.
 #
 # Usage: scripts/build-deb.sh <version> <dist-dir>
 set -euo pipefail
@@ -89,7 +90,7 @@ Section: sound
 Priority: optional
 Architecture: $ARCH
 Maintainer: L-K-M
-Depends: python3 (>= $PYTHON_VERSION), python3 (<< $NEXT_PYTHON_VERSION)
+Depends: python3 (>= $PYTHON_VERSION), python3 (<< $NEXT_PYTHON_VERSION), libdbus-1-3
 Description: Classic-style remote for YouTube Music in Firefox
  Compact player for an existing music.youtube.com tab: playback control,
  artwork, and song search without bringing the browser forward. Registers a

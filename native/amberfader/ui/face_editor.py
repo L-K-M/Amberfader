@@ -147,6 +147,7 @@ class FaceEditorWindow(QMainWindow):
         return action
 
     def _actions(self) -> None:
+        self.menuBar().setNativeMenuBar(True)
         self._new_action = self._action(
             "New from template…", QKeySequence.StandardKey.New, self._new
         )

@@ -14,6 +14,8 @@ finish-args:
   - --socket=wayland
   - --socket=fallback-x11
   - --device=dri
+  # Qt exports native menus to Plasma's global-menu registrar.
+  - --talk-name=com.canonical.AppMenu.Registrar
   # The control socket lives in the host's per-user runtime dir; the GUI must
   # see the same subtree even when it did not exist before first launch.
   - --filesystem=xdg-run/amberfader:create
