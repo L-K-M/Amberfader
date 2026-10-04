@@ -29,6 +29,7 @@ def styled_pack(tmp_path):
     {"title": None}, {"title": []}, {"title": "center"},
     {"title": {"align": "justify"}}, {"title": {"align": True}},
     {"title": {"font": "sans-serif; color:red"}},
+    {"title": {"font": "comic"}},
     {"title": {"size": 9}}, {"title": {"size": 37}},
     {"title": {"size": 12.5}}, {"title": {"size": True}},
     {"title": {"bold": "true"}},
