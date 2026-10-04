@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs every check the repo has, in both languages:
-#   TS: tsc --noEmit, eslint, vitest
+#   TS: tsc --noEmit, eslint, vitest; builds the embedded page bundle
 #   Python: ruff (if present), pytest (via uv run or .venv)
 #   shellcheck on scripts/* (if present)
 #   schema sync: the bundled copy in native/amberfader/schema must be
@@ -30,6 +30,9 @@ else
   echo "!! schema copies differ — copy protocol/schemas/envelope.schema.json into native/amberfader/schema/"
   FAILED=1
 fi
+
+step "Embedded page bundle (lets the embedded end-to-end test run)"
+run npm run --silent embedded:build
 
 step "Python: ruff + pytest"
 if command -v uv >/dev/null 2>&1 && [[ -d .venv ]]; then

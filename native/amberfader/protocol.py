@@ -10,6 +10,7 @@ Measure bytes, never characters: struct.pack("=I", len(encoded_bytes)).
 """
 from __future__ import annotations
 
+import functools
 import json
 import struct
 from collections.abc import Iterator
@@ -109,6 +110,24 @@ def validate_message(msg: dict[str, Any]) -> list[str]:
     schema = load_schema()
     validator = jsonschema.validators.validator_for(schema)(schema)
     return [f"{e.json_path or '/'}: {e.message}" for e in validator.iter_errors(msg)]
+
+
+@functools.cache
+def _definition_validator(name: str) -> Any:
+    import jsonschema
+
+    schema = load_schema()
+    if name not in schema["$defs"]:
+        raise KeyError(f"unknown schema definition: {name}")
+    reference = {"$schema": schema["$schema"], "$defs": schema["$defs"], "$ref": f"#/$defs/{name}"}
+    return jsonschema.validators.validator_for(schema)(reference)
+
+
+def validate_definition(name: str, value: Any) -> list[str]:
+    """Validate one value against a named `$defs` entry of the envelope
+    schema, e.g. a search.songs result whose shape the envelope leaves open."""
+    validator = _definition_validator(name)
+    return [f"{e.json_path or '/'}: {e.message}" for e in validator.iter_errors(value)]
 
 
 def _structural_check(msg: dict[str, Any]) -> list[str]:

@@ -10,6 +10,8 @@
   },
   "scripts": {
     "build": "node scripts/build-extension.mjs",
+    "embedded:build": "node scripts/build-embedded.mjs",
+    "embedded:run": "npm run embedded:build && uv run --extra gui --extra embedded python -m amberfader.embedded",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",

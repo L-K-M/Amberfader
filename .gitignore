@@ -1,6 +1,7 @@
 # build outputs
 /build/
 /dist/
+/native/amberfader/embedded/web/
 *.pyi
 
 # node
