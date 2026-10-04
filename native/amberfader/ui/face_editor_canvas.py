@@ -368,7 +368,11 @@ class FaceEditorCanvas(QGraphicsView):
         event.accept()
 
     def mouseReleaseEvent(self, event) -> None:
-        if self._gesture is not None and self._document is not None:
+        if (
+            event.button() == Qt.MouseButton.LeftButton
+            and self._gesture is not None
+            and self._document is not None
+        ):
             self.finish_gesture()
             event.accept()
             return

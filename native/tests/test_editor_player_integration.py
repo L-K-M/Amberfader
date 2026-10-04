@@ -67,3 +67,66 @@ def test_picker_edit_copy_respects_unsaved_editor_cancellation(player, qapp, mon
     assert editor.document is document
     assert window._face_id == "amber-classic"
     assert sent == []
+
+
+def test_face_editor_menu_action_reopens_without_resetting_dirty_document(
+    player, qapp, monkeypatch,
+):
+    from PySide6.QtWidgets import QMessageBox
+
+    window, _, sent = player
+    prompts = []
+
+    def discard_if_prompted(*args):
+        prompts.append(args)
+        return QMessageBox.StandardButton.Discard
+
+    monkeypatch.setattr(QMessageBox, "warning", discard_if_prompted)
+    action = next(action for action in window._menu.actions() if action.text() == "Face editor…")
+    action.trigger()
+    qapp.processEvents()
+    editor = window._face_editor
+    document = editor.document
+    document.set_rotation("play", 15)
+    editor._changed()
+    action.trigger()
+    qapp.processEvents()
+    assert prompts == []
+    assert window._face_editor is editor
+    assert editor.document is document
+    assert document.manifest["controlRotations"]["play"] == 15
+    assert editor.isVisible()
+    assert sent == []
+
+
+def test_cancel_close_keeps_dirty_editor_and_menu_reuses_it(player, qapp, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    window, _, sent = player
+    window.open_face_editor()
+    editor = window._face_editor
+    document = editor.document
+    document.set_rotation("play", 15)
+    editor._changed()
+    prompts = []
+
+    def cancel_close(*args):
+        prompts.append(args)
+        return QMessageBox.StandardButton.Cancel
+
+    monkeypatch.setattr(QMessageBox, "warning", cancel_close)
+    assert not editor.close()
+    qapp.processEvents()
+    assert editor.isVisible()
+    assert len(prompts) == 1
+    action = next(action for action in window._menu.actions() if action.text() == "Face editor…")
+    action.trigger()
+    qapp.processEvents()
+    assert editor.document is document
+    assert document.manifest["controlRotations"]["play"] == 15
+    assert len(prompts) == 1
+    assert window.close()
+    assert editor.isVisible()
+    assert editor.document is document
+    assert len(prompts) == 1
+    assert sent == []

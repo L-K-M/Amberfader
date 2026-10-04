@@ -93,10 +93,10 @@ def _read_snapshot(source: Path) -> _Snapshot:
     return snapshot
 
 
-def _is_bundled_path(path: Path) -> bool:
+def _is_within_directory(path: Path, directory: Path) -> bool:
     """Recognize physical ancestry, including case aliases on macOS volumes."""
     try:
-        root = BUILTIN_DIRECTORY.resolve()
+        root = directory.resolve()
         location = path.resolve()
         if location.is_relative_to(root):
             return True
@@ -110,6 +110,10 @@ def _is_bundled_path(path: Path) -> bool:
     except OSError as exc:
         raise FaceError(f"Cannot inspect face folder protection: {exc}") from exc
     return False
+
+
+def _is_bundled_path(path: Path) -> bool:
+    return _is_within_directory(path, BUILTIN_DIRECTORY)
 
 
 class FaceDocument:
@@ -368,6 +372,8 @@ class FaceDocument:
         target = chosen.resolve()
         if _is_bundled_path(target):
             raise FaceError("Save custom faces outside the bundled face folder")
+        if self._path is not None and _is_within_directory(target.parent, self._path):
+            raise FaceError("Choose a destination outside the working face folder")
         replace_current = allow_current and target == self._path
         try:
             if target.exists():

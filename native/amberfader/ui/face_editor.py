@@ -94,6 +94,7 @@ class FaceEditorWindow(QMainWindow):
         self.setMinimumSize(940, 600)
         self._document = document or FaceDocument.from_template(BUILTIN_DIRECTORY / DEFAULT_FACE_ID)
         self._syncing = False
+        self._metadata_model_values: dict[str, str] = {}
         self._artwork: FaceArtwork | None = None
         self._artwork_key = None
         self._cover = self._sample_cover()
@@ -466,7 +467,13 @@ class FaceEditorWindow(QMainWindow):
             self._sprite_group.setVisible(name in BUTTON_CONTROLS)
             self._sprite_description()
             for key, field in self._metadata.items():
-                field.setText(data[key])
+                value = data[key]
+                # Preserve text still being typed during unrelated layout refreshes.
+                # Undo and document replacement still update a focused field when
+                # its committed model value changes.
+                if not field.hasFocus() or self._metadata_model_values.get(key) != value:
+                    field.setText(value)
+                self._metadata_model_values[key] = value
             for field, value in zip(self._face_size, data["size"], strict=True):
                 field.setValue(value)
             self._face_font.setCurrentText(data.get("font", "sans"))
@@ -652,8 +659,10 @@ class FaceEditorWindow(QMainWindow):
         self._changed()
 
     def _confirm_discard(self) -> bool:
+        # Flush before finishing: its refresh must not erase pending inspector text.
+        # Save and Cancel preserve the current visible edit, including a drag.
         self._flush_inspector()
-        self._canvas.cancel_gesture()
+        self._canvas.finish_gesture()
         if not self._document.dirty:
             return True
         choice = QMessageBox.warning(
@@ -714,8 +723,8 @@ class FaceEditorWindow(QMainWindow):
         return True
 
     def save(self) -> bool:
-        self._canvas.finish_gesture()
         self._flush_inspector()
+        self._canvas.finish_gesture()
         if self._document.path is None:
             return self.save_as()
         return self._save_to(self._document.path)
@@ -730,15 +739,15 @@ class FaceEditorWindow(QMainWindow):
         return Path(directory) if directory else None
 
     def save_as(self) -> bool:
-        self._canvas.finish_gesture()
         self._flush_inspector()
+        self._canvas.finish_gesture()
         destination = self._destination_folder("Save face")
         return self._save_to(destination) if destination is not None else False
 
     def export(self) -> bool:
         """Write a portable copy while preserving the editable working document."""
-        self._canvas.finish_gesture()
         self._flush_inspector()
+        self._canvas.finish_gesture()
         destination = self._destination_folder("Export face copy")
         if destination is None:
             return False

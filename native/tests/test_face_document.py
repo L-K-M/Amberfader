@@ -558,3 +558,24 @@ def test_bundle_identity_inspection_error_never_bypasses_protection(
             document.save(tmp_path / "new")
     assert (existing / "face.json").read_bytes() == original
     assert not (tmp_path / "new").exists()
+
+
+@pytest.mark.parametrize("operation", ["save", "export"])
+@pytest.mark.parametrize("aliased", [False, True])
+def test_destination_inside_working_pack_is_rejected_before_it_changes_source(
+    tmp_path, operation, aliased,
+):
+    document = FaceDocument.from_template(TEMPLATE)
+    working = document.save(tmp_path / "working")
+    original = {file.name: file.read_bytes() for file in working.iterdir()}
+    parent = case_alias(working) if aliased else working
+    target = parent / "copy"
+    document.set_value(("name",), "Unsaved edit")
+    with pytest.raises(FaceError, match="outside the working face folder"):
+        getattr(document, operation)(target)
+    assert not target.exists()
+    assert {file.name: file.read_bytes() for file in working.iterdir()} == original
+    assert document.path == working
+    assert document.dirty
+    document.save()
+    assert not document.dirty

@@ -142,6 +142,7 @@ if ! /usr/bin/python3 - <<'PY_SMOKE'
 import sys
 from PySide6.QtWidgets import QApplication
 import amberfader.app
+import amberfader.editor_app
 import amberfader.helper
 from amberfader.ui.face_editor import FaceEditorWindow
 app = QApplication(sys.argv)

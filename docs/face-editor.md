@@ -102,9 +102,10 @@ and validation feedback to check the actual rotated footprint.
 ## Save and install
 
 **Save As** writes an ordinary folder containing `face.json` and only its
-declared PNG assets. Choose a new or empty folder. After saving, **Save** updates
-that working folder. **Export copy…** writes another portable copy without
-moving the working document or marking unsaved work as saved.
+declared PNG assets. Choose a new or empty folder outside your working face
+folder. After saving, **Save** updates that working folder. **Export copy…**
+writes another portable copy without moving the working document or marking
+unsaved work as saved.
 
 Save validates the complete staged snapshot before publishing it. Existing
 folders and unrelated files are protected: if a working folder changes outside

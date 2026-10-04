@@ -494,6 +494,7 @@ def test_saving_active_drag_finishes_it_before_saved_checkpoint(editor, qapp, tm
     start = QRectF(*original).center()
     _drag(qapp, editor._canvas, start, start + QPointF(1, 0), release=False)
     moved = editor.document.manifest["controls"]["play"]
+    assert moved != original
     assert editor.save()
     assert editor._canvas._gesture is None
     assert not editor.document.dirty
@@ -556,3 +557,153 @@ def test_nudges_stop_at_shared_draft_bounds_and_keep_preview_current(editor, qap
     assert draft[1] == -MAX_DRAFT_GEOMETRY
     assert editor._canvas._item.face.controls["play"] == tuple(draft)
     assert editor._rect_fields[0].maximum() == editor._rect_fields[2].maximum()
+
+
+def test_undo_other_element_preserves_focused_uncommitted_metadata(editor, qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QToolBar
+
+    original_x = editor.document.manifest["controls"]["play"][0]
+    editor._rect_fields[0].setValue(original_x + 1)
+    editor._inspector.setCurrentIndex(1)
+    field = editor._metadata["name"]
+    field.setFocus()
+    QTest.keyClicks(field, " still being typed")
+    pending = field.text()
+    assert field.hasFocus()
+    toolbar = editor.findChild(QToolBar)
+    undo_button = toolbar.widgetForAction(editor._undo_action)
+    undo_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    QTest.mouseClick(undo_button, Qt.MouseButton.LeftButton)
+    qapp.processEvents()
+    assert editor.document.manifest["controls"]["play"][0] == original_x
+    assert field.text() == pending
+    editor._flush_inspector()
+    assert editor.document.manifest["name"] == pending
+
+
+@pytest.mark.parametrize("button_name", ["RightButton", "MiddleButton"])
+def test_non_left_release_keeps_left_drag_active(editor, qapp, button_name):
+    from PySide6.QtCore import QEvent, QPointF, QRectF, Qt
+    from PySide6.QtGui import QMouseEvent
+
+    original = editor.document.manifest["controls"]["play"]
+    start = QRectF(*original).center()
+    _drag(qapp, editor._canvas, start, start + QPointF(5, 0), release=False)
+    event = QMouseEvent(
+        QEvent.Type.MouseButtonRelease,
+        QPointF(editor._canvas.mapFromScene(start)),
+        QPointF(editor._canvas.viewport().mapToGlobal(editor._canvas.mapFromScene(start))),
+        getattr(Qt.MouseButton, button_name),
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    editor._canvas.mouseReleaseEvent(event)
+    assert editor._canvas._gesture is not None
+    editor._canvas.cancel_gesture()
+    assert editor.document.manifest["controls"]["play"] == original
+    assert not editor.document.can_undo
+
+
+def test_replacing_document_with_focused_metadata_keeps_incoming_identity_and_history(
+    editor,
+    qapp,
+    monkeypatch,
+):
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QMessageBox
+
+    editor._inspector.setCurrentIndex(1)
+    editor._metadata["name"].setFocus()
+    QTest.keyClicks(editor._metadata["name"], " from the old document")
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: QMessageBox.StandardButton.Discard)
+    assert editor.new_from_template(BUILTIN_DIRECTORY / "viridian")
+    qapp.processEvents()
+    assert editor.document.manifest["name"] == "Viridian Custom"
+    assert editor._metadata["name"].text() == "Viridian Custom"
+    assert editor._canvas.selected == "play"
+    assert [field.value() for field in editor._rect_fields] == editor.document.manifest["controls"][
+        "play"
+    ]
+    assert not editor.document.can_undo
+
+
+def test_save_in_close_prompt_preserves_active_drag_and_pending_metadata(
+    editor,
+    qapp,
+    tmp_path,
+    monkeypatch,
+):
+    from PySide6.QtCore import QPointF, QRectF
+    from PySide6.QtWidgets import QMessageBox
+
+    destination = tmp_path / "closing-drag"
+    assert editor._save_to(destination)
+    original = editor.document.manifest["controls"]["play"]
+    start = QRectF(*original).center()
+    _drag(qapp, editor._canvas, start, start + QPointF(1, 0), release=False)
+    moved = editor.document.manifest["controls"]["play"]
+    assert moved != original
+    editor._metadata["name"].setText("Pending name at close")
+    prompts = []
+
+    def save_choice(*args):
+        prompts.append(args)
+        return QMessageBox.StandardButton.Save
+
+    monkeypatch.setattr(QMessageBox, "warning", save_choice)
+    assert editor._confirm_discard()
+    saved = load_face(destination)
+    assert len(prompts) == 1
+    assert saved.controls["play"] == tuple(moved)
+    assert saved.info.name == "Pending name at close"
+    assert editor.document.manifest["controls"]["play"] == moved
+    assert editor._canvas._gesture is None
+    assert not editor.document.dirty
+
+
+def test_cancel_in_close_prompt_preserves_current_active_drag(editor, qapp, monkeypatch):
+    from PySide6.QtCore import QPointF, QRectF
+    from PySide6.QtWidgets import QMessageBox
+
+    editor._metadata["name"].setText("An earlier committed edit")
+    editor._edit_metadata("name")
+    original = editor.document.manifest["controls"]["play"]
+    start = QRectF(*original).center()
+    _drag(qapp, editor._canvas, start, start + QPointF(1, 0), release=False)
+    moved = editor.document.manifest["controls"]["play"]
+    assert moved != original
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: QMessageBox.StandardButton.Cancel)
+    assert not editor._confirm_discard()
+    assert editor.document.manifest["controls"]["play"] == moved
+    assert editor.document.manifest["name"] == "An earlier committed edit"
+    assert editor._canvas._gesture is None
+    editor._undo()
+    assert editor.document.manifest["controls"]["play"] == original
+    assert editor.document.manifest["name"] == "An earlier committed edit"
+
+
+def test_save_during_active_drag_keeps_numeric_inspector_text_not_yet_committed(
+    editor,
+    qapp,
+    tmp_path,
+):
+    from PySide6.QtCore import QPointF, QRectF
+    from PySide6.QtTest import QTest
+
+    destination = tmp_path / "drag-numeric-edit"
+    assert editor._save_to(destination)
+    original = editor.document.manifest["controls"]["play"]
+    start = QRectF(*original).center()
+    _drag(qapp, editor._canvas, start, start + QPointF(1, 0), release=False)
+    field = editor._rect_fields[0]
+    field.setFocus()
+    field.lineEdit().selectAll()
+    QTest.keyClicks(field.lineEdit(), str(original[0] + 3))
+    assert field.value() == original[0] + 1
+    assert field.lineEdit().text().startswith(str(original[0] + 3))
+    assert editor.save()
+    assert load_face(destination).controls["play"][0] == original[0] + 3
+    assert editor.document.manifest["controls"]["play"][0] == original[0] + 3
+    assert editor._canvas._gesture is None
