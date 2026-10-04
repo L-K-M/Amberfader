@@ -24,6 +24,12 @@
     "danger": "#ffceba"
   },
   "coverGlass": true,
+  "sliderStyle": "inset",
+  "readoutStyles": {
+    "title": {"size": 14},
+    "playback": {"align": "right", "size": 11},
+    "status": {"align": "center", "size": 11}
+  },
   "controlShapes": {
     "art": "ellipse",
     "previous": "ellipse",
@@ -39,7 +45,7 @@
   },
   "controls": {
     "art": [143, 180, 92, 92],
-    "title": [302, 192, 276, 22],
+    "title": [302, 192, 136, 22],
     "artists": [302, 218, 276, 20],
     "time": [302, 244, 186, 30],
     "playback": [498, 250, 80, 20],
@@ -48,7 +54,7 @@
     "play": [588, 120, 56, 48],
     "next": [311, 311, 36, 32],
     "like": [536, 304, 34, 28],
-    "volume": [326, 165, 132, 18],
+    "volume": [446, 195, 132, 18],
     "search": [320, 280, 84, 24],
     "show": [412, 280, 88, 24],
     "hide": [508, 280, 64, 24],

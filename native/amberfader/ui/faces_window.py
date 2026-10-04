@@ -8,7 +8,7 @@ from PySide6.QtCore import QRect, QRectF, Qt, QUrl
 from PySide6.QtGui import (
     QColor,
     QDesktopServices,
-    QFontMetrics,
+    QFont,
     QLinearGradient,
     QPainter,
     QPen,
@@ -29,13 +29,18 @@ from PySide6.QtWidgets import (
 from ..face_library import Face, FaceError, FaceLibrary, load_face
 from .face_surface import (
     FONT_FAMILIES,
+    READOUT_CONTROLS,
     TRANSPORT_CONTROLS,
     FaceArtwork,
     control_path,
     draw_cover,
+    draw_slider,
     draw_transport_icon,
+    fit_readout_font,
     like_font_size,
     prepare_face,
+    readout_font,
+    readout_style,
 )
 
 PREVIEW_LABELS = {
@@ -86,18 +91,13 @@ class FacePreview(QWidget):
         for name, coordinates in face.controls.items():
             rect = QRect(*coordinates)
             painter.setPen(QColor(p["readout"]))
-            font = painter.font()
-            font.setFamily(FONT_FAMILIES["mono" if name == "time" else face.font])
-            font.setBold(name == "title")
-            size = face.time_size if name == "time" else 12
-            if name == "like":
-                size = like_font_size(face)
-            font.setPixelSize(size)
+            if name in READOUT_CONTROLS:
+                font = readout_font(face, name)
+            else:
+                font = QFont(FONT_FAMILIES[face.font])
+                font.setPixelSize(like_font_size(face) if name == "like" else 12)
             if name == "time":
-                font.setPixelSize(min(font.pixelSize(), rect.height() - 2))
-                width = QFontMetrics(font).horizontalAdvance(PREVIEW_LABELS["time"])
-                if width > rect.width():
-                    font.setPixelSize(max(10, int(font.pixelSize() * rect.width() / width)))
+                font = fit_readout_font(font, PREVIEW_LABELS["time"], rect)
             painter.setFont(font)
             if name == "art":
                 draw_cover(
@@ -106,6 +106,14 @@ class FacePreview(QWidget):
                 )
                 continue
             if name in ("seek", "volume"):
+                if face.slider_style == "inset":
+                    groove = QRectF(rect.x(), rect.y() + (rect.height() - 4) / 2, rect.width(), 4)
+                    # The 12px QSS handle has a 1px border on either side.
+                    handle = QRectF(
+                        rect.center().x() - 6, rect.y() + (rect.height() - 14) / 2, 14, 14,
+                    )
+                    draw_slider(painter, groove, handle, p)
+                    continue
                 groove = rect.adjusted(4, rect.height() // 2 - 2, -4, -(rect.height() // 2 - 2))
                 painter.fillRect(groove, QColor(p["display"]))
                 groove.setWidth(groove.width() // 2)
@@ -143,7 +151,10 @@ class FacePreview(QWidget):
                 text = painter.fontMetrics().elidedText(
                     text, Qt.TextElideMode.ElideRight, rect.width()
                 )
-            alignment = Qt.AlignmentFlag.AlignCenter if button else Qt.AlignmentFlag.AlignVCenter
+            alignment = (
+                readout_style(face, name).alignment if name in READOUT_CONTROLS
+                else Qt.AlignmentFlag.AlignCenter
+            )
             painter.drawText(rect, alignment, text)
 
 

@@ -18,20 +18,23 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMenu,
-    QSlider,
     QVBoxLayout,
 )
 
 from ..face_library import BUNDLED_FACE_ERROR, DEFAULT_FACE_ID, Face, FaceError, FaceLibrary
 from .face_surface import (
+    READOUT_CONTROLS,
     CoverLabel,
     ElidedLabel,
     FaceArtwork,
     FaceButton,
+    FaceSlider,
     FaceSurface,
     ReadoutLabel,
     face_stylesheet,
     prepare_face,
+    readout_font,
+    readout_style,
 )
 from .placeholder import placeholder_png
 from .search_window import SearchWindow
@@ -103,11 +106,11 @@ class MainWindow(QMainWindow):
         self._like.setToolTip("Liked state unknown")
         self._like.setEnabled(False)
 
-        self._seek = QSlider(Qt.Orientation.Horizontal, self._surface)
+        self._seek = FaceSlider(Qt.Orientation.Horizontal, self._surface)
         self._seek.setRange(0, 1000)
         self._seek.setToolTip("Seek")
         self._seek.setAccessibleName("Seek")
-        self._vol = QSlider(Qt.Orientation.Horizontal, self._surface)
+        self._vol = FaceSlider(Qt.Orientation.Horizontal, self._surface)
         self._vol.setRange(0, 100)
         self._vol.setValue(80)
         self._vol.setToolTip("Volume")
@@ -227,6 +230,11 @@ class MainWindow(QMainWindow):
                 widget.set_shape(
                     face.control_shapes.get(name, "rectangle"), face.radius * effective_scale,
                 )
+            elif isinstance(widget, FaceSlider):
+                widget.set_face(face)
+            elif name in READOUT_CONTROLS:
+                widget.setAlignment(readout_style(face, name).alignment)
+                widget.setFont(readout_font(face, name, effective_scale))
         self._art.set_shape(
             face.control_shapes.get("art", "rectangle"), face.radius * effective_scale,
             face.cover_glass,

@@ -7,6 +7,7 @@ from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt, Signal
 from PySide6.QtGui import (
     QBitmap,
     QColor,
+    QFont,
     QFontMetrics,
     QImage,
     QKeyEvent,
@@ -19,12 +20,68 @@ from PySide6.QtGui import (
     QPolygonF,
     QRegion,
 )
-from PySide6.QtWidgets import QLabel, QPushButton, QStyle, QStyleOptionButton, QWidget
+from PySide6.QtWidgets import (
+    QLabel,
+    QPushButton,
+    QSlider,
+    QStyle,
+    QStyleOptionButton,
+    QStyleOptionSlider,
+    QWidget,
+)
 
 from ..face_library import Face, FaceError
 
 FONT_FAMILIES = {"sans": "sans-serif", "mono": "monospace", "serif": "serif"}
 TRANSPORT_CONTROLS = frozenset(("previous", "play", "next"))
+READOUT_CONTROLS = frozenset(("title", "artists", "time", "playback", "status"))
+READOUT_ALIGNMENT = {
+    "left": Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+    "center": Qt.AlignmentFlag.AlignCenter,
+    "right": Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+}
+
+
+@dataclass(frozen=True)
+class ReadoutStyle:
+    alignment: Qt.AlignmentFlag
+    font: str
+    size: int
+    bold: bool
+
+
+def readout_style(face: Face, name: str) -> ReadoutStyle:
+    """Resolve each face afresh so a centered lens cannot restyle the next face."""
+    style = face.readout_styles.get(name, {})
+    return ReadoutStyle(
+        alignment=READOUT_ALIGNMENT[style.get("align", "left")],
+        font=style.get("font", "mono" if name == "time" else face.font),
+        size=style.get("size", face.time_size if name == "time" else 12),
+        bold=style.get("bold", name == "title"),
+    )
+
+
+def readout_font(face: Face, name: str, scale: float = 1.0) -> QFont:
+    style = readout_style(face, name)
+    font = QFont(FONT_FAMILIES[style.font])
+    if style.font == "mono":
+        # macOS may resolve the generic family to a proportional system font.
+        font.setStyleHint(QFont.StyleHint.Monospace)
+    # Large plugin fonts fit their allotted row instead of clipping into a bevel.
+    size = min(style.size, face.controls[name][3] - 2)
+    font.setPixelSize(max(10, round(size * scale)))
+    font.setBold(style.bold)
+    return font
+
+
+def fit_readout_font(font: QFont, text: str, rect: QRect) -> QFont:
+    """Keep every time digit visible in the player and the face chooser."""
+    fitted = QFont(font)
+    fitted.setPixelSize(min(fitted.pixelSize(), rect.height() - 2))
+    width = QFontMetrics(fitted).horizontalAdvance(text)
+    if width > rect.width():
+        fitted.setPixelSize(max(10, int(fitted.pixelSize() * rect.width() / width)))
+    return fitted
 
 
 def control_path(rect: QRectF, shape: str, radius: float) -> QPainterPath:
@@ -70,6 +127,78 @@ def draw_cover(
         reflection.setColorAt(1, QColor(0, 0, 0, 30))
         painter.fillPath(path, reflection)
     painter.restore()
+
+
+def draw_slider(
+    painter: QPainter, groove: QRectF, handle: QRectF, palette,
+    enabled: bool = True, focused: bool = False, upside_down: bool = False,
+) -> None:
+    """Paint an inset track at the same coordinates Qt uses for interaction."""
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    rim = groove.adjusted(0, -1, 0, 1)
+    painter.setPen(QPen(QColor(palette["border"]), 0.8))
+    painter.setBrush(QColor(palette["display"]).darker(140))
+    painter.drawRoundedRect(rim, rim.height() / 2, rim.height() / 2)
+    track = groove.adjusted(1, 0.5, -1, -0.5)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(palette["accent"] if enabled else palette["muted"]))
+    filled = QRectF(track)
+    position = max(track.left(), min(track.right(), handle.center().x()))
+    if upside_down:
+        filled.setLeft(position)
+    else:
+        filled.setRight(position)
+    painter.drawRoundedRect(filled, track.height() / 2, track.height() / 2)
+    diameter = min(handle.width(), handle.height()) - 1
+    thumb = QRectF(0, 0, diameter, diameter)
+    thumb.moveCenter(handle.center())
+    gradient = QLinearGradient(thumb.topLeft(), thumb.bottomLeft())
+    gradient.setColorAt(0, QColor(palette["buttonTop"]))
+    gradient.setColorAt(1, QColor(palette["buttonBottom"]))
+    painter.setBrush(gradient)
+    painter.setPen(QPen(QColor(palette["border"]), 0.8))
+    painter.drawEllipse(thumb)
+    core = thumb.adjusted(2, 2, -2, -2)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(palette["accent"] if enabled else palette["muted"]))
+    painter.drawEllipse(core)
+    if focused:
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor(palette["accent"]), 1, Qt.PenStyle.DashLine))
+        painter.drawRoundedRect(rim.adjusted(-1, -1, 1, 1), 4, 4)
+    painter.restore()
+
+
+class FaceSlider(QSlider):
+    """Face painting keeps QSlider's input, accessibility and signal behavior."""
+
+    def __init__(self, orientation: Qt.Orientation, parent: QWidget) -> None:
+        super().__init__(orientation, parent)
+        self._face: Face | None = None
+
+    def set_face(self, face: Face) -> None:
+        self._face = face
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        if self._face is None or self._face.slider_style == "classic":
+            super().paintEvent(event)
+            return
+        option = QStyleOptionSlider()
+        self.initStyleOption(option)
+        style = self.style()
+        groove = style.subControlRect(
+            QStyle.ComplexControl.CC_Slider, option, QStyle.SubControl.SC_SliderGroove, self,
+        )
+        handle = style.subControlRect(
+            QStyle.ComplexControl.CC_Slider, option, QStyle.SubControl.SC_SliderHandle, self,
+        )
+        painter = QPainter(self)
+        draw_slider(
+            painter, QRectF(groove), QRectF(handle), self._face.palette,
+            self.isEnabled(), self.hasFocus(), option.upsideDown,
+        )
 
 
 @dataclass(frozen=True)
@@ -130,9 +259,7 @@ def face_stylesheet(face: Face, scale: float) -> str:
     QMainWindow, QWidget#faceSurface {{ background: transparent; }}
     QDialog, QMenu {{ background: {p['window']}; }}
     QLabel {{ background: transparent; }}
-    QLabel#title {{ font-weight: bold; }}
     QLabel#title, QLabel#artists, QLabel#time, QLabel#playback {{ color: {p['readout']}; }}
-    QLabel#time {{ font-family: monospace; font-size: {round(face.time_size * scale)}px; }}
     QLabel#dim, QLabel#status {{ color: {p['muted']}; }}
     QLabel#status[error="true"] {{ color: {p['danger']}; }}
     QPushButton {{
@@ -169,6 +296,13 @@ def face_stylesheet(face: Face, scale: float) -> str:
     for name, (_, _, width, height) in face.controls.items():
         corner = round(min(face.radius, width // 2 - 1, height // 2 - 1) * scale)
         stylesheet += f"QPushButton#{name} {{ border-radius: {corner}px; }}\n"
+    for name in sorted(READOUT_CONTROLS):
+        font = readout_font(face, name, scale)
+        weight = "bold" if font.bold() else "normal"
+        stylesheet += (
+            f"QLabel#{name} {{ font-family: {font.family()}; "
+            f"font-size: {font.pixelSize()}px; font-weight: {weight}; }}\n"
+        )
     return stylesheet
 
 
@@ -217,11 +351,7 @@ class ReadoutLabel(QLabel):
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
-        font = self.font()
-        font.setPixelSize(min(font.pixelSize(), self.height() - 2))
-        width = QFontMetrics(font).horizontalAdvance(self.text())
-        if width > self.width():
-            font.setPixelSize(max(10, int(font.pixelSize() * self.width() / width)))
+        font = fit_readout_font(self.font(), self.text(), self.rect())
         painter.setFont(font)
         painter.setPen(self.palette().windowText().color())
         painter.drawText(self.rect(), self.alignment(), self.text())

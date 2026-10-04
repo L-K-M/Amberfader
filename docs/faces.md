@@ -121,6 +121,17 @@ my-face/
   `radius`; `capsule` uses half the shorter dimension.
 - `coverGlass` (version 2): optional boolean, default false. Adds a faint glass
   reflection over the cover while leaving the background's bezel visible.
+- `readoutStyles` (version 2): optional entries for `title`, `artists`, `time`,
+  `playback` and `status`. Each entry can set `align` (`left`, `center`, `right`),
+  `font` (`sans`, `mono`, `serif`), `size` (10–36 logical pixels) and `bold`.
+  Omitted values retain the face font at 12 pixels, left alignment and a bold
+  title; time uses `mono` and `timeSize`. Fonts fit the row height, and long
+  metadata is elided with its full text available in a tooltip. The player and
+  picker use the same settings. Center circular readouts on their glass rather
+  than the exterior window silhouette.
+- `sliderStyle` (version 2): `classic` (default) or `inset`. The inset rail and
+  thumb use the face palette while retaining native slider input and signals.
+  Place the full straight track within one panel, clear of bevels and seams.
 
 ### Required host controls
 
@@ -145,6 +156,9 @@ square and at least 64×64, except version 2 elliptical apertures, which can be
 oval and need at least 48×48. The entire control rectangle must still fit on
 the opaque shell. Leave enough room for translated desktop fonts and long track
 names.
+An opaque area can still contain a bezel or panel seam. Check the painted
+controls against those physical boundaries, including slider endpoints and
+thumbs. Geometry validation does not establish visual alignment.
 
 Transparent PNG exteriors create shaped windows. Qt uses the background's
 alpha mask for hit testing. The compositor handles dragging where supported.
