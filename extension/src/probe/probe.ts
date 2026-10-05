@@ -184,7 +184,7 @@ async function suiteMediaOps(): Promise<Record<string, unknown>> {
   probe.muted = true;
   probe.src =
     "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDE=";
-  let detachedPlay = "unresolved";
+  let detachedPlay: string;
   try {
     await probe.play();
     detachedPlay = "allowed";
