@@ -166,8 +166,10 @@ Everything here is platform-neutral code plus the hooks that packaging needs.
    the built wheel lacks it.
 7. **Self-test mode.** `amberfader --self-test` loads the scripted test page
    with Chromium's sandbox on and the real bundle. It checks attach, play,
-   pause, search and play result, prints a marker and exits 0. Any failure or
-   a 60 s timeout exits non-zero. Every package smoke test in Phases 2 and 3
+   pause, search and play result, prints a marker and exits 0. It also
+   reports whether the renderer sandbox is active and fails when it is not,
+   so a silent fallback to no sandbox cannot pass. Any failure or a 60 s
+   timeout exits non-zero. Every package smoke test in Phases 2 and 3
    runs it, so CI proves the packaged app can start Chromium, inject the
    bundle and talk to it.
 8. **Docs.** Make the README lead with the app instead of the extension.
@@ -205,8 +207,11 @@ on Linux and macOS.
   AppArmor profile for `QtWebEngineProcess` that allows `userns` (as Ubuntu's
   own profiles do for Chrome) and load it in `postinst` when AppArmor is
   present. Never fall back to `--no-sandbox`.
-- Smoke in CI: install the deb into a clean Ubuntu 24.04 environment with the
-  default AppArmor setting and run `amberfader --self-test`.
+- Smoke in CI: install the deb on Ubuntu 24.04, set
+  `kernel.apparmor_restrict_unprivileged_userns` to 1 (Ubuntu's default)
+  and check that it reads 1 rather than trusting the runner image, then run
+  `amberfader --self-test`. The self-test reports whether Chromium's
+  sandbox is active, and the smoke fails if it is not.
 - Desktop entry: new description, `desktop-file-validate` in CI. Install
   hicolor icons at 128, 256 and 512 px rendered from `media-sources/icon.png`
   (also for the Flatpak and the player window).
@@ -215,6 +220,12 @@ on Linux and macOS.
 
 - Add `--share=network` and `--socket=pulseaudio`. Keep `--device=dri`,
   Wayland, X11 fallback and IPC.
+- Keep single-instance working: each Flatpak instance has its own runtime
+  folder, so the socket must live in a shared one. Keep the
+  `xdg-run/amberfader` share for it, or move the socket to Flatpak's
+  per-app runtime folder (`$XDG_RUNTIME_DIR/app/ch.lkmc.amberfader`).
+  Every package smoke launches the app twice and checks that the second
+  launch hands over to the first and exits.
 - Chromium's own sandbox and Flatpak's sandbox interact. Spike before
   building:
   - (a) Keep the pip PySide6 wheels and find out whether QtWebEngine can
@@ -233,8 +244,8 @@ on Linux and macOS.
 
 - The `deb` job builds, installs and self-tests the deb, then repacks and
   self-tests the Flatpak.
-- The Flatpak steps relax the AppArmor knob; the deb smoke runs before they
-  do or in its own job, so it tests the default setting.
+- The Flatpak steps relax the AppArmor knob, so the deb smoke runs in its
+  own job with the knob set to 1.
 
 **Exit:** deb and Flatpak artifacts self-test green in CI. You confirm sign-in
 and one hour of hidden playback from the installed deb or Flatpak on your
@@ -254,8 +265,9 @@ Linux desktop.
   build (D3). Record the size before and after.
 - `Info.plist`:
   - `CFBundleIdentifier` `ch.lkmc.amberfader`
-  - `CFBundleShortVersionString` and `CFBundleVersion` from the release
-    version
+  - `CFBundleShortVersionString` and `CFBundleVersion` from the numeric
+    `X.Y.Z` part of the release version; a pre-release suffix such as
+    `-rc1` is dropped there and kept in the `.dmg` name
   - `LSMinimumSystemVersion` 13.0 (the wheel's minimum)
   - `LSApplicationCategoryType` `public.app-category.music`
   - `NSHighResolutionCapable`
@@ -305,7 +317,8 @@ Linux desktop.
 **CI**
 
 - A `macos` job on an Apple silicon runner (`macos-15`): unit tests and the
-  embedded e2e test, then an unsigned build.
+  embedded e2e test, then an ad-hoc signed build (Apple silicon does not
+  run unsigned code). `codesign --verify` must pass before the self-test.
 - It runs `Amberfader.app/Contents/MacOS/Amberfader --self-test` and uploads
   the `.dmg`.
 - The release workflow builds, signs and notarizes in the `release`
@@ -361,7 +374,8 @@ do for buttons.
 
 1. **Overlap release 0.2.0 (D1):**
    - The standalone app is the default on Linux, and new on macOS.
-   - The extension, helper and `amberfader-firefox` still ship.
+   - The extension, helper and `amberfader-firefox` still ship, and the
+     release notes announce their removal in 0.3.0.
    - Release notes cover migration:
      - Sign in again inside Amberfader.
      - Faces and appearance carry over.
@@ -376,8 +390,9 @@ do for buttons.
    - Delete `helper.py`, the Firefox host copy and `PlaybackHost`,
      `install-user`, `uninstall-user` and `doctor` (diagnostics now live in
      Settings).
-   - Delete the deb's native-messaging manifest and the Flatpak
-     `xdg-run/amberfader` share.
+   - Delete the deb's native-messaging manifest. Remove the Flatpak
+     `xdg-run/amberfader` share only if the single-instance socket moved
+     to the per-app runtime folder (Phase 2).
    - Move the remaining TypeScript (adapter, executor, embedded bridge,
      protocol, shared) to `web/` with its tests.
    - Fold the `gui` and `embedded` extras into the base dependencies, since
@@ -403,7 +418,7 @@ acceptance matrix passed on Linux and macOS.
 | `typescript` | ubuntu-24.04 | tsc, eslint, vitest, page bundle builds |
 | `python` | ubuntu-24.04 | ruff, pytest (offscreen), global menu over D-Bus, wheel contains the bundle |
 | `embedded` | ubuntu-24.04 | Bridge end to end in real QtWebEngine against the test page |
-| `linux-packages` | ubuntu-24.04 | deb installs and self-tests with the sandbox and default AppArmor; Flatpak installs and self-tests |
+| `linux-packages` | ubuntu-24.04 | deb installs and self-tests with the sandbox on and the AppArmor restriction set; Flatpak installs and self-tests |
 | `macos` | macos-15 | Unit and e2e tests, frozen `.app` self-tests, `.dmg` uploaded |
 | `face-editor-macos` | macos-14 | Kept as is, or folded into `macos` |
 | Release | same jobs | Adds signing and notarization in the `release` environment, publishes `.deb`, `.flatpak`, `.dmg`, wheel and checksums |
@@ -450,22 +465,22 @@ them).
 
 ## 10. Pull request sequence
 
-Each item is one PR through the usual review loop. Items on the same line
+Each entry is one PR through the usual review loop; `|` separates PRs that
 can run in parallel.
 
 1. This plan.
 2. Phase 0 results and the decision record (after your gate runs).
 3. Platform folders and macOS migration.
-4. Lifecycle: close hides, Quit, tray, Dock. Then pop-up windows.
-5. Settings and diagnostics. Entry point switch, bundle in the wheel,
+4. Lifecycle: close hides, Quit, tray, Dock | pop-up windows.
+5. Settings and diagnostics | entry point switch, bundle in the wheel,
    `--self-test`.
 6. deb with QtWebEngine, AppArmor and smoke test | macOS freeze, `build.sh
-   macos`, unsigned CI build.
-7. Flatpak (after the spike) | macOS signing, notarization and release job
-   (after D2).
-8. MPRIS | Now Playing (after the Phase 4 spike).
+   macos`, ad-hoc signed CI build.
+7. Flatpak (after the Flatpak sandbox spike) | macOS signing, notarization
+   and release job (after D2).
+8. MPRIS | Now Playing (both after the Phase 4 spike).
 9. Content blocking or extensions (after D5).
-10. Release 0.2.0 with both modes.
+10. Release 0.2.0 with both modes, announcing the Firefox mode's removal.
 11. Remove the Firefox mode, move TypeScript to `web/`, version source,
     AGENTS.md and README; release 0.3.0.
 
