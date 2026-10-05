@@ -46,6 +46,25 @@ async function radioSearch() {
 
 const mixMenu = () => readFileSync("extension/tests/fixtures/mix-menu-2026-10-02.html", "utf8");
 
+// Mirrors the 2026-10-05 observation (fixtures/player-page-2026-10-05.json):
+// an open player page hides the search page; the player bar toggle closes it.
+function openPlayerPage({ withToggle = true, closes = true } = {}) {
+  const page = document.querySelector("ytmusic-search-page") as HTMLElement;
+  page.style.visibility = "hidden";
+  document.body.insertAdjacentHTML("beforeend", `<ytmusic-app-layout player-page-open>
+    <ytmusic-player-bar>${withToggle ? '<yt-icon-button class="toggle-player-page-button"></yt-icon-button>' : ""}
+    </ytmusic-player-bar></ytmusic-app-layout>`);
+  const layout = document.querySelector("ytmusic-app-layout")!;
+  const events: string[] = [];
+  layout.querySelector(".toggle-player-page-button")?.addEventListener("click", () => {
+    events.push("close player page");
+    if (!closes) return;
+    layout.removeAttribute("player-page-open");
+    page.style.visibility = "";
+  });
+  return events;
+}
+
 describe("SiteSearch", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
@@ -180,6 +199,108 @@ describe("SiteSearch", () => {
     expect(mix).toHaveBeenCalledOnce();
     expect(play).not.toHaveBeenCalled();
     expect(shuffle).not.toHaveBeenCalled();
+  });
+
+  it("closes the player page that hides the results before opening the row menu", async () => {
+    const { search, token, rows, result } = await radioSearch();
+    const events = openPlayerPage();
+    const mix = vi.fn((event: Event) => event.preventDefault());
+    rows[1]!.querySelector("button")!.addEventListener("click", () => {
+      events.push("open row menu");
+      document.body.insertAdjacentHTML("beforeend", mixMenu());
+      document.querySelector("[aria-label='Start mix'] a")!.addEventListener("click", mix);
+    });
+
+    const prepared = await search.prepareRadio(token, result.results[1]!.resultId, 500);
+
+    expect(prepared.ok).toBe(true);
+    expect(events).toEqual(["close player page", "open row menu"]);
+    if (!prepared.ok) throw new Error(prepared.error);
+    expect(prepared.activate().ok).toBe(true);
+    expect(mix).toHaveBeenCalledOnce();
+  });
+
+  it("asks to close the player page when it offers no close control", async () => {
+    const { search, token, rows, result } = await radioSearch();
+    openPlayerPage({ withToggle: false });
+    const opened = vi.fn();
+    rows[0]!.querySelector("button")!.addEventListener("click", opened);
+
+    expect(await search.prepareRadio(token, result.results[0]!.resultId, 500)).toEqual({
+      ok: false, code: "user_interaction_required",
+      error: "Close the YouTube Music player page, then try Start mix again",
+    });
+    expect(opened).not.toHaveBeenCalled();
+  });
+
+  it("times out without opening a menu when the player page stays open", async () => {
+    const { search, token, rows, result } = await radioSearch();
+    const events = openPlayerPage({ closes: false });
+    rows[0]!.querySelector("button")!.addEventListener("click", () => events.push("open row menu"));
+
+    expect(await search.prepareRadio(token, result.results[0]!.resultId, 120)).toMatchObject({
+      ok: false, code: "timeout",
+    });
+    expect(events).toEqual(["close player page"]);
+  });
+
+  it("follows a layout element the site replaces while closing the player page", async () => {
+    const { search, token, rows, result } = await radioSearch();
+    const events = openPlayerPage({ closes: false });
+    const layout = document.querySelector("ytmusic-app-layout")!;
+    layout.querySelector(".toggle-player-page-button")!.addEventListener("click", () => {
+      layout.replaceWith(document.createElement("ytmusic-app-layout"));
+      (document.querySelector("ytmusic-search-page") as HTMLElement).style.visibility = "";
+    });
+    rows[0]!.querySelector("button")!.addEventListener("click", () => events.push("open row menu"));
+
+    await search.prepareRadio(token, result.results[0]!.resultId, 300);
+
+    expect(events).toEqual(["close player page", "open row menu"]);
+  });
+
+  it("reports a changed result when closing the player page re-renders its row", async () => {
+    const { search, token, rows, result } = await radioSearch();
+    openPlayerPage();
+    document.querySelector(".toggle-player-page-button")!.addEventListener("click", () => {
+      rows[0]!.replaceWith(rows[0]!.cloneNode(true));
+    });
+
+    expect(await search.prepareRadio(token, result.results[0]!.resultId, 300)).toEqual({
+      ok: false, code: "stale_result", error: "Search result changed while closing the player page",
+    });
+  });
+
+  it("says the menu stayed hidden when the player page closed but the row did not reappear", async () => {
+    const { search, token, rows, result } = await radioSearch();
+    openPlayerPage();
+    document.querySelector(".toggle-player-page-button")!.addEventListener("click", () => {
+      (rows[0] as HTMLElement).style.visibility = "hidden";
+    });
+
+    expect(await search.prepareRadio(token, result.results[0]!.resultId, 120)).toEqual({
+      ok: false, code: "timeout",
+      error: "The player page closed, but this result's menu stayed hidden; search again, then try Start mix",
+    });
+  });
+
+  it("keeps reporting a missing menu when no player page hides the results", async () => {
+    const { search, token, result } = await radioSearch();
+    (document.querySelector("ytmusic-search-page") as HTMLElement).style.visibility = "hidden";
+
+    expect(await search.prepareRadio(token, result.results[0]!.resultId, 500)).toEqual({
+      ok: false, code: "unsupported_operation", error: "No available action menu for this result",
+    });
+  });
+
+  it("stops waiting for the player page when a newer search starts", async () => {
+    const { search, token, result } = await radioSearch();
+    openPlayerPage({ closes: false });
+
+    const pending = search.prepareRadio(token, result.results[0]!.resultId, 5000);
+    search.cancelCurrent();
+
+    expect(await pending).toMatchObject({ ok: false, code: "stale_result" });
   });
 
   it("refuses an already-open unrelated menu without clicking a row", async () => {

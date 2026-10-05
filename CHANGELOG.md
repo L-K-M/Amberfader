@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   flatpak-builder instead of soft-skipping the flatpak artifact on every
   release.
 
+### Fixed
+
+- Start mix after playing a search result: YouTube Music's player page hid
+  the results and their menus, so Start mix reported no action menu.
+  Amberfader now closes the player page with the site's own toggle first, or
+  asks you to close it when that layout has no toggle. Applies to both the
+  extension and the embedded prototype.
+
 ## [0.1.0] - Unreleased
 
 ### Added

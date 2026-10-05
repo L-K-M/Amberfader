@@ -34,6 +34,19 @@ empty image sources, delayed image loading, paused cover replay, and stale
 snapshot responses. Successful fetching and rendering in that live Zen
 session still require the artwork checks in `docs/manual-test-plan.md`.
 
+## Live observations (2026-10-05)
+
+- The embedded QtWebEngine prototype passed its gate on the user's Mac,
+  including Google sign-in with QtWebEngine's default user agent. Details are
+  in [`embedded-prototype.md`](embedded-prototype.md#results-so-far).
+- In a signed-out session in a Linux container, playing a search result
+  opened the player page (`ytmusic-app-layout[player-page-open]`), which
+  hid the search results and every row's action menu. The player bar's
+  `.toggle-player-page-button` closed it and the rows reappeared. One layout
+  experiment had no such toggle. Sanitized record:
+  `extension/tests/fixtures/player-page-2026-10-05.json`. The full Start mix
+  flow after this fix is not yet confirmed in a signed-in session.
+
 ## Browsers
 
 | Browser | Install type | Native messaging | Status |
