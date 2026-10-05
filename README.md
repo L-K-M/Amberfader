@@ -16,6 +16,8 @@ Amberfader runs on Linux (deb or Flatpak) and on macOS with Apple silicon.
 
 ### Install on macOS
 
+The `.dmg` is attached to releases from 0.2.0 on.
+
 1. Download `Amberfader-<version>-macos-arm64.dmg` from the
    [latest release](https://github.com/L-K-M/Amberfader/releases/latest),
    open it and drag **Amberfader** to **Applications**.
@@ -31,6 +33,13 @@ marked UNVERIFIED until they are observed in a live YouTube Music session;
 see [`docs/manual-test-plan.md`](docs/manual-test-plan.md). The move from the
 Firefox extension to the standalone app is planned in
 [`docs/standalone-plan.md`](docs/standalone-plan.md).
+
+### Upgrading from 0.1.x
+
+0.2.0 replaces the Firefox extension and its native helper, so you can
+remove the Amberfader add-on from Firefox. Upgrading the `.deb` removes the
+old helper. If you installed 0.1.x with `scripts/install-user`, run
+`scripts/uninstall-user` from that 0.1.9 checkout.
 
 ## Use it
 

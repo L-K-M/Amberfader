@@ -14,7 +14,9 @@ memory checks in [`embedded-browser.md`](embedded-browser.md#gate) first.
 Change a selector only with evidence from a live page:
 
 1. Start Amberfader with `QTWEBENGINE_REMOTE_DEBUGGING=127.0.0.1:9222` in the
-   environment.
+   environment. While that port is open, any local process can control the
+   embedded browser and read your signed-in session, so use it only to
+   capture evidence and then restart Amberfader without it.
 2. Open `http://127.0.0.1:9222` in a Chromium-based browser and inspect the
    YouTube Music page.
 3. Save a sanitized fixture (no account names, queries or tokens) under

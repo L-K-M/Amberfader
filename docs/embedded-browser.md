@@ -107,8 +107,8 @@ needs a new measurement. Linux hidden playback and memory are still open.
 
 The gate passed on macOS, and the Firefox extension and native helper were
 removed. [`standalone-plan.md`](standalone-plan.md) plans the remaining
-work: packaging for Linux and macOS, built-in ad blocking and "continue
-playing", and media keys.
+work: Linux packages, the first release, and later media keys and pop-up
+windows.
 
 ## Results so far
 
@@ -151,7 +151,8 @@ memory, and desktop X11 or Wayland behavior.
 ## Extensions
 
 Chrome extensions are not available. Ad blocking and "continue playing" are
-planned as built-in features instead (see the plan). QtWebEngine 6.10 added
+built in instead (see [Security and privacy](#security-and-privacy)).
+QtWebEngine 6.10 added
 an API for Chrome extensions
 (Manifest V3 only, from an unpacked folder or a zip), but enabling an
 extension crashes the process in every PySide6 release that has it. Tested

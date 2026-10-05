@@ -105,6 +105,8 @@ def migrate_legacy_files(
             shutil.move(str(source), str(target))
         except OSError as exc:
             problem = f"could not move {source} to {target}: {exc.strerror or exc}"
+            if source.exists() and target.exists():
+                problem += " (remove the partial copy at the destination to retry)"
             _LOG.warning("%s", problem)
             problems.append(problem)
     return problems

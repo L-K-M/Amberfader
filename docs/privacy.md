@@ -8,8 +8,9 @@ a browser. There is no telemetry, no analytics, no crash reporting and no
 update check.
 
 Navigation is limited to YouTube Music, other `youtube.com` hosts,
-`google.com` and Google's `accounts.` country hosts. Other links open in your
-system browser. See [Security and privacy](embedded-browser.md#security-and-privacy)
+`google.com` and Google's `accounts.` country hosts. The player fetches
+artwork only from the Google image hosts on the allowlist under
+[Permissions](#permissions). Other links open in your system browser. See [Security and privacy](embedded-browser.md#security-and-privacy)
 for the full policy.
 
 ## What stays on the machine
@@ -53,8 +54,9 @@ immediately re-added.
   ad-tracking endpoints before they leave the machine. It records nothing
   about what it blocked.
 - Every web permission prompt is denied (notifications, camera, microphone,
-  location and others), downloads are cancelled, and WebRTC is limited to
-  public network interfaces.
+  location and others).
+- Downloads are cancelled, and WebRTC is limited to public network
+  interfaces.
 - Artwork is fetched only from Google-owned image hosts on an explicit
   allowlist; redirects are re-validated against it.
 - Python dependencies: PySide6 (Qt, including Qt WebEngine) and jsonschema.

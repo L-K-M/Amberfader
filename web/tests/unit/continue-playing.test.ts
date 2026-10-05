@@ -75,8 +75,11 @@ describe("ContinuePlaying", () => {
     expect(hidden.clicks).not.toHaveBeenCalled();
     expect(hidden.play).not.toHaveBeenCalled();
 
-    document.body.innerHTML = "<ytmusic-popup-container><ytmusic-menu-popup-renderer></ytmusic-menu-popup-renderer></ytmusic-popup-container>";
+    document.body.innerHTML = "<video></video><ytmusic-popup-container><ytmusic-menu-popup-renderer></ytmusic-menu-popup-renderer></ytmusic-popup-container>";
+    const menuClicks = vi.fn();
+    document.querySelector("ytmusic-popup-container")!.addEventListener("click", menuClicks);
     expect(watching.check()).toBe(false);
+    expect(menuClicks).not.toHaveBeenCalled();
   });
 
   it("never clicks a container the prompt is not inside", () => {

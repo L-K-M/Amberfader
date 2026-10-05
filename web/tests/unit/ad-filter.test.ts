@@ -58,6 +58,24 @@ describe("installAdFilter", () => {
     expect(win.ytInitialPlayerResponse).toEqual({ videoDetails: { videoId: "x" } });
   });
 
+  it("strips ad keys from fetch() responses read with Response#json", async () => {
+    // Stands in for the native body parser, which never calls JSON.parse.
+    class FakeResponse {
+      constructor(private readonly body: string) {}
+      json(): Promise<unknown> {
+        return Promise.resolve(JSON.parse(this.body));
+      }
+    }
+    const win = fakeWindow();
+    (win as Record<string, unknown>).Response = FakeResponse;
+    installAdFilter(win);
+
+    await expect(new FakeResponse(RESPONSE).json()).resolves.toEqual({
+      videoDetails: { videoId: "abc" },
+      playerResponse: { streamingData: { formats: [] } },
+    });
+  });
+
   it("installs once", () => {
     const win = fakeWindow();
     installAdFilter(win);

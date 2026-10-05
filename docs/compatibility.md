@@ -58,7 +58,7 @@ session still require the artwork checks in `docs/manual-test-plan.md`.
 | Linux x86_64 | `.deb` | expected; package update in progress |
 | Linux x86_64 | Flatpak | expected; package update in progress |
 | macOS 13+ on Apple silicon | from a checkout | **verified** on 2026-10-05: sign-in, persistence, playback, hidden playback, controls, reload |
-| macOS on Apple silicon | `.dmg` | planned |
+| macOS on Apple silicon | `.dmg` | expected; CI builds it and the frozen app's `--self-test` passes on macos-15 (2026-10-05); first released with 0.2.0 |
 | macOS on Intel, Windows | not a target | unsupported |
 
 ## Desktop environments
@@ -76,7 +76,7 @@ session still require the artwork checks in `docs/manual-test-plan.md`.
 |---|---|
 | `.deb` | expected: `scripts/build-deb.sh` |
 | `.flatpak` | expected: `scripts/build-flatpak.sh` repacks the deb layout |
-| macOS `.dmg` | planned |
+| macOS `.dmg` | expected: `scripts/build-macos.sh` (PyInstaller, ad-hoc signed) |
 | AppImage / Snap | not planned |
 
 The `.deb` resolves its bundled Python wheels with the build host's

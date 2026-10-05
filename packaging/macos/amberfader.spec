@@ -3,6 +3,7 @@
 # PyInstaller's PySide6.QtWebEngineCore hooks collect QtWebEngineCore.framework
 # with its QtWebEngineProcess.app helper, resources and locales.
 import os
+import re
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files
@@ -10,8 +11,9 @@ from PyInstaller.utils.hooks import collect_data_files
 ROOT = Path(SPECPATH).resolve().parents[1]
 VERSION = os.environ["AMBERFADER_VERSION"]
 ICON = os.environ["AMBERFADER_ICNS"]
-# CFBundle versions must be numeric; a pre-release suffix stays in the .dmg name.
-BUNDLE_VERSION = VERSION.split("-", 1)[0].split("+", 1)[0]
+# CFBundle versions must be numeric; a pre-release suffix (0.2.0rc1,
+# 0.2.0-beta) stays in the .dmg name only.
+BUNDLE_VERSION = re.match(r"\d+(?:\.\d+)*", VERSION).group(0)
 
 a = Analysis(
     [str(ROOT / "packaging" / "macos" / "launch.py")],

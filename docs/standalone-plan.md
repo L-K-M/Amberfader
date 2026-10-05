@@ -58,8 +58,9 @@ Open:
   your recheck in a signed-in session.
 - Linux hidden playback and memory, and a macOS memory figure with the
   corrected command.
-- Chrome extensions: blocked by a Qt crash (see
-  [Extensions](embedded-browser.md#extensions)). Depends on D5.
+- Chrome extensions: Qt cannot enable them (see
+  [Extensions](embedded-browser.md#extensions)), so D5 builds ad blocking and
+  "continue playing" in.
 
 ## 3. Decisions
 
@@ -140,13 +141,14 @@ Everything here is platform-neutral code plus the hooks that packaging needs.
    and a destination that already exists (no overwrite).
 2. **Lifecycle (D4).** Closing the player quits Amberfader and stops the
    music, as the prototype already does; there is no tray. Quit is also in
-   the player menu and on Cmd+Q / Ctrl+Q. Launching Amberfader again, or
-   clicking its Dock icon on macOS, raises the running player. SIGTERM and
-   logout quit through Qt, so the sign-in cookies are flushed.
-3. **Pop-up windows.** Sign-in and YouTube Music pop-ups open in a separate
+   the player menu and on Cmd+Q / Ctrl+Q. Launching Amberfader again while
+   it runs raises the player instead of starting a second instance. SIGTERM
+   and logout quit through Qt, so the sign-in cookies are flushed.
+3. **Pop-up windows** (after 0.2.0, see section 10). Sign-in and YouTube Music pop-ups open in a separate
    short-lived window under the same navigation policy, instead of replacing
    the music page. Tested with `window.open` on the test page.
-4. **Settings and diagnostics** (replaces the extension options page):
+4. **Settings and diagnostics** (after 0.2.0, see section 10; replaces the
+   extension options page):
    - Versions of Amberfader, Qt and Chromium, and the profile folder.
    - Whether the page is attached.
    - **Sign out and clear site data:** cookies, storage and HTTP cache.

@@ -13,6 +13,7 @@ cd "$(dirname "$0")/.."
 VERSION="${1:?usage: build-macos.sh <version> <dist-dir>}"
 DIST="${2:?usage: build-macos.sh <version> <dist-dir>}"
 [[ "$(uname -s)" == Darwin ]] || { echo "error: build-macos.sh runs on macOS" >&2; exit 1; }
+[[ "$(uname -m)" == arm64 ]] || { echo "error: the app is built on Apple silicon" >&2; exit 1; }
 for f in adapter.js ad-filter.js; do
   [[ -f native/amberfader/embedded/web/$f ]] ||
     { echo "error: page scripts missing; run npm run build" >&2; exit 1; }
@@ -34,7 +35,7 @@ iconutil -c icns "$WORK/Amberfader.iconset" -o "$WORK/Amberfader.icns"
 
 echo "-- PyInstaller"
 AMBERFADER_VERSION="$VERSION" AMBERFADER_ICNS="$PWD/$WORK/Amberfader.icns" \
-  python -m PyInstaller --noconfirm --clean \
+  python3 -m PyInstaller --noconfirm --clean \
   --distpath "$WORK/dist" --workpath "$WORK/build" packaging/macos/amberfader.spec
 APP="$WORK/dist/Amberfader.app"
 [[ -d "$APP" ]] || { echo "error: PyInstaller did not produce $APP" >&2; exit 1; }

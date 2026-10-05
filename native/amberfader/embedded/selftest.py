@@ -138,6 +138,8 @@ class SelfTest:
             self._checks()
         except _Expired:
             self._report("time limit", False, f"{TIMEOUT_S:.0f} s")
+        except Exception as exc:  # the verdict line must still print
+            self._report("unexpected error", False, type(exc).__name__)
         self._out(FAILED if self._failed else PASSED)
         return 1 if self._failed else 0
 

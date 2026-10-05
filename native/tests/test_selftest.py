@@ -76,3 +76,35 @@ def test_renderer_started_without_a_zygote_counts(tmp_path):
         120: (BROWSER, [ENGINE, "--type=renderer"], 2),
     }
     assert renderer_sandbox(make_proc(tmp_path, tree), BROWSER) == "on"
+
+
+def test_self_test_never_uses_a_given_socket(tmp_path):
+    """--self-test with --socket must not reach (and raise) a running
+    instance's socket; it always uses its own scratch socket."""
+    import argparse
+
+    from amberfader.embedded.__main__ import _socket_path
+
+    args = argparse.Namespace(self_test=True, socket="/run/live.sock")
+    assert _socket_path(args, str(tmp_path)) == str(tmp_path / "self-test.sock")
+    args = argparse.Namespace(self_test=False, socket="/run/live.sock")
+    assert _socket_path(args, str(tmp_path)) == "/run/live.sock"
+
+
+def test_unexpected_error_still_prints_the_verdict(monkeypatch):
+    from types import SimpleNamespace
+
+    from amberfader.embedded import selftest
+
+    def broken_checks(self):
+        raise KeyError("results")
+
+    monkeypatch.setattr(selftest.SelfTest, "_checks", broken_checks)
+    runtime = SimpleNamespace(
+        upstream=SimpleNamespace(messageReceived=SimpleNamespace(connect=lambda _f: None)),
+        amber=SimpleNamespace(window=SimpleNamespace(route_response=lambda *_a: None)),
+    )
+    lines: list[str] = []
+    assert selftest.SelfTest(runtime, out=lines.append).run() == 1
+    assert lines[-1] == selftest.FAILED
+    assert any("unexpected error" in line and "KeyError" in line for line in lines)

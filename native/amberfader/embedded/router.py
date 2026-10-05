@@ -1,9 +1,8 @@
 """In-process router for the embedded YouTube Music page.
 
 Routes for exactly one page, which this process owns. It speaks the public
-protocol
-(protocol/schemas) to the player client, so the client's deadlines, binding
-checks and schema validation apply unchanged.
+protocol (protocol/schemas) to the player client, so the client's deadlines,
+binding checks and schema validation apply unchanged.
 
 Binding: every page document registers with a fresh nonce and receives a new
 binding token. Commands carry the nonce they were issued for; a reload,

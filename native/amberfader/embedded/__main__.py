@@ -104,6 +104,16 @@ def main(argv: list[str] | None = None) -> int:
             shutil.rmtree(scratch, ignore_errors=True)
 
 
+def _socket_path(args: argparse.Namespace, scratch: str | None) -> str:
+    # The self-test always uses its own socket, so it can never reach (and
+    # raise) a running instance instead of testing anything.
+    if args.self_test and scratch:
+        return os.path.join(scratch, "self-test.sock")
+    if args.socket:
+        return str(args.socket)
+    return default_socket_path()
+
+
 def _run(args: argparse.Namespace, scratch: str | None) -> int:
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
@@ -114,12 +124,7 @@ def _run(args: argparse.Namespace, scratch: str | None) -> int:
     from .runtime import EmbeddedRuntime, RuntimeOptions
 
     try:
-        if args.socket:
-            socket_path = args.socket
-        elif args.self_test and scratch:
-            socket_path = os.path.join(scratch, "self-test.sock")
-        else:
-            socket_path = default_socket_path()
+        socket_path = _socket_path(args, scratch)
     except (RuntimeError, OSError) as exc:
         print(f"amberfader: {exc}", file=sys.stderr)
         return 2
@@ -141,7 +146,7 @@ def _run(args: argparse.Namespace, scratch: str | None) -> int:
     try:
         bundle = load_bundle()
         ad_filter = load_ad_filter()
-    except BundleMissingError as exc:
+    except (BundleMissingError, OSError, UnicodeDecodeError) as exc:
         print(f"amberfader: {exc}", file=sys.stderr)
         return 2
 

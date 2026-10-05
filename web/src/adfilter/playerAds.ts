@@ -2,7 +2,8 @@
 // uBlock Origin's own filters use on music.youtube.com (uAssets
 // filters/filters.txt: `set ytInitialPlayerResponse.adPlacements undefined`
 // and `json-prune playerResponse.adPlacements playerResponse.playerAds
-// playerResponse.adSlots adPlacements playerAds adSlots`).
+// playerResponse.adSlots adPlacements playerAds adSlots`, and
+// `json-prune-fetch-response` for the same keys).
 //
 // Runs in the page's main world, before the page's own scripts. It holds no
 // reference to Amberfader's bridge and sends nothing anywhere.
@@ -42,6 +43,18 @@ export function installAdFilter(win: typeof globalThis): void {
     apply: (parse, thisArg, args: unknown[]): unknown =>
       stripAds(Reflect.apply(parse, thisArg, args) as unknown),
   });
+
+  // Response#json() parses natively without calling JSON.parse, so player
+  // responses the page reads with fetch() need their own hook.
+  const proto = (target.Response as typeof Response | undefined)?.prototype;
+  const json: unknown = proto ? Reflect.get(proto, "json") : undefined;
+  if (proto && typeof json === "function") {
+    proto.json = new Proxy(json as Response["json"], {
+      apply: (original, thisArg, args: unknown[]): Promise<unknown> =>
+        (Reflect.apply(original, thisArg, args) as Promise<unknown>).then((value) =>
+          stripAds(value)),
+    });
+  }
 
   // Inline page scripts assign these globals directly instead of parsing.
   for (const name of GLOBALS) {
