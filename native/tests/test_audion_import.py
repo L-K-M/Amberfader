@@ -228,7 +228,7 @@ def test_corrupt_png_and_missing_digits_report_conversion_errors(audion_pack, qa
         _import(audion_pack)
     (audion_pack / "base.png").write_bytes(original)
     (audion_pack / "111.png").unlink()
-    with pytest.raises(FaceError, match="111.png"):
+    with pytest.raises(FaceError, match=r"111\.png"):
         _import(audion_pack)
 
 
@@ -388,7 +388,7 @@ def test_translucent_original_text_remains_imported(audion_pack, qapp):
 
 def test_fully_transparent_original_shell_is_rejected(audion_pack, qapp):
     _image(audion_pack / "base-alpha.png", (140, 90), "#ffffff", 0)
-    with pytest.raises(FaceError, match="no visible.*drag"):
+    with pytest.raises(FaceError, match=r"no visible.*drag"):
         _import(audion_pack)
 
 

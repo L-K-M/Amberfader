@@ -1,9 +1,12 @@
 import { readFileSync } from "node:fs";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ClientEvents } from "../../src/popup/client";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import type { ClientEvents, ProtocolClient } from "../../src/popup/client";
 import type { PlayerState, SearchSongsResult } from "../../src/protocol/types";
 
-const mock = vi.hoisted((): { events: ClientEvents; request: ReturnType<typeof vi.fn> } => ({
+// Responses stay loosely typed so tests can return just the fields the UI reads.
+type RequestMock = Mock<(...args: Parameters<ProtocolClient["request"]>) => Promise<unknown>>;
+
+const mock = vi.hoisted((): { events: ClientEvents; request: RequestMock } => ({
   events: {},
   request: vi.fn(),
 }));

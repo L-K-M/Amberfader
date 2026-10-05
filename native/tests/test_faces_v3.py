@@ -272,7 +272,7 @@ def test_alpha_mask_is_a_required_bounded_declared_image(imported_snapshot, tmp_
         FaceDocument.from_snapshot(manifest, assets)
     assets["alpha-mask.png"] = png(24, 11) + b"x" * 1000
     monkeypatch.setattr(face_module, "MAX_IMAGE_BYTES", len(assets["alpha-mask.png"]) - 1)
-    with pytest.raises(FaceError, match="alpha-mask.png exceeds"):
+    with pytest.raises(FaceError, match=r"alpha-mask\.png exceeds"):
         load_face_snapshot(manifest, assets, tmp_path)
     monkeypatch.undo()
     without_mask = sum(len(data) for name, data in assets.items() if name != "alpha-mask.png")
