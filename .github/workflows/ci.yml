@@ -144,6 +144,47 @@ jobs:
           native/tests/test_audion_import_ui.py native/tests/test_audion_face_rendering.py
           native/tests/test_audion_popup_keyboard.py
 
+  macos:
+    name: macOS app build and self-test
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Build the page scripts
+        run: npm ci && npm run build
+
+      # A python.org-style build with a shared libpython, as PyInstaller needs.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Amberfader and PyInstaller
+        run: python -m pip install . "pyinstaller==6.22.3"
+
+      - name: Build Amberfader.app and the .dmg
+        run: scripts/build-macos.sh "$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' native/amberfader/__init__.py)" dist
+
+      - name: Self-test the frozen app
+        run: dist/macos/dist/Amberfader.app/Contents/MacOS/Amberfader --self-test
+
+      - name: Upload .dmg
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos-dmg
+          path: |
+            dist/*.dmg
+            dist/*.dmg.sha256
+          if-no-files-found: error
+          retention-days: 7
+
   embedded:
     name: Page bridge end to end in Qt WebEngine
     runs-on: ubuntu-24.04

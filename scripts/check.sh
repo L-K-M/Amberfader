@@ -47,7 +47,7 @@ fi
 
 step "shellcheck"
 if command -v shellcheck >/dev/null 2>&1; then
-  for f in scripts/build.sh scripts/build-deb.sh scripts/build-flatpak.sh scripts/check.sh scripts/release.sh; do
+  for f in scripts/build.sh scripts/build-deb.sh scripts/build-flatpak.sh scripts/build-macos.sh scripts/check.sh scripts/release.sh; do
     [[ -f "$f" ]] && run shellcheck -x "$f"
   done
 else

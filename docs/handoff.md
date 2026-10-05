@@ -32,7 +32,8 @@ this branch, so finished steps stack on it as separate commits:
 | `7ef7d51` | Built-in ad blocking (request rules from EasyList + main-world `JSON.parse` filter as in uBlock Origin) and continue playing (YouTube NonStop technique) | local checks green; e2e covers both in real Qt WebEngine |
 | `2b7a8ae` | macOS data in `~/Library/...` with a one-time move from the old XDG folders | local checks green |
 | `25099d9` | Page scripts shipped in wheels (hatch artifacts + build hook); `amberfader --self-test` | local checks green; sandbox detection verified both ways (see below) |
-| this file | Handoff notes | |
+| `5374ce8` | This file | |
+| next | macOS target: `packaging/macos/amberfader.spec`, `scripts/build-macos.sh`, `build.sh macos`, CI job `macos` (macos-15, runs the frozen app's `--self-test`), release job attaching the `.dmg`, README install steps | written blind on Linux; CI on the `macos` job is the first real test |
 
 Earlier PRs, all merged: #28 (prototype), #32 (macOS socket), #33 (Start
 mix), #34 (plan).
@@ -67,13 +68,10 @@ mix), #34 (plan).
    - CI: separate `deb` and `flatpak` jobs; each runs `amberfader --self-test`
      on the installed package; the deb job sets the AppArmor knob to 1.
    - Desktop entry and hicolor icons from `media-sources/icon.png`.
-3. **macOS target** (plan Phase 3): PyInstaller `.app` (hooks for
-   `PySide6.QtWebEngineCore` exist in PyInstaller 6.22), arm64 thin, ad-hoc
-   signed, `.icns` from `media-sources/icon.png`, `Info.plist` with numeric
-   `X.Y.Z`, `.dmg` via `hdiutil`; `scripts/build-macos.sh` + `build.sh macos`;
-   CI job on `macos-15` running the frozen app's `--self-test`; release job
-   attaches the `.dmg`. README: first-launch approval in System Settings >
-   Privacy & Security.
+3. **macOS target** (plan Phase 3): implemented in the last commit but never
+   run on a Mac; fix whatever the `macos` CI job reports. Not done yet:
+   thinning the universal2 Qt binaries to arm64 (size), and a one-hour
+   hidden playback check from the frozen app (App Nap).
 4. **Release 0.2.0**: `scripts/release.sh 0.2.0 --push` uses
    `L-K-M/release-tool` with `RELEASE_KIND=python` (version source
    `native/amberfader/__init__.py`). Tag pushes may need the owner if the

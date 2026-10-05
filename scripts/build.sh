@@ -2,13 +2,14 @@
 # Builds every Amberfader target and stages results in dist/.
 #
 # Usage: scripts/build.sh [target...] [--clean] [--check]
-#   targets: wheel deb flatpak   (default: all this machine can build)
+#   targets: wheel deb flatpak macos   (default: all this machine can build)
 #   A missing toolchain skips a target on a default run, but fails when the
 #   target was named explicitly.
 #
 #   wheel    python wheel + sdist (uv build)            -> dist/*.whl, dist/*.tar.gz
 #   deb      per-user .deb packaging                    -> dist/amberfader_<ver>_*.deb
 #   flatpak  repack the .deb into a .flatpak bundle     -> dist/amberfader_<ver>.flatpak
+#   macos    Amberfader.app in an ad-hoc signed .dmg    -> dist/Amberfader-<ver>-macos-arm64.dmg
 #
 #   --clean  remove dist/ first
 #   --check  print the plan and exit
@@ -40,7 +41,7 @@ for arg in "$@"; do
 done
 
 if [[ ${#TARGETS[@]} -eq 0 ]]; then
-  TARGETS=(wheel deb flatpak)
+  TARGETS=(wheel deb flatpak macos)
 else
   EXPLICIT=1
 fi
@@ -129,6 +130,21 @@ for target in "${TARGETS[@]}"; do
         OK+=("flatpak → $DIST/")
       else
         FAILED+=("flatpak")
+      fi
+      ;;
+    macos)
+      echo "==> macOS app"
+      if [[ "$(uname -s)" != "Darwin" ]]; then
+        skip_or_fail macos "the macOS app builds on macOS"; continue
+      fi
+      if ! python3 -c "import PyInstaller" >/dev/null 2>&1; then
+        skip_or_fail macos "PyInstaller not installed (pip install pyinstaller and this project)"; continue
+      fi
+      page_scripts || { FAILED+=("macos"); continue; }
+      if scripts/build-macos.sh "$VERSION" "$DIST"; then
+        OK+=("macos → $DIST/")
+      else
+        FAILED+=("macos")
       fi
       ;;
     *)

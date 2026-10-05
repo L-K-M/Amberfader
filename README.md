@@ -14,6 +14,16 @@ keeps running out of sight.
 
 Amberfader runs on Linux (deb or Flatpak) and on macOS with Apple silicon.
 
+### Install on macOS
+
+1. Download `Amberfader-<version>-macos-arm64.dmg` from the
+   [latest release](https://github.com/L-K-M/Amberfader/releases/latest),
+   open it and drag **Amberfader** to **Applications**.
+2. The app is not signed with an Apple Developer ID, so the first launch is
+   blocked. Open **System Settings > Privacy & Security**, find the message
+   about Amberfader and choose **Open Anyway**. Each update needs this once.
+3. Sign in to YouTube Music with **Show YT**.
+
 ## Status
 
 Early development. Site selectors in `web/src/adapter/selectors.ts` are
