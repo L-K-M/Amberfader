@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 
 from .. import APP_NAME
+from ..settings import default_settings_path
 from ..transport.paths import runtime_socket_dir
 from .history import default_history_path
 
@@ -88,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from ..face_library import FaceError
     from ..transport.local import try_activate_existing
-    from .page import BundleMissingError, PageMode, load_bundle
+    from .page import BundleMissingError, PageMode, load_ad_filter, load_bundle
     from .runtime import EmbeddedRuntime, RuntimeOptions
 
     try:
@@ -108,6 +109,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         bundle = load_bundle()
+        ad_filter = load_ad_filter()
     except BundleMissingError as exc:
         print(f"amberfader: {exc}", file=sys.stderr)
         return 2
@@ -125,13 +127,16 @@ def main(argv: list[str] | None = None) -> int:
     for signum in (signal.SIGINT, signal.SIGTERM):
         signal.signal(signum, request_quit)
 
+    mode = PageMode.TEST_PAGE if args.test_page else PageMode.YOUTUBE_MUSIC
     options = RuntimeOptions(
-        mode=PageMode.TEST_PAGE if args.test_page else PageMode.YOUTUBE_MUSIC,
+        mode=mode,
         socket_path=socket_path,
         history_path=default_history_path(),
         scale=args.scale,
+        # The scripted test page never changes your saved settings.
+        settings_path=None if mode is PageMode.TEST_PAGE else default_settings_path(),
     )
-    runtime = EmbeddedRuntime(options, bundle)
+    runtime = EmbeddedRuntime(options, bundle, ad_filter=ad_filter)
     try:
         try:
             started = runtime.start()

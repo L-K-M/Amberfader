@@ -151,3 +151,23 @@ def test_main_window_stays_silent_when_close_is_vetoed(qapp, monkeypatch):
     monkeypatch.undo()
     window.close()
     assert closed == [True]
+
+
+def test_page_options_appear_in_both_menus_and_report_toggles(embedded):
+    window = embedded[0].window
+    seen = []
+    block = window.add_page_option("Block ads", True, seen.append)
+    window.add_page_option("Continue playing automatically", False, lambda _on: None)
+
+    assert block.isChecked()
+    assert [a.text() for a in window._playback_menu.actions() if a.isCheckable()] == [
+        "Block ads", "Continue playing automatically",
+    ]
+    # The ☰ menu keeps Close last, after its own separator.
+    assert [a.text() for a in window._menu.actions()][-4:] == [
+        "Block ads", "Continue playing automatically", "", "Close Amberfader",
+    ]
+    assert block in window._import_playback_menu.actions()
+
+    block.trigger()
+    assert seen == [False]

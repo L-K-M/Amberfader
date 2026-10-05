@@ -1,9 +1,9 @@
-"""End-to-end driver for the embedded prototype, run by test_embedded_e2e.py.
+"""End-to-end driver for the embedded browser, run by test_embedded_e2e.py.
 
-Runs the real stack in QtWebEngine: page + injected bundle + QWebChannel +
+Runs the real stack in QtWebEngine: page + injected scripts + QWebChannel +
 router + AmberfaderApp + MainWindow, against the scripted test page (the
-extension's FakeAdapter). Proves the plumbing, not that YouTube Music
-accepts any action. A subprocess is required because QtWebEngine must be
+FakeAdapter). Proves the plumbing, not that YouTube Music accepts any
+action. A subprocess is required because QtWebEngine must be
 imported before any QApplication exists. Prints one JSON report line.
 """
 from __future__ import annotations
@@ -18,6 +18,25 @@ import time
 from pathlib import Path
 
 TIMEOUT_S = 30.0
+# A stand-in for YouTube Music's "Continue watching?" prompt. Clicking its
+# container closes it, as continue-playing expects of the real one.
+PROMPT_SCRIPT = """(() => {
+  window.__amberfaderPromptClosed = false;
+  const container = document.createElement('ytmusic-popup-container');
+  const prompt = document.createElement('ytmusic-you-there-renderer');
+  prompt.textContent = 'Video paused. Continue watching?';
+  container.appendChild(prompt);
+  container.addEventListener('click', () => {
+    prompt.remove();
+    window.__amberfaderPromptClosed = true;
+  });
+  document.body.appendChild(container);
+  document.dispatchEvent(new CustomEvent('yt-popup-opened'));
+})()"""
+AD_RESPONSE = (
+    "JSON.stringify(JSON.parse('{\"adPlacements\":[1],"
+    "\"playerResponse\":{\"playerAds\":[1],\"keep\":2},\"keep\":3}'))"
+)
 
 
 def main() -> int:
@@ -27,7 +46,7 @@ def main() -> int:
 
     from amberfader import PROTOCOL_VERSION
     from amberfader.embedded import page as page_module
-    from amberfader.embedded.page import PageMode, load_bundle
+    from amberfader.embedded.page import PageMode, load_ad_filter, load_bundle
     from amberfader.embedded.runtime import EmbeddedRuntime, RuntimeOptions
 
     # Never launch a real browser from a test: record the hand-off instead.
@@ -49,7 +68,7 @@ def main() -> int:
         history_path=tmp / "history.json",
         profile_storage=tmp / "profile",
         profile_cache=tmp / "cache",
-    ), load_bundle())
+    ), load_bundle(), ad_filter=load_ad_filter())
 
     messages: list[dict] = []
     responses: list[tuple[str, bool, dict]] = []
@@ -156,6 +175,14 @@ def main() -> int:
             " && typeof __AMBERFADER_EMBEDDED__ === 'undefined'"
         ) is True)
 
+        # Both built-in features are on by default.
+        check("ad filter strips player ads in the main world",
+              main_world(AD_RESPONSE) == '{"playerResponse":{"keep":2},"keep":3}')
+        main_world(PROMPT_SCRIPT)
+        check("continue playing closes the prompt", pump(
+            lambda: main_world("window.__amberfaderPromptClosed") is True, timeout=5,
+        ))
+
         # A reload is a new document: new binding, old token rejected.
         runtime.host.load()
         check("rebound after reload", pump(lambda: len(set(bound_tokens())) >= 2))
@@ -200,6 +227,25 @@ def main() -> int:
         ))
         _, ok, _ = call("player.play")
         check("command after renderer exit", ok)
+
+        # The menu switches turn both features off from the next load.
+        options = {action.text(): action for action in window._playback_menu.actions()}
+        options["Block ads"].setChecked(False)
+        options["Continue playing automatically"].setChecked(False)
+        check("switches off", not runtime.settings.block_ads
+              and not runtime.settings.continue_playing and not runtime.ad_requests.enabled)
+        tokens_before = len(set(bound_tokens()))
+        runtime.host.load()
+        check("reattached after switching off", pump(
+            lambda: len(set(bound_tokens())) > tokens_before,
+        ))
+        check("ad filter off after reload", main_world(
+            "JSON.parse('{\"adPlacements\":[1]}').adPlacements.length",
+        ) == 1)
+        main_world(PROMPT_SCRIPT)
+        pump(lambda: False, timeout=1)
+        check("prompt left open when continue playing is off",
+              main_world("window.__amberfaderPromptClosed") is False)
 
     try:
         run_checks()

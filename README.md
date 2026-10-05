@@ -30,6 +30,21 @@ Firefox extension to the standalone app is planned in
 - Closing the player quits Amberfader and stops the music.
 - Launching Amberfader again while it runs brings the player to the front.
 
+## Ad blocking and continue playing
+
+Both are built in and on by default. Turn them off in **Playback** (or the
+**☰** menu); a change applies fully the next time YouTube Music loads.
+
+- **Block ads** stops requests to Google's ad hosts and YouTube's ad and
+  ad-tracking endpoints (rules taken from EasyList), and removes ad data from
+  YouTube Music's player responses the way uBlock Origin does. YouTube
+  changes how it delivers ads, so this can stop working; if the page
+  misbehaves, turn it off.
+- **Continue playing automatically** closes YouTube Music's "Video paused.
+  Continue watching?" prompt and resumes the track.
+
+Neither has been confirmed against live YouTube Music yet.
+
 Where your data lives on Linux:
 
 | Data | Location |
@@ -38,6 +53,7 @@ Where your data lives on Linux:
 | HTTP cache | `~/.cache/amberfader/webengine` |
 | Recent searches and artists | `~/.local/state/amberfader/embedded-search-history.json` |
 | Faces and appearance | `~/.local/share/amberfader/faces`, `~/.config/amberfader/appearance.json` |
+| Ad blocking and continue playing switches | `~/.config/amberfader/settings.json` |
 
 ## Likes, recents and mixes
 

@@ -111,6 +111,16 @@ export const PLAYER_PAGE = {
   closeToggle: "ytmusic-player-bar .toggle-player-page-button",
 } as const;
 
+// YouTube Music's "Video paused. Continue watching?" prompt. UNVERIFIED: not
+// yet seen live. Taken from the YouTube NonStop extension's autoconfirm.js
+// (github.com/lawfx/YoutubeNonStop, v0.9.2), which closes this prompt by
+// clicking its popup container after the page fires yt-popup-opened.
+export const YOU_THERE = {
+  prompt: "ytmusic-you-there-renderer",
+  container: "ytmusic-popup-container",
+  openedEvent: "yt-popup-opened",
+} as const;
+
 // Observed Start mix navigation item. Activation/navigation remains UNVERIFIED.
 export const RADIO = {
   popup: "ytmusic-menu-popup-renderer",

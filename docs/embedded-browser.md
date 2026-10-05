@@ -187,8 +187,14 @@ A minimal reproduction for a Qt bug report: load a `WebEngineProfile` with
 
 - The adapter bundle and Qt's `qwebchannel.js` run in QtWebEngine's
   application world, the equivalent of a browser extension's content
-  script. Page
-  scripts run in the main world and cannot reach the bridge (tested).
+  script. Page scripts run in the main world and cannot reach the bridge
+  (tested).
+- While ad blocking is on, a second script (`web/src/adfilter/`) runs in the
+  main world at document creation, because it has to change the page's own
+  objects: it wraps `JSON.parse` and the player response globals to remove
+  ad data. It holds no reference to the bridge and sends nothing. A profile
+  request interceptor blocks the ad requests listed in
+  `native/amberfader/embedded/adblock.py`.
 - Injection is limited to the top frame of `https://music.youtube.com`, by
   `@match` and by an origin check in the bundle. The host also accepts page
   messages only while the top-level page is on that origin.
@@ -210,6 +216,8 @@ A minimal reproduction for a Qt bug report: load a `WebEngineProfile` with
 ## Known limitations
 
 - Closing the player quits Amberfader and stops playback, by design.
+- Ad blocking and "continue playing" are not yet confirmed against live
+  YouTube Music; YouTube changes its ad delivery often.
 - A pop-up opened by sign-in or YouTube Music loads in the main view and
   replaces the music page.
 - Packages for Linux and macOS are in progress; for now it runs from a

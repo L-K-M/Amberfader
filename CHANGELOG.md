@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   version source moved from the extension manifest to
   `native/amberfader/__init__.py`.
 
+### Added (standalone app)
+
+- Built-in ad blocking: blocks Google's ad hosts and YouTube's ad and
+  ad-tracking endpoints (EasyList rules) and removes ad data from player
+  responses, the technique uBlock Origin's filters use on music.youtube.com.
+- Continue playing: closes YouTube Music's "Video paused. Continue
+  watching?" prompt and resumes playback, as the YouTube NonStop extension
+  does.
+- Both are on by default, with switches in the Playback and ☰ menus, saved
+  in `settings.json`. Neither is confirmed against live YouTube Music yet.
+
 ### Removed
 
 - The Firefox extension, the native-messaging helper (`amberfader-helper`),

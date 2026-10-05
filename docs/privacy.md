@@ -20,6 +20,7 @@ for the full policy.
 | HTTP cache | `~/.cache/amberfader/webengine` on Linux |
 | Recent searches and played artists | `~/.local/state/amberfader/embedded-search-history.json` on Linux, 20 entries per list |
 | Faces and appearance | `~/.local/share/amberfader/faces`, `~/.config/amberfader/appearance.json` |
+| Ad blocking and continue playing switches | `~/.config/amberfader/settings.json` |
 
 Delete the profile folder to sign out completely. **Clear recents** in the
 search window removes both recent lists; the current track is not
@@ -46,6 +47,9 @@ immediately re-added.
 
 ## Permissions
 
+- Ad blocking stops requests to Google's ad hosts and YouTube's ad and
+  ad-tracking endpoints before they leave the machine. It records nothing
+  about what it blocked.
 - Every web permission prompt is denied (notifications, camera, microphone,
   location and others), downloads are cancelled, and WebRTC is limited to
   public network interfaces.

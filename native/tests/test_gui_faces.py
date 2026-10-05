@@ -305,6 +305,7 @@ import amberfader.face_library as faces
 from amberfader.embedded.__main__ import main
 faces.BUILTIN_DIRECTORY = Path(sys.argv[1])
 page.load_bundle = lambda: ""
+page.load_ad_filter = lambda: ""
 raise SystemExit(main(["--test-page", "--background", "--socket", sys.argv[2]]))
 """, str(tmp_path / "missing-faces"), str(socket),
     ], capture_output=True, text=True, timeout=30, env=env)

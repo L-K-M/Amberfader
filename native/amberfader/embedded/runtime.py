@@ -6,15 +6,16 @@ Requires a QApplication created after QtWebEngineWidgets was imported.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
 
 from ..app import AmberfaderApp
+from ..settings import AppSettings, SettingsStore
 from .artwork import ArtworkFetcher
 from .history import SearchHistoryStore
-from .page import PageHost, PageMode, create_profile
+from .page import AdRequestFilter, PageHost, PageMode, create_profile
 from .router import EmbeddedRouter
 from .upstream import EmbeddedUpstream
 
@@ -24,6 +25,8 @@ ATTACH_TIMEOUT_MS = 20_000
 ATTACH_STALLED = (
     "Amberfader could not attach to the YouTube Music page yet. Use Show YT to check it."
 )
+SETTING_SAVED = "Saved. It applies fully the next time YouTube Music loads."
+SETTING_NOT_SAVED = "Applied for now, but could not be saved: {reason}"
 
 
 def _xdg_path(variable: str, fallback: str) -> Path:
@@ -40,6 +43,8 @@ class RuntimeOptions:
     socket_path: str
     history_path: Path
     scale: float = 1.0
+    # None keeps settings in memory (the scripted test page uses this).
+    settings_path: Path | None = None
     profile_storage: Path = field(
         default_factory=lambda: _xdg_path("XDG_DATA_HOME", ".local/share") / "webengine",
     )
@@ -49,8 +54,12 @@ class RuntimeOptions:
 
 
 class EmbeddedRuntime:
-    def __init__(self, options: RuntimeOptions, bundle: str) -> None:
+    def __init__(self, options: RuntimeOptions, bundle: str, *, ad_filter: str) -> None:
+        self.settings_store = SettingsStore(options.settings_path)
+        self.settings = self.settings_store.load()
         self.profile = create_profile(options.mode, options.profile_storage, options.profile_cache)
+        self.ad_requests = AdRequestFilter(self.settings.block_ads)
+        self.profile.setUrlRequestInterceptor(self.ad_requests)
         self.upstream = EmbeddedUpstream()
         self.artwork = ArtworkFetcher()
         self.router = EmbeddedRouter(
@@ -61,6 +70,7 @@ class EmbeddedRuntime:
         )
         self.host = PageHost(
             self.profile, options.mode, bundle,
+            ad_filter=ad_filter, settings=self.settings,
             on_message=self.router.on_page_message, on_lost=self.router.on_page_lost,
         )
         self.artwork.assetReady.connect(self.router.on_asset)
@@ -80,6 +90,16 @@ class EmbeddedRuntime:
         if not self.amber.start():
             return False
         self._started = True
+        window = self.amber.window
+        assert window is not None
+        window.add_page_option(
+            "Block ads", self.settings.block_ads,
+            lambda on: self._change(replace(self.settings, block_ads=on)),
+        )
+        window.add_page_option(
+            "Continue playing automatically", self.settings.continue_playing,
+            lambda on: self._change(replace(self.settings, continue_playing=on)),
+        )
         self.amber.attach_upstream(self.upstream)
         assert self.host.page is not None
         self.host.page.loadFinished.connect(lambda _ok: self._stall.start())
@@ -93,6 +113,28 @@ class EmbeddedRuntime:
         if self._started:
             self.amber.close()
         self.host.shutdown()
+        # The profile does not own its interceptor; detach it before either
+        # Python object can be freed.
+        self.profile.setUrlRequestInterceptor(None)
+
+    def _change(self, settings: AppSettings) -> None:
+        """Apply a switch from the menu: request blocking at once, the page
+        scripts at the next load. A save failure keeps it for this session."""
+        self.settings = settings
+        self.ad_requests.enabled = settings.block_ads
+        self.host.apply_settings(settings)
+        window = self.amber.window
+        try:
+            self.settings_store.save(settings)
+        except OSError as exc:
+            if window is not None:
+                window.show_status(
+                    SETTING_NOT_SAVED.format(reason=exc.strerror or type(exc).__name__),
+                    error=True,
+                )
+            return
+        if window is not None:
+            window.show_status(SETTING_SAVED)
 
     def _report_stall(self) -> None:
         window = self.amber.window

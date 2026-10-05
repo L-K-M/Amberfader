@@ -8,6 +8,10 @@ Isolation: the bundle and Qt's qwebchannel.js run in QtWebEngine's
 application world, the equivalent of an extension content script. Page
 scripts run in the main world and cannot reach the channel. Host-side, page
 messages are accepted only while the top-level page is on the expected origin.
+
+Ad blocking: while it is on, the ad filter script runs in the main world
+(it has to change the page's own objects) and holds no bridge, and
+AdRequestFilter blocks ad requests for the whole profile.
 """
 from __future__ import annotations
 
@@ -25,10 +29,14 @@ from PySide6.QtWebEngineCore import (
     QWebEngineProfile,
     QWebEngineScript,
     QWebEngineSettings,
+    QWebEngineUrlRequestInfo,
+    QWebEngineUrlRequestInterceptor,
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QLabel, QMainWindow
 
+from ..settings import AppSettings
+from .adblock import is_ad_request
 from .navigation import MUSIC_ORIGIN, navigation_allowed, opens_externally, origin_of
 
 HOST_OBJECT_NAME = "amberfader"
@@ -40,6 +48,8 @@ TEST_PAGE_HTML = (
     "No YouTube Music session is involved.</p>"
 )
 WORLD = QWebEngineScript.ScriptWorldId.ApplicationWorld
+BRIDGE_SCRIPT_NAME = "amberfader-page-bridge"
+AD_FILTER_SCRIPT_NAME = "amberfader-ad-filter"
 
 
 class PageMode(Enum):
@@ -59,14 +69,22 @@ class BundleMissingError(RuntimeError):
     pass
 
 
-def load_bundle() -> str:
-    resource = resources.files("amberfader.embedded") / "web" / "adapter.js"
+def _load_page_script(name: str) -> str:
+    resource = resources.files("amberfader.embedded") / "web" / name
     try:
         return resource.read_text("utf-8")
     except FileNotFoundError as exc:
         raise BundleMissingError(
             "The page bundle is missing. Build it with: npm run build"
         ) from exc
+
+
+def load_bundle() -> str:
+    return _load_page_script("adapter.js")
+
+
+def load_ad_filter() -> str:
+    return _load_page_script("ad-filter.js")
 
 
 def _qwebchannel_source() -> str:
@@ -79,12 +97,37 @@ def _qwebchannel_source() -> str:
         source.close()
 
 
-def script_source(bundle: str, mode: PageMode) -> str:
-    # @match keeps QtWebEngine from injecting anywhere else; the bundle also
-    # checks the origin and the top frame itself.
-    header = f"// ==UserScript==\n// @match {mode.origin}/*\n// ==/UserScript==\n"
-    config = json.dumps({"adapter": mode.value, "origin": mode.origin})
-    return f"{header}{_qwebchannel_source()}\nvar __AMBERFADER_EMBEDDED__ = {config};\n{bundle}"
+def _match_header(mode: PageMode) -> str:
+    # @match keeps QtWebEngine from injecting anywhere else.
+    return f"// ==UserScript==\n// @match {mode.origin}/*\n// ==/UserScript==\n"
+
+
+def script_source(bundle: str, mode: PageMode, *, continue_playing: bool) -> str:
+    # The bundle also checks the origin and the top frame itself.
+    config = json.dumps({
+        "adapter": mode.value, "origin": mode.origin, "continuePlaying": continue_playing,
+    })
+    return (
+        f"{_match_header(mode)}{_qwebchannel_source()}\n"
+        f"var __AMBERFADER_EMBEDDED__ = {config};\n{bundle}"
+    )
+
+
+def ad_filter_source(source: str, mode: PageMode) -> str:
+    return f"{_match_header(mode)}{source}"
+
+
+class AdRequestFilter(QWebEngineUrlRequestInterceptor):
+    """Blocks ad and ad-tracking requests (embedded/adblock.py) while
+    enabled. Qt calls interceptRequest on the UI thread."""
+
+    def __init__(self, enabled: bool) -> None:
+        super().__init__()
+        self.enabled = enabled
+
+    def interceptRequest(self, info: QWebEngineUrlRequestInfo) -> None:
+        if self.enabled and is_ad_request(info.requestUrl().toString()):
+            info.block(True)
 
 
 def create_profile(mode: PageMode, storage: Path, cache: Path) -> QWebEngineProfile:
@@ -240,30 +283,56 @@ class PageHost(QObject):
         mode: PageMode,
         bundle: str,
         *,
+        ad_filter: str,
+        settings: AppSettings,
         on_message: Callable[[str], None],
         on_lost: Callable[[str], None],
     ) -> None:
         super().__init__()
         self._mode = mode
+        self._bundle = bundle
+        self._ad_filter = ad_filter
         self._on_lost = on_lost
         self.page: GuardedPage | None = GuardedPage(profile, mode.origin)
         self._bridge = PageBridge(self.on_home_origin, on_message)
         self._channel = QWebChannel(self)
         self._channel.registerObject(HOST_OBJECT_NAME, self._bridge)
         self.page.setWebChannel(self._channel, WORLD)
-
-        script = QWebEngineScript()
-        script.setName("amberfader-page-bridge")
-        script.setSourceCode(script_source(bundle, mode))
-        script.setWorldId(WORLD)
-        # Same timing as the extension's run_at: document_idle.
-        script.setInjectionPoint(QWebEngineScript.InjectionPoint.Deferred)
-        script.setRunsOnSubFrames(False)
-        self.page.scripts().insert(script)
+        self.apply_settings(settings)
 
         self.page.urlChanged.connect(self._url_changed)
         self.page.renderProcessTerminated.connect(self._renderer_exited)
         self.window: BrowserWindow | None = BrowserWindow(self.page, self.load)
+
+    def apply_settings(self, settings: AppSettings) -> None:
+        """Replace the injected scripts. Takes effect at the next page load."""
+        if self.page is None:
+            return
+        scripts = self.page.scripts()
+        for name in (BRIDGE_SCRIPT_NAME, AD_FILTER_SCRIPT_NAME):
+            for old in scripts.find(name):
+                scripts.remove(old)
+
+        bridge = QWebEngineScript()
+        bridge.setName(BRIDGE_SCRIPT_NAME)
+        bridge.setSourceCode(script_source(
+            self._bundle, self._mode, continue_playing=settings.continue_playing,
+        ))
+        bridge.setWorldId(WORLD)
+        # Same timing as a browser extension's run_at: document_idle.
+        bridge.setInjectionPoint(QWebEngineScript.InjectionPoint.Deferred)
+        bridge.setRunsOnSubFrames(False)
+        scripts.insert(bridge)
+
+        if settings.block_ads:
+            ads = QWebEngineScript()
+            ads.setName(AD_FILTER_SCRIPT_NAME)
+            ads.setSourceCode(ad_filter_source(self._ad_filter, self._mode))
+            # Before the page's own scripts, which parse the player data.
+            ads.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+            ads.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+            ads.setRunsOnSubFrames(False)
+            scripts.insert(ads)
 
     def on_home_origin(self) -> bool:
         return self.page is not None and origin_of(self.page.url().toString()) == self._mode.origin

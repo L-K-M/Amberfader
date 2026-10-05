@@ -1,8 +1,8 @@
-"""Embedded prototype end to end in real QtWebEngine (scripted test page).
+"""The embedded browser end to end in real QtWebEngine (scripted test page).
 
-Skips without the `embedded` extra or the built page bundle
-(npm run build), unless AMBERFADER_REQUIRE_EMBEDDED=1 makes that a
-failure (CI sets it so the job cannot pass by skipping). Fixtures prove the
+Skips without Qt WebEngine or the built page scripts (npm run build),
+unless AMBERFADER_REQUIRE_EMBEDDED=1 makes that a failure (CI sets it so the
+job cannot pass by skipping). Fixtures prove the
 bridge; they never prove that YouTube Music accepts an action.
 """
 import importlib.util
@@ -30,10 +30,10 @@ def test_embedded_stack_end_to_end():
     except ImportError:
         webengine = None
     if webengine is None:
-        _unavailable("embedded extra not installed (uv sync --extra gui --extra embedded)")
-    bundle = resources.files("amberfader.embedded") / "web" / "adapter.js"
-    if not bundle.is_file():
-        _unavailable("page bundle not built (npm run build)")
+        _unavailable("Qt WebEngine not installed (uv sync)")
+    scripts = resources.files("amberfader.embedded") / "web"
+    if not all((scripts / name).is_file() for name in ("adapter.js", "ad-filter.js")):
+        _unavailable("page scripts not built (npm run build)")
 
     env = {
         **os.environ,

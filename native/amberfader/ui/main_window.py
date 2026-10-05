@@ -225,6 +225,8 @@ class MainWindow(QMainWindow):
         search = self._menu.addAction("Search", self.open_search)
         self._menu.addSeparator()
         close = self._menu.addAction("Close Amberfader", self.close)
+        self._close_action = close
+        self._options_separator: QAction | None = None
 
         bar = self.menuBar()
         bar.setNativeMenuBar(True)
@@ -234,6 +236,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction(close)
 
         playback = bar.addMenu("&Playback")
+        self._playback_menu = playback
         self._playback_actions: dict[str, QAction] = {}
         for name, text in (
             ("previous", "Previous track"), ("play", "Play"),
@@ -255,7 +258,8 @@ class MainWindow(QMainWindow):
         self._import_menu = QMenu(self)
         self._import_menu.addActions(self._menu.actions())
         self._import_menu.addSeparator()
-        self._import_menu.addMenu("Playback").addActions(list(self._playback_actions.values()))
+        self._import_playback_menu = self._import_menu.addMenu("Playback")
+        self._import_playback_menu.addActions(list(self._playback_actions.values()))
         self._import_menu.addActions([show, hide, minimize])
 
         # Native menus remain exported when their QWidget is hidden. Keep the
@@ -398,6 +402,24 @@ class MainWindow(QMainWindow):
         artwork = prepare_face(face)
         self._faces.remember(face_id)
         self._apply_face(face, artwork)
+
+    def add_page_option(
+        self, text: str, checked: bool, toggled: Callable[[bool], None],
+    ) -> QAction:
+        """Add a checkable YouTube Music option to the Playback menu and the
+        ☰ menu. The owner applies and saves it from `toggled`."""
+        action = QAction(text, self)
+        action.setCheckable(True)
+        action.setChecked(checked)
+        action.toggled.connect(toggled)
+        if self._options_separator is None:
+            self._playback_menu.addSeparator()
+            self._import_playback_menu.addSeparator()
+            self._options_separator = self._menu.insertSeparator(self._close_action)
+        self._playback_menu.addAction(action)
+        self._import_playback_menu.addAction(action)
+        self._menu.insertAction(self._options_separator, action)
+        return action
 
     def open_faces(self) -> None:
         from .faces_window import FacesWindow

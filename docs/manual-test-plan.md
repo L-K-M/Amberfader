@@ -71,6 +71,14 @@ Change a selector only with evidence from a live page:
 - [ ] No playback action is retried after an uncertain timeout; a pending
       outcome is surfaced instead.
 - [ ] Closing the player quits Amberfader and stops the music.
+- [ ] With **Block ads** on, play tracks for at least an hour as a
+      non-Premium account. Record any audio or video ad and the page's
+      behavior. Turn it off, reload, and confirm the page still plays.
+- [ ] With **Continue playing automatically** on, leave music playing for
+      several hours without touching the page. If YouTube Music shows
+      "Video paused. Continue watching?", Amberfader closes it and playback
+      resumes. Capture the prompt's markup (see Selector evidence) the first
+      time it appears.
 
 ## Soak
 

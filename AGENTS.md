@@ -40,7 +40,9 @@ Node 22+ (`.nvmrc`), Python 3.11+ via uv (`uv sync`). `uv.lock` and
   issues the same `AmberfaderApp` requests; none touches the page directly.
 - **Embedded browser policy:** the adapter bundle is injected only into the
   top frame of `https://music.youtube.com`, in the application world; page
-  scripts must not reach the bridge. Top-level navigation stays on the
+  scripts must not reach the bridge. The only main-world script is the ad
+  filter (`web/src/adfilter/`), which must never get a bridge reference or
+  send data anywhere. Top-level navigation stays on the
   allowlist in `native/amberfader/embedded/navigation.py`; every web
   permission prompt is denied and downloads are cancelled. Never change the
   user agent or disable Chromium's sandbox outside tests. Artwork hosts are

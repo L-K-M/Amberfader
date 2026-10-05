@@ -16,6 +16,7 @@ export default defineConfig({
           include: [
             "web/tests/unit/adapter*.test.ts",
             "web/tests/unit/search*.test.ts",
+            "web/tests/unit/continue*.test.ts",
           ],
           restoreMocks: true,
         },
@@ -28,6 +29,7 @@ export default defineConfig({
           exclude: [
             "web/tests/unit/adapter*.test.ts",
             "web/tests/unit/search*.test.ts",
+            "web/tests/unit/continue*.test.ts",
           ],
           restoreMocks: true,
         },

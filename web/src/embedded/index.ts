@@ -1,7 +1,8 @@
-// Bootstrap for the embedded QtWebEngine prototype. The Python host prepends
-// Qt's qwebchannel.js and a configuration object to this bundle, then injects
-// the result into an isolated world of the top frame only. Page scripts run in
+// Bootstrap for the page bundle. The Python host prepends Qt's
+// qwebchannel.js and a configuration object to this bundle, then injects the
+// result into an isolated world of the top frame only. Page scripts run in
 // the main world and cannot reach the channel.
+import { ContinuePlaying } from "../adapter/continuePlaying";
 import { FakeAdapter } from "../adapter/fakeAdapter";
 import type { SiteAdapter } from "../adapter/types";
 import { YouTubeMusicAdapter } from "../adapter/youtubeMusic";
@@ -14,6 +15,8 @@ interface EmbeddedConfig {
   adapter: "youtube-music" | "fake";
   // The only origin this bundle may attach to.
   origin: string;
+  // Close YouTube Music's "Continue watching?" prompt and resume playback.
+  continuePlaying: boolean;
 }
 
 interface HostObject {
@@ -51,6 +54,7 @@ function attach(config: EmbeddedConfig, host: HostObject): void {
   const bridge = new EmbeddedBridge(nonce, adapter, executorFor(adapter), post);
 
   host.command.connect((raw) => void bridge.handleCommand(raw));
+  if (config.continuePlaying) new ContinuePlaying(document).start();
   window.addEventListener("pagehide", () => bridge.unload());
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) bridge.reannounce();
