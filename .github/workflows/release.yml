@@ -129,6 +129,8 @@ jobs:
             echo "::error::no release artifacts produced"
             exit 1
           fi
+          # The README promises the macOS .dmg from 0.2.0 on.
+          compgen -G 'dist/*.dmg' >/dev/null || { echo "::error::no macOS .dmg"; exit 1; }
           gh release create "${{ github.ref_name }}" \
             --title "Amberfader ${{ github.ref_name }}" \
             --generate-notes \

@@ -13,7 +13,10 @@ VERSION = os.environ["AMBERFADER_VERSION"]
 ICON = os.environ["AMBERFADER_ICNS"]
 # CFBundle versions must be numeric; a pre-release suffix (0.2.0rc1,
 # 0.2.0-beta) stays in the .dmg name only.
-BUNDLE_VERSION = re.match(r"\d+(?:\.\d+)*", VERSION).group(0)
+_numeric = re.match(r"\d+(?:\.\d+)*", VERSION)
+if _numeric is None:
+    raise SystemExit(f"AMBERFADER_VERSION must start with a number: {VERSION!r}")
+BUNDLE_VERSION = _numeric.group(0)
 
 a = Analysis(
     [str(ROOT / "packaging" / "macos" / "launch.py")],

@@ -69,6 +69,17 @@ mix), #34 (plan).
      (parser tests need realistic metadata; the privacy rule covers runtime
      diagnostics).
    - Deferred to step 2: deb `Depends` for Qt WebEngine's libraries.
+
+   Round 2 (on `57eb98c`, no important findings; the first minor-only
+   round): applied a hard error when the self-test has no scratch folder,
+   a clear error for a non-numeric version in the spec, sdist contents
+   checked in CI, and the release refusing to publish without a `.dmg`.
+   Refuted: `if-no-files-found` is not a `download-artifact` input (a
+   missing artifact already fails that step); the `Response#json` test is
+   not vacuous (it failed with the hook removed, since `fakeWindow()` has
+   its own `JSON` object). Declined: printing the exception message in the
+   self-test (diagnostics name error kinds, never page content). If round 3
+   has no important findings, the PR is at steady state: merge it.
 2. **Linux packages** (plan Phase 2):
    - deb: today it installs `amberfader` (now incl. PySide6-Addons) into
      `/opt/amberfader/lib`, but `Depends` lacks Qt WebEngine's system

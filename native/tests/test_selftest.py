@@ -87,6 +87,8 @@ def test_self_test_never_uses_a_given_socket(tmp_path):
 
     args = argparse.Namespace(self_test=True, socket="/run/live.sock")
     assert _socket_path(args, str(tmp_path)) == str(tmp_path / "self-test.sock")
+    with pytest.raises(RuntimeError):
+        _socket_path(argparse.Namespace(self_test=True, socket=None), None)
     args = argparse.Namespace(self_test=False, socket="/run/live.sock")
     assert _socket_path(args, str(tmp_path)) == "/run/live.sock"
 

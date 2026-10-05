@@ -107,7 +107,9 @@ def main(argv: list[str] | None = None) -> int:
 def _socket_path(args: argparse.Namespace, scratch: str | None) -> str:
     # The self-test always uses its own socket, so it can never reach (and
     # raise) a running instance instead of testing anything.
-    if args.self_test and scratch:
+    if args.self_test:
+        if not scratch:
+            raise RuntimeError("the self-test needs its scratch folder")
         return os.path.join(scratch, "self-test.sock")
     if args.socket:
         return str(args.socket)

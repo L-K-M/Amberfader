@@ -102,10 +102,12 @@ jobs:
       - name: Build wheel and sdist
         run: uv build --out-dir dist
 
-      - name: Wheel ships the page scripts
+      - name: Wheel and sdist ship the page scripts
         run: |
           unzip -l dist/*.whl | grep -q "amberfader/embedded/web/adapter.js"
           unzip -l dist/*.whl | grep -q "amberfader/embedded/web/ad-filter.js"
+          tar -tzf dist/*.tar.gz | grep -q "amberfader/embedded/web/adapter.js"
+          tar -tzf dist/*.tar.gz | grep -q "amberfader/embedded/web/ad-filter.js"
 
       - name: Upload Python distributions
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
