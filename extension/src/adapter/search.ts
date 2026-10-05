@@ -487,11 +487,14 @@ export class SiteSearch {
       const menu = queryFirst(row, SEARCH.rowActionMenu);
       return menu !== null && isVisibleControl(menu);
     };
+    // Queried each time: the site may replace the layout element on the way
+    // back to the results.
+    const playerPageOpen = (): boolean =>
+      this.doc.querySelector(PLAYER_PAGE.layout)?.hasAttribute(PLAYER_PAGE.openAttribute) ?? false;
     if (menuVisible()) return { ok: true };
 
-    const layout = this.doc.querySelector(PLAYER_PAGE.layout);
     // Not hidden by the player page; the menu check reports what is missing.
-    if (!layout?.hasAttribute(PLAYER_PAGE.openAttribute)) return { ok: true };
+    if (!playerPageOpen()) return { ok: true };
 
     const toggle = this.doc.querySelector(PLAYER_PAGE.closeToggle);
     if (!toggle || !isVisibleControl(toggle) || !isEnabledControl(toggle)) {
@@ -502,8 +505,10 @@ export class SiteSearch {
     }
     toggle.click();
 
+    // A row the site re-renders on the way back is detached for good; stop
+    // waiting, and the caller's identity check reports a changed result.
     const shown = await this.waitUntil(
-      () => !layout.hasAttribute(PLAYER_PAGE.openAttribute) && menuVisible(), deadlineMs,
+      () => !playerPageOpen() && (!row.isConnected || menuVisible()), deadlineMs,
     );
     if (shown === "cancelled") {
       return { ok: false, code: "stale_result", error: "Search superseded while closing the player page" };
@@ -511,7 +516,9 @@ export class SiteSearch {
     if (!shown) {
       return {
         ok: false, code: "timeout",
-        error: "The player page did not close in time; close it, then try Start mix again",
+        error: playerPageOpen()
+          ? "The player page did not close in time; close it, then try Start mix again"
+          : "The player page closed, but this result's menu stayed hidden; search again, then try Start mix",
       };
     }
     return { ok: true };

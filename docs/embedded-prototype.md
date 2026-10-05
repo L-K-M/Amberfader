@@ -127,7 +127,7 @@ needs a new measurement. Linux hidden playback and memory are still open.
       ```sh
       pids=$(pgrep -d, -f '^[^ ]*[Pp]ython[0-9.]* -m amberfader\.embedded|^[^ ]*/QtWebEngineProcess')
       ps -o pid=,rss=,comm= -p "$pids"
-      ps -o rss= -p "$pids" | awk '{s += $1} END {printf "%.0f MiB\n", s / 1024}'
+      ps -o rss= -p "$pids" | awk '{s += $1; n++} END {if (n) printf "%.0f MiB\n", s / 1024; else print "no Amberfader processes found"}'
       ```
 
       The app's own process matters: QtWebEngine runs Chromium's browser

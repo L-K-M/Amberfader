@@ -244,6 +244,46 @@ describe("SiteSearch", () => {
     expect(events).toEqual(["close player page"]);
   });
 
+  it("follows a layout element the site replaces while closing the player page", async () => {
+    const { search, token, rows, result } = await radioSearch();
+    const events = openPlayerPage({ closes: false });
+    const layout = document.querySelector("ytmusic-app-layout")!;
+    layout.querySelector(".toggle-player-page-button")!.addEventListener("click", () => {
+      layout.replaceWith(document.createElement("ytmusic-app-layout"));
+      (document.querySelector("ytmusic-search-page") as HTMLElement).style.visibility = "";
+    });
+    rows[0]!.querySelector("button")!.addEventListener("click", () => events.push("open row menu"));
+
+    await search.prepareRadio(token, result.results[0]!.resultId, 300);
+
+    expect(events).toEqual(["close player page", "open row menu"]);
+  });
+
+  it("reports a changed result when closing the player page re-renders its row", async () => {
+    const { search, token, rows, result } = await radioSearch();
+    openPlayerPage();
+    document.querySelector(".toggle-player-page-button")!.addEventListener("click", () => {
+      rows[0]!.replaceWith(rows[0]!.cloneNode(true));
+    });
+
+    expect(await search.prepareRadio(token, result.results[0]!.resultId, 300)).toEqual({
+      ok: false, code: "stale_result", error: "Search result changed while closing the player page",
+    });
+  });
+
+  it("says the menu stayed hidden when the player page closed but the row did not reappear", async () => {
+    const { search, token, rows, result } = await radioSearch();
+    openPlayerPage();
+    document.querySelector(".toggle-player-page-button")!.addEventListener("click", () => {
+      (rows[0] as HTMLElement).style.visibility = "hidden";
+    });
+
+    expect(await search.prepareRadio(token, result.results[0]!.resultId, 120)).toEqual({
+      ok: false, code: "timeout",
+      error: "The player page closed, but this result's menu stayed hidden; search again, then try Start mix",
+    });
+  });
+
   it("keeps reporting a missing menu when no player page hides the results", async () => {
     const { search, token, result } = await radioSearch();
     (document.querySelector("ytmusic-search-page") as HTMLElement).style.visibility = "hidden";
