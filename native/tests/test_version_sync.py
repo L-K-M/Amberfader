@@ -12,7 +12,6 @@ ROOT = Path(__file__).resolve().parents[2]
 @pytest.fixture()
 def release_project(tmp_path):
     files = {
-        "extension/manifest.json": json.dumps({"version": "0.1.5"}),
         "package.json": json.dumps({"version": "0.1.5"}),
         "pyproject.toml": 'version = "0.1.5"\n',
         "native/amberfader/__init__.py": '__version__ = "0.1.5"\n',

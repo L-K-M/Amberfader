@@ -17,9 +17,9 @@ def build_environment(tmp_path):
     scripts = root / "scripts"
     scripts.mkdir(parents=True)
     shutil.copyfile(ROOT / "scripts/build-deb.sh", scripts / "build-deb.sh")
-    icons = root / "extension/icons"
+    icons = root / "packaging/icons"
     icons.mkdir(parents=True)
-    shutil.copyfile(ROOT / "extension/icons/icon-96.png", icons / "icon-96.png")
+    shutil.copyfile(ROOT / "packaging/icons/amberfader-96.png", icons / "amberfader-96.png")
 
     # Bash functions isolate external tooling, including the absolute launcher
     # interpreter. File staging still runs through the unmodified build script.
@@ -85,10 +85,15 @@ def test_deb_installs_for_launcher_interpreter_and_declares_its_abi(
         assert invocation[:4] == ["/usr/bin/python3", "-m", "pip", "install"]
     assert invocation[invocation.index("--target") + 1] == "dist/deb/stage/opt/amberfader/lib"
 
-    for name in ("amberfader", "amberfader-helper", "amberfader-face-editor"):
-        assert "/usr/bin/python3 -m amberfader." in (stage / "usr/bin" / name).read_text()
+    for name in ("amberfader", "amberfader-face-editor"):
+        assert "/usr/bin/python3 -m amberfader" in (stage / "usr/bin" / name).read_text()
         assert (stage / "usr/bin" / name).stat().st_mode & 0o111
+    assert "-m amberfader \"$@\"" in (stage / "usr/bin/amberfader").read_text()
     assert "amberfader.editor_app" in (stage / "usr/bin/amberfader-face-editor").read_text()
+    assert sorted(path.name for path in (stage / "usr/bin").iterdir()) == [
+        "amberfader", "amberfader-face-editor",
+    ]
+    assert not (stage / "usr/lib/mozilla").exists()
 
 
 def test_deb_rejects_unsupported_launcher_python_before_installing(build_environment):

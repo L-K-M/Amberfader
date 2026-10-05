@@ -2,11 +2,10 @@
 # Builds every Amberfader target and stages results in dist/.
 #
 # Usage: scripts/build.sh [target...] [--clean] [--check]
-#   targets: ext wheel deb flatpak   (default: all this machine can build)
+#   targets: wheel deb flatpak   (default: all this machine can build)
 #   A missing toolchain skips a target on a default run, but fails when the
 #   target was named explicitly.
 #
-#   ext      unpacked extension + web-ext lint          -> dist/extension/
 #   wheel    python wheel + sdist (uv build)            -> dist/*.whl, dist/*.tar.gz
 #   deb      per-user .deb packaging                    -> dist/amberfader_<ver>_*.deb
 #   flatpak  repack the .deb into a .flatpak bundle     -> dist/amberfader_<ver>.flatpak
@@ -14,8 +13,8 @@
 #   --clean  remove dist/ first
 #   --check  print the plan and exit
 #
-# Requirements: Node 22+ (extension), Python 3.11+ + uv (wheel), dpkg-deb
-# (deb), flatpak-builder + org.kde.Platform//6.8 (flatpak, Linux only).
+# Requirements: Python 3.11+ + uv (wheel), dpkg-deb (deb), flatpak-builder +
+# org.kde.Platform//6.8 (flatpak, Linux only).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -40,13 +39,12 @@ for arg in "$@"; do
 done
 
 if [[ ${#TARGETS[@]} -eq 0 ]]; then
-  TARGETS=(ext wheel deb flatpak)
+  TARGETS=(wheel deb flatpak)
 else
   EXPLICIT=1
 fi
 
-VERSION="$(node -p "require('./extension/manifest.json').version" 2>/dev/null \
-  || sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' extension/manifest.json | head -1)"
+VERSION="$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' native/amberfader/__init__.py)"
 
 declare -a OK=() SKIPPED=() FAILED=()
 
@@ -65,7 +63,7 @@ if [[ $CHECK -eq 1 ]]; then
   echo "-- targets:  ${TARGETS[*]}${EXPLICIT:+ (explicit)}"
   echo "-- version:  $VERSION"
   echo "-- staged:   $DIST/"
-  for t in node npm python3 uv dpkg-deb flatpak-builder; do
+  for t in python3 uv dpkg-deb flatpak-builder; do
     printf -- "-- %-16s %s\n" "$t:" "$(command -v "$t" 2>/dev/null || echo missing)"
   done
   exit 0
@@ -76,20 +74,6 @@ mkdir -p "$DIST"
 
 for target in "${TARGETS[@]}"; do
   case "$target" in
-    ext)
-      echo "==> extension"
-      if ! have node || ! have npm; then
-        skip_or_fail ext "node/npm not found"; continue
-      fi
-      if [[ ! -d node_modules ]]; then
-        npm install --no-audit --no-fund || { FAILED+=("ext"); continue; }
-      fi
-      if node scripts/build-extension.mjs && npx web-ext lint --source-dir "$DIST/extension" --self-hosted; then
-        OK+=("ext → $DIST/extension")
-      else
-        FAILED+=("ext")
-      fi
-      ;;
     wheel)
       echo "==> python wheel"
       if ! have uv; then skip_or_fail wheel "uv not found (https://docs.astral.sh/uv/)"; continue; fi

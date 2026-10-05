@@ -249,7 +249,7 @@ describe("YouTubeMusicAdapter (synthetic fixture)", () => {
 
   it("reads the captured like control, ignoring a hidden stale player bar", async () => {
     mountPlayer();
-    document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/like-control-2026-10-02.html", "utf8"));
+    document.body.insertAdjacentHTML("beforeend", readFileSync("web/tests/fixtures/like-control-2026-10-02.html", "utf8"));
     const active = document.querySelector("#button-shape-like button") as HTMLElement;
     const hiddenBar = active.closest("ytmusic-player-bar")!.cloneNode(true) as HTMLElement;
     hiddenBar.hidden = true;
@@ -269,7 +269,7 @@ describe("YouTubeMusicAdapter (synthetic fixture)", () => {
 
   it("reports unknown likes when visible player controls disagree", async () => {
     mountPlayer();
-    const fixture = readFileSync("extension/tests/fixtures/like-control-2026-10-02.html", "utf8");
+    const fixture = readFileSync("web/tests/fixtures/like-control-2026-10-02.html", "utf8");
     document.body.insertAdjacentHTML("beforeend", fixture + fixture);
     document.querySelector("#button-shape-like button")!.setAttribute("aria-pressed", "true");
     vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() =>
@@ -286,7 +286,7 @@ describe("YouTubeMusicAdapter (synthetic fixture)", () => {
 
   it("clicks once for a desired like state, waits for aria-pressed, and observes all bars", async () => {
     mountPlayer();
-    document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/like-control-2026-10-02.html", "utf8"));
+    document.body.insertAdjacentHTML("beforeend", readFileSync("web/tests/fixtures/like-control-2026-10-02.html", "utf8"));
     vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() =>
       Object.assign([new DOMRect(0, 0, 24, 24)], { item: () => null }));
     const button = document.querySelector("#button-shape-like button") as HTMLButtonElement;
@@ -310,7 +310,7 @@ describe("YouTubeMusicAdapter (synthetic fixture)", () => {
 
   it("rejects a like request after the track changes, before clicking", async () => {
     mountPlayer();
-    document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/like-control-2026-10-02.html", "utf8"));
+    document.body.insertAdjacentHTML("beforeend", readFileSync("web/tests/fixtures/like-control-2026-10-02.html", "utf8"));
     vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() =>
       Object.assign([new DOMRect(0, 0, 24, 24)], { item: () => null }));
     const button = document.querySelector("#button-shape-like button") as HTMLButtonElement;
@@ -331,7 +331,7 @@ describe("YouTubeMusicAdapter (synthetic fixture)", () => {
 
   it("does not report a like as successful without a confirmed outcome", async () => {
     mountPlayer();
-    document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/like-control-2026-10-02.html", "utf8"));
+    document.body.insertAdjacentHTML("beforeend", readFileSync("web/tests/fixtures/like-control-2026-10-02.html", "utf8"));
     vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() =>
       Object.assign([new DOMRect(0, 0, 24, 24)], { item: () => null }));
     vi.useFakeTimers();
@@ -370,7 +370,7 @@ describe("YouTubeMusicAdapter (synthetic fixture)", () => {
       const play = vi.fn();
       document.querySelector("ytmusic-play-button-renderer")!.addEventListener("click", play);
       document.querySelector("ytmusic-menu-renderer button")!.addEventListener("click", () => {
-        document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/mix-menu-2026-10-02.html", "utf8"));
+        document.body.insertAdjacentHTML("beforeend", readFileSync("web/tests/fixtures/mix-menu-2026-10-02.html", "utf8"));
         document.querySelector("[aria-label='Start mix'] a")!.addEventListener("click", (event) => {
           event.preventDefault();
           history.replaceState(null, "", "https://music.youtube.com/watch?playlist=fixture-mix&v=mix-seed");
@@ -411,7 +411,7 @@ describe("YouTubeMusicAdapter (synthetic fixture)", () => {
       const clicked = vi.fn((event: Event) => event.preventDefault());
       document.querySelector("ytmusic-menu-renderer button")!.addEventListener("click", () => {
         setTimeout(() => {
-          document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/mix-menu-2026-10-02.html", "utf8"));
+          document.body.insertAdjacentHTML("beforeend", readFileSync("web/tests/fixtures/mix-menu-2026-10-02.html", "utf8"));
           document.querySelector("[aria-label='Start mix'] a")!.addEventListener("click", clicked);
         }, 3000);
       });
@@ -429,7 +429,7 @@ describe("YouTubeMusicAdapter (synthetic fixture)", () => {
 
   it("ignores animation-only style changes while still observing like state changes", async () => {
     mountPlayer();
-    document.body.insertAdjacentHTML("beforeend", readFileSync("extension/tests/fixtures/like-control-2026-10-02.html", "utf8"));
+    document.body.insertAdjacentHTML("beforeend", readFileSync("web/tests/fixtures/like-control-2026-10-02.html", "utf8"));
     vi.spyOn(HTMLElement.prototype, "getClientRects").mockImplementation(() =>
       Object.assign([new DOMRect(0, 0, 24, 24)], { item: () => null }));
     const states: AdapterPlayerState[] = [];

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Amberfader is now a standalone app. It plays YouTube Music in its own
+  embedded browser (Qt WebEngine) and needs no Firefox, extension or native
+  helper. Sign in once in the YouTube Music window. `amberfader` starts the
+  app; PySide6 and Qt WebEngine are regular dependencies (`uv sync`).
+- The page-side TypeScript moved from `extension/` to `web/`, and the
+  version source moved from the extension manifest to
+  `native/amberfader/__init__.py`.
+
+### Removed
+
+- The Firefox extension, the native-messaging helper (`amberfader-helper`),
+  `scripts/install-user`, `scripts/uninstall-user` and `scripts/doctor`.
+  Remove the extension from Firefox yourself; recent searches from the
+  extension are not carried over. Faces and appearance settings are kept.
+
 ### Added
 
 - Audion face import in the visual editor: preview converted JSON/PNG folders
@@ -16,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Experimental embedded QtWebEngine prototype (`npm run embedded:run`):
   YouTube Music in Amberfader's own window, driven by the unchanged site
   adapter through an in-process router. Requires the new `embedded` extra.
-  Pending a manual gate; see docs/embedded-prototype.md.
+  Pending a manual gate; see docs/embedded-browser.md.
 - CI now repacks the .deb as a Flatpak bundle and smoke-checks the installed
   app in the real runtime (command exists in /app/bin; QApplication import
   probe loads the full PySide6/Qt chain). release.yml installs
@@ -28,8 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Start mix after playing a search result: YouTube Music's player page hid
   the results and their menus, so Start mix reported no action menu.
   Amberfader now closes the player page with the site's own toggle first, or
-  asks you to close it when that layout has no toggle. Applies to both the
-  extension and the embedded prototype.
+  asks you to close it when that layout has no toggle.
 
 ## [0.1.0] - Unreleased
 

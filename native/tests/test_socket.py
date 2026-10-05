@@ -7,11 +7,7 @@ import stat
 
 import pytest
 
-from amberfader.transport.paths import (
-    default_socket_path,
-    path_has_live_owner,
-    runtime_socket_dir,
-)
+from amberfader.transport.paths import path_has_live_owner, runtime_socket_dir
 
 
 @pytest.fixture()
@@ -45,7 +41,7 @@ def test_nonexistent_runtime_dir_rejected(tmp_path, monkeypatch):
 
 
 def test_dir_created_0700_and_permissions(xdg, qapp, qtlocal):
-    path = default_socket_path()
+    path = os.path.join(runtime_socket_dir(), "control.sock")
     assert stat.S_IMODE(os.stat(os.path.dirname(path)).st_mode) == 0o700
 
     srv = qtlocal.LocalServer(path)

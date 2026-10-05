@@ -7,13 +7,16 @@ on 2026-10-02; remaining acceptance gates are *expected* unless noted.
 
 ## Live observations (2026-10-02)
 
+These were made with the Firefox extension, which was removed in 0.2.0. The
+site observations still apply to the embedded browser.
+
 - The user confirmed the Amberfader Flatpak connects to Flatpak Zen
   (`app.zen_browser.zen`) after native-host registration and the documented
   `.mozilla` persistence/talk permissions. Browser version and session type
   were not recorded; other packaging combinations remain unverified.
 - The probe found `ytmusic-player-bar img.image`: a complete 60×60 cover from
   `https://yt3.googleusercontent.com`. The sanitized artwork section is stored
-  in `extension/tests/fixtures/artwork-probe-2026-10-02.json`.
+  in `web/tests/fixtures/artwork-probe-2026-10-02.json`.
 - The extension now grants access to that exact HTTPS host. The probe proves
   site-side image presence, not successful extension fetching or rendering;
   those remain a live acceptance gate.
@@ -26,7 +29,7 @@ on 2026-10-02; remaining acceptance gates are *expected* unless noted.
   `aria-label="Start mix"`, `aria-disabled="false"`, and an
   `a#navigation-endpoint` pointing to `watch?playlist=...`. The menu includes
   album actions; song-result activation and playback remain unverified.
-  The sanitized menu is in `extension/tests/fixtures/mix-menu-2026-10-02.html`.
+  The sanitized menu is in `web/tests/fixtures/mix-menu-2026-10-02.html`.
 
 The 2026-10-03 screenshots show artwork missing in both Amberfader players
 while YouTube Music displays its cover. Automated regressions now cover
@@ -38,31 +41,25 @@ session still require the artwork checks in `docs/manual-test-plan.md`.
 
 - The embedded QtWebEngine prototype passed its gate on the user's Mac,
   including Google sign-in with QtWebEngine's default user agent. Details are
-  in [`embedded-prototype.md`](embedded-prototype.md#results-so-far).
+  in [`embedded-browser.md`](embedded-browser.md#results-so-far).
 - In a signed-out session in a Linux container, playing a search result
   opened the player page (`ytmusic-app-layout[player-page-open]`), which
   hid the search results and every row's action menu. The player bar's
   `.toggle-player-page-button` closed it and the rows reappeared. One layout
   experiment had no such toggle. Sanitized record:
-  `extension/tests/fixtures/player-page-2026-10-05.json`. The full Start mix
+  `web/tests/fixtures/player-page-2026-10-05.json`. The full Start mix
   flow after this fix is not yet confirmed in a signed-in session.
 
-## Browsers
+## Platforms
 
-| Browser | Install type | Native messaging | Status |
-|---|---|---|---|
-| Firefox | deb / rpm | `~/.mozilla/native-messaging-hosts` + system manifest | expected |
-| Firefox | Flatpak | per-user manifest in the Flatpak data dir | expected |
-| Zen | native Linux | `~/.mozilla/native-messaging-hosts` | expected |
-| Zen | Flatpak (`app.zen_browser.zen` / `io.github.zen_browser.zen`) | per-app `.mozilla/native-messaging-hosts`; persist `.mozilla` and allow `flatpak-spawn` | expected |
-| Firefox | Snap | confined — no host-path access | **unsupported in v1** |
-| Firefox | macOS/Windows | not a target | unsupported |
-
-`strict_min_version`: set after Phase 0 identifies the oldest working
-Firefox. `tabs.hide()` requires Firefox ≥ 61 and the `tabHide` optional
-permission; `background.scripts` event-page behavior requires a Firefox MV3
-release. The probe checklist records the tested version in the environment
-row of the acceptance matrix.
+| Platform | Install type | Status |
+|---|---|---|
+| Linux x86_64 | from a checkout | expected; the scripted test page passes in CI |
+| Linux x86_64 | `.deb` | expected; package update in progress |
+| Linux x86_64 | Flatpak | expected; package update in progress |
+| macOS 13+ on Apple silicon | from a checkout | **verified** on 2026-10-05: sign-in, persistence, playback, hidden playback, controls, reload |
+| macOS on Apple silicon | `.dmg` | planned |
+| macOS on Intel, Windows | not a target | unsupported |
 
 ## Desktop environments
 
@@ -70,15 +67,16 @@ row of the acceptance matrix.
 |---|---|
 | X11 + any DE | expected |
 | Wayland + any DE | expected (Qt `wayland`/`xcb` platform abstraction) |
-| No `$XDG_RUNTIME_DIR` | **unsupported** — the app refuses to start rather
-than placing the control socket somewhere world-readable |
+| Linux without `$XDG_RUNTIME_DIR` | **unsupported**: the app refuses to start rather than placing its single-instance socket somewhere others can reach |
+| macOS | the single-instance socket lives in the private `$TMPDIR` |
 
 ## Packaging
 
 | Format | Status |
 |---|---|
-| `.deb` | expected — `scripts/build-deb.sh` |
-| `.flatpak` | expected — `scripts/build-flatpak.sh` repacks the deb layout |
+| `.deb` | expected: `scripts/build-deb.sh` |
+| `.flatpak` | expected: `scripts/build-flatpak.sh` repacks the deb layout |
+| macOS `.dmg` | planned |
 | AppImage / Snap | not planned |
 
 The `.deb` resolves its bundled Python wheels with the build host's
@@ -88,33 +86,11 @@ The upper bound also excludes Python 3.13 prereleases with a different ABI.
 Build a package on a matching host for distributions using a different minor.
 Source installs keep the project's Python 3.11+ requirement.
 
-The Flatpak bundle ships a host-side registration script, not a native-host
-manifest. `scripts/install-user --app flatpak` registers a launcher running
-`flatpak run --command=amberfader-helper ch.lkmc.amberfader`. A Flatpak browser
-uses `flatpak-spawn --host` to invoke that launcher.
-
-Gecko's native-host directory is `.mozilla`, independent of Zen's `.zen`
-profile directory. The installer prints the required `.mozilla` persistence
-and talk-permission command for Flatpak Zen. The user-reported connection above
-covers `app.zen_browser.zen`; the other combinations remain unverified.
-
-## Known environment gaps
-
-- Snap-confined Firefox cannot reach the host's native-messaging directory.
-  `scripts/doctor` detects a Snap Firefox and says so instead of failing
-  mysteriously (records compat limitation A6).
-- A Flatpak **browser** talking to a **deb-installed** helper, or vice versa,
-  is a registered combination, not a verified one — the per-user manifest
-  path differs per browser package type and `install-user` covers the
-  combinations it knows how to express.
-
-## Resource budgets (to be measured during the W5 soak)
+## Resource budgets
 
 | Metric | Budget | Measured |
 |---|---|---|
-| Helper RSS | ≤ 20 MiB steady state | pending |
-| GUI RSS | ≤ 150 MiB steady state | pending |
-| Idle CPU | ~0% (event-driven; 1 Hz position sampling while playing) | pending |
-| Socket traffic | bounded by 256 KiB frame cap; state events ~1 Hz max | pending |
+| Total RSS (app + Qt WebEngine processes) | to be set after the first live measurement | scripted test page in a Linux container: about 454 MiB; live playback pending |
+| Idle CPU | ~0% while paused (event-driven; 1 Hz position sampling while playing) | pending |
 
-Pending means not yet measured — not "assumed fine".
+Pending means not yet measured, not "assumed fine".

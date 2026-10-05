@@ -1,15 +1,11 @@
-"""Amberfader desktop application.
+"""Amberfader's player client.
 
-Owns the per-user control socket, applies helper protocol traffic to the
-windows, and enforces request deadlines. The GUI is independent of the
-helper's process tree: closing the app leaves music playing, and a dead
-helper is a real disconnect — never silently retried.
+Applies the page's protocol traffic to the windows, enforces request
+deadlines and binding checks, and owns the single-instance socket. A lost
+page is a real disconnect, never silently retried.
 """
 from __future__ import annotations
 
-import argparse
-import os
-import sys
 from collections.abc import Callable
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any
@@ -17,14 +13,9 @@ from uuid import uuid4
 
 from . import PROTOCOL_VERSION
 from .face_library import FaceError
-from .hosts import HOST_COPY, PlaybackHost
+from .player_copy import PLAYER_COPY
 from .protocol import validate_message
-from .transport.local import (
-    FramedSocket,
-    LocalServer,
-    default_socket_path,
-    try_activate_existing,
-)
+from .transport.local import FramedSocket, LocalServer
 
 if TYPE_CHECKING:  # pragma: no cover
     from PySide6.QtCore import QTimer
@@ -50,33 +41,30 @@ class _BindingState(Enum):
 
 
 class AmberfaderApp:
-    """One running desktop instance: socket server + windows + pending calls.
+    """One running instance: socket server + windows + pending calls.
 
     Requires a QApplication to exist. `start()` fails cleanly when a live
-    process already owns the socket path (second-instance semantics live in
-    main(): it activates the existing window and exits instead)."""
+    process already owns the socket path (the launcher activates that
+    instance and exits instead)."""
 
     def __init__(
         self,
         socket_path: str,
+        *,
+        show_page: Callable[[bool], bool],
         scale: float = 1.0,
-        host: PlaybackHost = PlaybackHost.FIREFOX,
-        show_page: Callable[[bool], bool] | None = None,
     ) -> None:
         from PySide6.QtWidgets import QApplication
 
         self.app = QApplication.instance()
         if self.app is None:
             raise RuntimeError("AmberfaderApp requires a QApplication")
-        # The embedded page window is local to this process: showing it must
-        # work before any page is bound (for example to sign in), so it never
-        # becomes a bound protocol request.
-        if (host is PlaybackHost.EMBEDDED) != (show_page is not None):
-            raise ValueError("show_page is required for, and only for, the embedded host")
         self.socket_path = socket_path
         self._scale = scale
-        self._host = host
-        self._copy = HOST_COPY[host]
+        self._copy = PLAYER_COPY
+        # The YouTube Music window is local to this process: showing it must
+        # work before any page is bound (for example to sign in), so it never
+        # becomes a bound protocol request.
         self._show_page = show_page
         self.server = LocalServer(socket_path)
         self.window: MainWindow | None = None
@@ -96,15 +84,10 @@ class AmberfaderApp:
         from .ui.main_window import MainWindow
 
         try:
-            self.window = MainWindow(self.request, scale=self._scale, host=self._host)
+            self.window = MainWindow(self.request, scale=self._scale)
         except FaceError:
             self.server.close()
             raise
-        if self._host is PlaybackHost.FIREFOX:
-            self.server.helperConnected.connect(self._on_helper)
-        else:
-            # The embedded socket only serves single-instance activation.
-            self.server.helperConnected.connect(lambda s: s.socket.disconnectFromServer())
         self.server.activationRequested.connect(self._on_activation)
         self.server.invalidPeer.connect(lambda s: s.socket.disconnectFromServer())
         self.window.show()
@@ -121,7 +104,7 @@ class AmberfaderApp:
     def request(self, method: str, params: dict) -> None:
         if self.window is None:
             return
-        if self._show_page is not None and method in WINDOW_METHODS:
+        if method in WINDOW_METHODS:
             changed = self._show_page(method == "browser.showPlayer")
             self.window.route_response(method, changed, {} if changed else {
                 "message": "Could not change the YouTube Music window.",
@@ -189,23 +172,19 @@ class AmberfaderApp:
     # ---- inbound wiring ---------------------------------------------------
 
     def attach_upstream(self, upstream: FramedSocket) -> None:
-        """Attach an in-process upstream instead of a helper socket. It must
-        offer FramedSocket's interface: send(), messageReceived and
-        disconnected."""
-        self._on_helper(upstream)
-
-    def _on_helper(self, sock: FramedSocket) -> None:
+        """Attach the in-process page upstream. It must offer FramedSocket's
+        interface: send(), messageReceived and disconnected."""
         self._state_epoch += 1
         self._session_id = self._binding_token = None
         self._binding_state = _BindingState.UNKNOWN
-        self.conn = sock
-        sock.messageReceived.connect(self._on_message)
-        sock.disconnected.connect(self._on_helper_gone)
+        self.conn = upstream
+        upstream.messageReceived.connect(self._on_message)
+        upstream.disconnected.connect(self._on_upstream_gone)
         if self.window is not None:
             self.window.show_status(self._copy.connected)
         self.request("state.get", {})
 
-    def _on_helper_gone(self) -> None:
+    def _on_upstream_gone(self) -> None:
         self._state_epoch += 1
         self.conn = None
         self._session_id = self._binding_token = None
@@ -213,7 +192,7 @@ class AmberfaderApp:
         for rid in list(self._pending):
             self._settle(rid, False, {"message": self._copy.disconnected})
         if self.window is not None:
-            self.window.set_connection("gui", "disconnected", "helper socket closed")
+            self.window.set_connection("gui", "disconnected", "page bridge closed")
 
     def _on_message(self, msg: dict) -> None:
         if self.window is None:
@@ -317,42 +296,3 @@ class AmberfaderApp:
             self.window.raise_requested()
         sock.socket.disconnectFromServer()
 
-
-def main() -> int:  # pragma: no cover - exercised via entry point
-    parser = argparse.ArgumentParser(prog="amberfader")
-    parser.add_argument("--socket", default=os.environ.get("AMBERFADER_SOCKET"))
-    parser.add_argument("--scale", type=float, default=1.0, choices=(1.0, 1.5, 2.0))
-    args = parser.parse_args()
-
-    # Late Qt import: --help and the helper path stay PySide6-free.
-    from PySide6.QtWidgets import QApplication
-
-    app = QApplication(sys.argv)
-    app.setApplicationName("amberfader")
-    app.setOrganizationDomain("ch.lkmc")
-
-    try:
-        path = args.socket or default_socket_path()
-    except RuntimeError as exc:
-        print(f"amberfader: {exc}", file=sys.stderr)
-        return 2
-
-    # Single instance: a second launch activates the existing window and exits.
-    if try_activate_existing(path):
-        return 0
-
-    amber = AmberfaderApp(path, scale=args.scale)
-    try:
-        started = amber.start()
-    except FaceError as exc:
-        print(f"amberfader: {exc}", file=sys.stderr)
-        return 2
-    if not started:
-        print(f"amberfader: cannot listen on {path}", file=sys.stderr)
-        return 2
-    app.aboutToQuit.connect(amber.close)
-    return app.exec()
-
-
-if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(main())

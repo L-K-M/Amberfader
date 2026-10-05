@@ -2,49 +2,54 @@
 
 ## What leaves the machine
 
-Nothing by design. Amberfader talks to exactly one remote service — YouTube
-Music — and only inside the user's own Firefox tab, under the user's own
-session, exactly as if they were using the site directly. There is no
-telemetry, no analytics, no crash reporting, no update pinging in v1.
+Amberfader talks to YouTube Music and to Google's sign-in pages, from its own
+embedded browser, under your own Google session, as if you used the site in
+a browser. There is no telemetry, no analytics, no crash reporting and no
+update check.
 
-`data_collection_permissions` in the manifest is frozen to match this: the
-extension collects nothing Mozilla's categories would require declaring.
+Navigation is limited to YouTube Music, other `youtube.com` hosts,
+`google.com` and Google's `accounts.` country hosts. Other links open in your
+system browser. See [Security and privacy](embedded-browser.md#security-and-privacy)
+for the full policy.
 
-## Data paths
+## What stays on the machine
+
+| Data | Where |
+|---|---|
+| Google cookies, site storage | Amberfader's own browser profile, `~/.local/share/amberfader/webengine` on Linux |
+| HTTP cache | `~/.cache/amberfader/webengine` on Linux |
+| Recent searches and played artists | `~/.local/state/amberfader/embedded-search-history.json` on Linux, 20 entries per list |
+| Faces and appearance | `~/.local/share/amberfader/faces`, `~/.config/amberfader/appearance.json` |
+
+Delete the profile folder to sign out completely. **Clear recents** in the
+search window removes both recent lists; the current track is not
+immediately re-added.
+
+## Data paths inside the app
 
 | Data | Path |
 |---|---|
-| Track metadata (title/artist/album) | page DOM → adapter → background → GUI socket |
-| Artwork | HTTPS fetch on an allowlisted image host, **no credentials**, normalized and downscaled before reaching any client |
-| Search queries | typed by the user → socket → content script → site search field |
-| Recent searches and artists | extension-local storage → background → either search window |
-| Playback commands | socket → background → bound tab only |
+| Track metadata (title/artist/album) | page DOM → adapter → QWebChannel → router → player |
+| Artwork | HTTPS fetch on an allowlisted image host, **no cookies**, normalized and downscaled before reaching the player |
+| Search queries | search window → router → adapter → site search field |
+| Playback commands | player → router → the one bound page document |
 
-- The Unix control socket lives in `$XDG_RUNTIME_DIR/amberfader` (mode 0700,
-  owner-only socket). Other users on the machine cannot see it.
-- The helper's stdout carries protocol frames only — no logging, no page
-  content. Diagnostics go to stderr.
-- Page-derived strings pass through `cleanText`/`cleanId` before crossing a
-  boundary; artwork **URLs never reach the GUI** — only the normalized
+- The single-instance socket lives in `$XDG_RUNTIME_DIR/amberfader` on Linux
+  and in the private `$TMPDIR/amberfader` on macOS (mode 0700, owner-only
+  socket). It only lets a second launch raise the running player.
+- Page-derived strings pass through `cleanText`/`cleanId` before leaving the
+  page; artwork **URLs never reach the player windows**, only the normalized
   thumbnail bytes do.
-- Search and track text may be logged nowhere; protocol logs name error
-  codes and message kinds, never payloads.
-- Recent searches and played artists are saved in this browser profile, with
-  20 entries per list. Both windows share these lists. **Clear recents** in
-  the search window removes them; the current track is not immediately re-added.
+- Page console output is discarded because it can contain track names.
+  Diagnostics go to stderr and name error codes and message kinds, never
+  track names, queries or page content.
 
-## Permissions audit
+## Permissions
 
-- Host access: `music.youtube.com` (adapter) + allowlisted artwork hosts.
-- No `<all_urls>`, no cookies, no history, no webRequest, no clipboard, no
-  geolocation.
-- `nativeMessaging`, `tabHide` are **optional** permissions requested in the
-  onboarding page with a user gesture — the extension works extension-only
-  without them.
-
-## Third-party surface
-
-- `fetch` of artwork goes to Google-owned image CDNs on an explicit
-  hostname allowlist; redirects are re-validated against the allowlist.
-- Dependencies are dev-tooling only (esbuild, vitest, eslint, PySide6 wheel
-  in the packaged tree). No runtime network SDKs.
+- Every web permission prompt is denied (notifications, camera, microphone,
+  location and others), downloads are cancelled, and WebRTC is limited to
+  public network interfaces.
+- Artwork is fetched only from Google-owned image hosts on an explicit
+  allowlist; redirects are re-validated against it.
+- Python dependencies: PySide6 (Qt, including Qt WebEngine) and jsonschema.
+  No runtime network SDKs.

@@ -1,7 +1,8 @@
-// Generates extension/src/protocol/validators.gen.js — ajv validators
-// pre-compiled to plain JS via ajv/dist/standalone. Required because MV3
-// extension pages run under a CSP that forbids eval/Function, which is how
-// ajv builds validators at runtime. Regenerate whenever the schema changes:
+// Generates web/src/protocol/validators.gen.js — ajv validators
+// pre-compiled to plain JS via ajv/dist/standalone. Required because the
+// page bundle runs inside YouTube Music, whose Content Security Policy can
+// forbid eval/Function, which is how ajv builds validators at runtime.
+// Regenerate whenever the schema changes:
 //
 //   node scripts/gen-validators.mjs           # write
 //   node scripts/gen-validators.mjs --check   # verify committed file is fresh
@@ -14,8 +15,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const OUT = join(root, "extension/src/protocol/validators.gen.js");
-const OUT_DTS = join(root, "extension/src/protocol/validators.gen.d.ts");
+const OUT = join(root, "web/src/protocol/validators.gen.js");
+const OUT_DTS = join(root, "web/src/protocol/validators.gen.d.ts");
 const schema = JSON.parse(
   readFileSync(join(root, "protocol/schemas/envelope.schema.json"), "utf8"),
 );

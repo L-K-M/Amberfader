@@ -1,5 +1,5 @@
-"""Desktop client in embedded mode: local window controls, host copy,
-single-instance socket, and the in-process upstream."""
+"""Player client: local window controls, player copy, single-instance
+socket, and the in-process upstream."""
 import socket as pysock
 
 import pytest
@@ -13,19 +13,8 @@ pytest.importorskip(
 from conftest import pump
 
 from amberfader import PROTOCOL_VERSION
-from amberfader.hosts import HOST_COPY, PlaybackHost
+from amberfader.player_copy import PLAYER_COPY
 from amberfader.protocol import encode_frame
-
-EMBEDDED_COPY = HOST_COPY[PlaybackHost.EMBEDDED]
-
-
-def test_show_page_belongs_to_the_embedded_host(qapp, tmp_path):
-    from amberfader.app import AmberfaderApp
-
-    with pytest.raises(ValueError):
-        AmberfaderApp(str(tmp_path / "a.sock"), host=PlaybackHost.EMBEDDED)
-    with pytest.raises(ValueError):
-        AmberfaderApp(str(tmp_path / "b.sock"), show_page=lambda _visible: True)
 
 
 @pytest.fixture()
@@ -39,9 +28,7 @@ def embedded(qapp, tmp_path):
         calls.append(visible)
         return outcome["ok"]
 
-    app = AmberfaderApp(
-        str(tmp_path / "embedded.sock"), host=PlaybackHost.EMBEDDED, show_page=show_page,
-    )
+    app = AmberfaderApp(str(tmp_path / "embedded.sock"), show_page=show_page)
     assert app.start()
     responses = []
     original = app.window.route_response
@@ -71,18 +58,18 @@ def test_window_controls_work_without_a_binding(embedded):
     assert app._pending == {}
 
 
-def test_embedded_copy_replaces_firefox_wording(embedded):
+def test_player_copy_describes_the_embedded_page(embedded):
     app, _calls, _outcome, responses = embedded
 
     app.request("player.play", {})
 
-    assert responses == [("player.play", False, {"message": EMBEDDED_COPY.unbound})]
+    assert responses == [("player.play", False, {"message": PLAYER_COPY.unbound})]
     assert app.window._btn_close.toolTip() == "Quit Amberfader; music stops"
-    assert app.window._btn_show.toolTip() == EMBEDDED_COPY.show_tip
+    assert app.window._btn_show.toolTip() == PLAYER_COPY.show_tip
     assert "Firefox" not in app.window._artists.text()
 
 
-def test_embedded_socket_turns_helpers_away(qapp, embedded):
+def test_socket_turns_helpers_away(qapp, embedded):
     app = embedded[0]
     client = pysock.socket(pysock.AF_UNIX)
     client.connect(app.socket_path)

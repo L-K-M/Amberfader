@@ -49,7 +49,7 @@ PREVIEW_LABELS = {
     "title": "A face for your music", "artists": "Amberfader · Face preview",
     "time": "03:48 / 04:30", "playback": "PREVIEW", "previous": "⏮", "play": "▶",
     "next": "⏭", "like": "♥", "search": "Search", "show": "Show YT", "hide": "Hide",
-    "menu": "☰", "minimize": "\u2212", "close": "\u00d7", "status": "Firefox keeps playing",
+    "menu": "☰", "minimize": "\u2212", "close": "\u00d7", "status": "Status message",
 }
 
 READOUT_ALIGNMENT = {

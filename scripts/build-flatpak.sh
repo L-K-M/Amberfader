@@ -43,13 +43,7 @@ cat > "$STAGE/app/bin/amberfader" <<'EOF'
 #!/bin/sh
 exec env PYTHONPATH=/app/lib \
   LD_LIBRARY_PATH="/app/lib/PySide6/Qt/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-  /usr/bin/python3 -m amberfader.app "$@"
-EOF
-cat > "$STAGE/app/bin/amberfader-helper" <<'EOF'
-#!/bin/sh
-exec env PYTHONPATH=/app/lib \
-  LD_LIBRARY_PATH="/app/lib/PySide6/Qt/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-  /usr/bin/python3 -m amberfader.helper "$@"
+  /usr/bin/python3 -m amberfader "$@"
 EOF
 cat > "$STAGE/app/bin/amberfader-face-editor" <<'EOF'
 #!/bin/sh
@@ -57,11 +51,7 @@ exec env PYTHONPATH=/app/lib \
   LD_LIBRARY_PATH="/app/lib/PySide6/Qt/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
   /usr/bin/python3 -m amberfader.editor_app "$@"
 EOF
-chmod 755 "$STAGE/app/bin/amberfader" "$STAGE/app/bin/amberfader-helper" \
-  "$STAGE/app/bin/amberfader-face-editor"
-# Run this installer on the host to register the bundled helper with the
-# browser, without a second Python installation or wider app permissions.
-install -Dm755 scripts/install-user "$STAGE/app/share/amberfader/install-user"
+chmod 755 "$STAGE/app/bin/amberfader" "$STAGE/app/bin/amberfader-face-editor"
 # Desktop file: app-id filename + Exec rewrites per flatpak rules. The deb
 # already ships it app-id-named — rename only when it doesn't.
 DESKTOP_DIR="$STAGE/app/share/applications"
@@ -71,9 +61,7 @@ if [[ -n $DESKTOP_SRC ]]; then
   [[ $(basename "$DESKTOP_SRC") == "$APP_ID.desktop" ]] ||
     mv "$DESKTOP_SRC" "$DESKTOP_DIR/$APP_ID.desktop"
 fi
-# The deb's system-wide host manifest does not belong inside the bundle —
-# Browser registration is per-user via the bundled host-side installer.
-rm -rf "$STAGE/app/lib/mozilla" "$STAGE/DEBIAN" 2>/dev/null || true
+rm -rf "$STAGE/DEBIAN"
 
 # Vendor the Kerberos libs the wheel's libQt6Network NEEDs: the KDE runtime
 # doesn't ship libgssapi_krb5 (the .deb gets it via package Depends). The
@@ -147,7 +135,7 @@ from PySide6 import QtDBus
 from PySide6.QtWidgets import QApplication
 import amberfader.app
 import amberfader.editor_app
-import amberfader.helper
+import amberfader.embedded.router
 from amberfader.ui.face_editor import FaceEditorWindow
 app = QApplication(sys.argv)
 window = FaceEditorWindow()
@@ -160,13 +148,7 @@ fi
 test -x /app/bin/amberfader-face-editor ||
   { echo "!! face editor launcher missing" >&2; exit 1; }
 test -d "$XDG_RUNTIME_DIR/amberfader" ||
-  { echo "!! shared control socket directory absent at sandbox startup" >&2; exit 1; }
-test -x /app/share/amberfader/install-user ||
-  { echo "!! bundled native-host installer missing" >&2; exit 1; }
-helper_output="$(/app/bin/amberfader-helper /app/native-host.json amberfader@ch.lkmc </dev/null)" ||
-  { echo "!! helper rejected Firefox startup arguments" >&2; exit 1; }
-test -z "$helper_output" ||
-  { echo "!! helper printed unframed output" >&2; exit 1; }
+  { echo "!! shared single-instance socket directory absent at sandbox startup" >&2; exit 1; }
 echo "__amberfader-smoke-ok__"
 PROBE
 )" || true

@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   typescript:
-    name: Extension lint, typecheck, unit tests, build
+    name: Page bundle lint, typecheck, unit tests, build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -37,19 +37,8 @@ jobs:
       - name: Lint, typecheck, unit tests
         run: npm run check
 
-      - name: Build extension and run web-ext lint
-        run: npm run ext:lint
-
-      - name: Package the extension zip
-        run: npm run ext:package
-
-      - name: Upload extension zip
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: firefox-extension
-          path: dist/web-ext-artifacts/
-          if-no-files-found: error
-          retention-days: 7
+      - name: Build the page bundle
+        run: npm run build
 
       - name: Validate shell entry points
         run: bash -n scripts/*.sh
@@ -58,7 +47,7 @@ jobs:
         run: npm run version:check
 
   python:
-    name: Native helper/GUI lint and unit tests
+    name: Python app lint and unit tests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -68,17 +57,19 @@ jobs:
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
-      - name: Qt runtime libraries and global-menu test session
+      - name: Qt and Qt WebEngine runtime libraries, global-menu test session
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libegl1 libgl1 libglib2.0-0t64 libxkbcommon0 \
             libfontconfig1 libdbus-1-3 libxkbcommon-x11-0 \
             libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 \
+            libnss3 libasound2t64 libxkbfile1 libxcomposite1 libxdamage1 \
+            libxrandr2 libxtst6 libgbm1 libxcb-dri3-0 libgssapi-krb5-2 \
             xvfb xauth dbus python3-dbus python3-gi
 
       - name: Sync project environment
-        run: uv sync --extra gui
+        run: uv sync
 
       - name: Ruff
         run: uv run ruff check native/
@@ -125,7 +116,7 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
       - name: Sync editor environment
-        run: uv sync --extra gui
+        run: uv sync
 
       - name: Editor, persistence and transformed input tests
         env:
@@ -141,7 +132,7 @@ jobs:
           native/tests/test_audion_popup_keyboard.py
 
   embedded:
-    name: Embedded QtWebEngine prototype end to end
+    name: Page bridge end to end in Qt WebEngine
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -157,8 +148,8 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
-      - name: Build the embedded page bundle
-        run: npm run embedded:build
+      - name: Build the page bundle
+        run: npm run build
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
@@ -172,7 +163,7 @@ jobs:
             libgssapi-krb5-2
 
       - name: Sync project environment
-        run: uv sync --extra gui --extra embedded
+        run: uv sync
 
       - name: Bridge end to end against the scripted test page (Qt offscreen)
         env:
@@ -192,12 +183,12 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
       - name: Build the .deb
-        run: scripts/build-deb.sh "$(node -p "JSON.parse(require('node:fs').readFileSync('extension/manifest.json','utf8')).version")" dist
+        run: scripts/build-deb.sh "$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' native/amberfader/__init__.py)" dist
 
       - name: Inspect package contents
         run: |
           dpkg-deb --info dist/amberfader_*_*.deb
-          dpkg-deb --contents dist/amberfader_*_*.deb | grep -E "native-messaging-hosts|applications|amberfader-helper|icon"
+          dpkg-deb --contents dist/amberfader_*_*.deb | grep -E "applications|bin/amberfader|icon"
 
       - name: Upload .deb
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

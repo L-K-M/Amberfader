@@ -1,7 +1,6 @@
-// Builds the page bundle for the embedded QtWebEngine prototype into the
-// Python package, where amberfader.embedded loads it at startup. The bundle
-// reuses the extension's site adapter and executor unchanged; only the
-// transport (QWebChannel instead of the extension bus) differs.
+// Builds the page bundle (site adapter, command executor and QWebChannel
+// bridge) into the Python package, where amberfader.embedded injects it into
+// the YouTube Music page at startup.
 import { build } from "esbuild";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +9,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(root, "native", "amberfader", "embedded", "web", "adapter.js");
 
 await build({
-  entryPoints: [join(root, "extension", "src", "embedded", "index.ts")],
+  entryPoints: [join(root, "web", "src", "embedded", "index.ts")],
   outfile: OUT,
   bundle: true,
   format: "iife",

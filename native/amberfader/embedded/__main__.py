@@ -1,6 +1,6 @@
-"""Run the embedded prototype: python -m amberfader.embedded
+"""Amberfader's launcher: the `amberfader` command and python -m amberfader.
 
-From a checkout: npm run embedded:run (builds the page bundle first).
+From a checkout: npm start (builds the page bundle first).
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from .. import NATIVE_HOST_NAME
+from .. import APP_NAME
 from ..transport.paths import runtime_socket_dir
 from .history import default_history_path
 
@@ -30,7 +30,7 @@ def default_socket_path() -> str:
     if sys.platform != "darwin" or os.environ.get("XDG_RUNTIME_DIR"):
         return os.path.join(runtime_socket_dir(), EMBEDDED_SOCKET_NAME)
 
-    directory = Path(tempfile.gettempdir()) / NATIVE_HOST_NAME
+    directory = Path(tempfile.gettempdir()) / APP_NAME
     with contextlib.suppress(FileExistsError):
         directory.mkdir(mode=0o700)
     # gettempdir() falls back to the shared /tmp when $TMPDIR is unset, so
@@ -55,8 +55,8 @@ def default_socket_path() -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="python -m amberfader.embedded",
-        description="Amberfader with YouTube Music in its own QtWebEngine window (prototype).",
+        prog="amberfader",
+        description="Amberfader: a compact classic-style player for YouTube Music.",
     )
     parser.add_argument("--scale", type=float, default=1.0, choices=(1.0, 1.5, 2.0))
     parser.add_argument(
@@ -79,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
         from PySide6 import QtWebEngineWidgets  # noqa: F401
     except ImportError:
         print(
-            "amberfader: QtWebEngine is not installed. Run: uv sync --extra gui --extra embedded",
+            "amberfader: QtWebEngine is not installed. Run: uv sync",
             file=sys.stderr,
         )
         return 2
@@ -92,9 +92,8 @@ def main(argv: list[str] | None = None) -> int:
     from .runtime import EmbeddedRuntime, RuntimeOptions
 
     try:
-        bundle = load_bundle()
         socket_path = args.socket or default_socket_path()
-    except (BundleMissingError, RuntimeError, OSError) as exc:
+    except (RuntimeError, OSError) as exc:
         print(f"amberfader: {exc}", file=sys.stderr)
         return 2
 
@@ -103,8 +102,15 @@ def main(argv: list[str] | None = None) -> int:
     app.setOrganizationDomain("ch.lkmc")
 
     # Single instance: two processes must never share one browser profile.
+    # Checked before anything else, so a second launch only raises the first.
     if try_activate_existing(socket_path):
         return 0
+
+    try:
+        bundle = load_bundle()
+    except BundleMissingError as exc:
+        print(f"amberfader: {exc}", file=sys.stderr)
+        return 2
 
     # Ctrl+C or SIGTERM quits through Qt, so Chromium can flush the sign-in
     # cookies instead of being killed mid-write. Installed before startup;

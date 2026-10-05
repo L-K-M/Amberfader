@@ -1,4 +1,4 @@
-"""QtWebEngine side of the embedded prototype.
+"""QtWebEngine side of Amberfader.
 
 Owns the persistent profile (the Google sign-in lives here), the guarded
 YouTube Music page, the injected adapter bundle, and the window that shows
@@ -36,7 +36,7 @@ PROFILE_NAME = "amberfader-embedded"
 TEST_PAGE_ORIGIN = "https://amberfader.invalid"
 TEST_PAGE_HTML = (
     "<!doctype html><meta charset='utf-8'><title>Amberfader test page</title>"
-    "<p>Scripted test page for the embedded prototype. "
+    "<p>Scripted test page for Amberfader. "
     "No YouTube Music session is involved.</p>"
 )
 WORLD = QWebEngineScript.ScriptWorldId.ApplicationWorld
@@ -65,7 +65,7 @@ def load_bundle() -> str:
         return resource.read_text("utf-8")
     except FileNotFoundError as exc:
         raise BundleMissingError(
-            "The embedded page bundle is missing. Build it with: npm run embedded:build"
+            "The page bundle is missing. Build it with: npm run build"
         ) from exc
 
 

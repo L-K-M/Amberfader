@@ -1,5 +1,5 @@
-"""Wires the embedded prototype: page host, router, artwork, and the
-existing desktop client (AmberfaderApp + MainWindow) on top.
+"""Wires the app together: page host, router, artwork, and the player
+client (AmberfaderApp + MainWindow) on top.
 
 Requires a QApplication created after QtWebEngineWidgets was imported.
 """
@@ -12,7 +12,6 @@ from pathlib import Path
 from PySide6.QtCore import QTimer
 
 from ..app import AmberfaderApp
-from ..hosts import PlaybackHost
 from .artwork import ArtworkFetcher
 from .history import SearchHistoryStore
 from .page import PageHost, PageMode, create_profile
@@ -67,8 +66,7 @@ class EmbeddedRuntime:
         self.artwork.assetReady.connect(self.router.on_asset)
         self.upstream.requested.connect(self.router.handle_request)
         self.amber = AmberfaderApp(
-            options.socket_path, scale=options.scale,
-            host=PlaybackHost.EMBEDDED, show_page=self.host.set_visible,
+            options.socket_path, show_page=self.host.set_visible, scale=options.scale,
         )
         self._stall = QTimer()
         self._stall.setSingleShot(True)

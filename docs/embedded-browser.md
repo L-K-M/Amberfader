@@ -1,61 +1,43 @@
-# Embedded QtWebEngine prototype
+# Embedded browser
 
-This prototype tests whether Amberfader should host YouTube Music in its own
-QtWebEngine window instead of attaching to Firefox. It is experimental. The
-Firefox extension and native helper are unchanged and remain the supported
-path.
+Amberfader hosts YouTube Music in its own Qt WebEngine (Chromium) profile and
+drives the page with an injected adapter. This page explains how that works,
+how to run it from a checkout, what the browser is allowed to do, and what
+has been measured so far.
 
-The decision depends on a manual gate that only your desktop can run: Google
-sign-in, playback and memory with a real account. See [Gate](#gate).
-
-## How it differs from Firefox mode
+## How it works
 
 ```text
-Firefox mode
-  YouTube Music tab -> content script -> background router -> controller page
-    -> native messaging -> helper -> Unix socket -> desktop app
-
-Embedded prototype (one process plus Chromium's helper processes)
-  QtWebEngine page -> injected adapter (isolated world) -> QWebChannel
-    -> EmbeddedRouter -> desktop app
+One process plus Chromium's helper processes:
+  QtWebEngine page -> injected adapter (application world) -> QWebChannel
+    -> EmbeddedRouter -> AmberfaderApp -> player windows
 ```
 
-Reused unchanged:
-
-- The site adapter and its selectors (`extension/src/adapter/`), and the
-  command executor with request-ID dedup (`extension/src/content/executor.ts`).
-- The public protocol and its schema validation.
-- The desktop client: `AmberfaderApp` deadlines and binding checks,
-  `MainWindow`, faces, search window.
-
-New:
-
-- `extension/src/embedded/`: the page-side bridge, built into
-  `native/amberfader/embedded/web/adapter.js` by `npm run embedded:build`.
+- `web/src/adapter/`: the site adapter and its selectors, and
+  `web/src/content/executor.ts`: the command executor with request-ID dedup.
+- `web/src/embedded/`: the page-side bridge, built into
+  `native/amberfader/embedded/web/adapter.js` by `npm run build`.
 - `native/amberfader/embedded/`: the router (binding per page document),
   page host, artwork fetcher, search history and navigation policy.
+- `native/amberfader/app.py`: the player client, with request deadlines,
+  binding checks and schema validation of everything the page sends.
 
-Not needed in this mode: native-messaging registration, the helper, Flatpak
-talk permissions, extension permissions, tab discovery and extension signing.
-
-## Run it
-
-From a checkout:
+## Run it from a checkout
 
 ```sh
 npm ci
-uv sync --extra gui --extra embedded
-npm run embedded:run
+uv sync
+npm start
 ```
 
-`embedded:run` builds the page bundle and starts
-`python -m amberfader.embedded`. Options:
+`npm start` builds the page bundle and starts `python -m amberfader`.
+Options:
 
 | Option | Effect |
 | --- | --- |
 | `--background` | Start with the YouTube Music window hidden |
 | `--test-page` | Drive a scripted local page instead of YouTube Music (no network, no sign-in) |
-| `--scale 1.5` | Same scale factors as the Firefox-mode app |
+| `--scale 1.5` | Scale the player (1.0, 1.5 or 2.0) |
 
 - **Show YT** shows the YouTube Music window, and **Hide** hides it. Closing
   that window also only hides it.
@@ -63,29 +45,17 @@ npm run embedded:run
   runs in this process.
 - Ctrl+C in the terminal quits cleanly.
 - A second launch raises the running instance. Its socket is
-  `$XDG_RUNTIME_DIR/amberfader/embedded.sock`, separate from Firefox mode.
-  macOS has no `XDG_RUNTIME_DIR`, so there the socket goes in your private
-  temporary folder, `$TMPDIR/amberfader/embedded.sock`, unless you have set
+  `$XDG_RUNTIME_DIR/amberfader/embedded.sock`. macOS has no
+  `XDG_RUNTIME_DIR`, so there the socket goes in your private temporary
+  folder, `$TMPDIR/amberfader/embedded.sock`, unless you have set
   `XDG_RUNTIME_DIR` yourself.
 
-Amberfader targets Linux, but the prototype also starts on macOS. A Mac is
-enough to test Google sign-in, persistence and the controls. Hidden playback
-and memory results from macOS don't carry over to Linux, so check those on
-Linux before deciding.
-
-Where data lives:
-
-| Data | Location |
-| --- | --- |
-| Profile: cookies and sign-in | `~/.local/share/amberfader/webengine` (delete it to sign out completely) |
-| HTTP cache | `~/.cache/amberfader/webengine` |
-| Recent searches and artists | `~/.local/state/amberfader/embedded-search-history.json` |
-
-Faces and their preferences are shared with Firefox mode.
+The README lists where your data lives.
 
 ## Gate
 
-Run these on your desktop and record each result in the PR or below.
+These checks decided whether Amberfader should replace the Firefox extension
+with this embedded browser. Rerun them on both platforms before a release.
 
 **2026-10-05, macOS:** sign-in, persistence, playback, hidden playback,
 controls and reload/navigation all passed. One finding: Start mix failed
@@ -135,10 +105,10 @@ needs a new measurement. Linux hidden playback and memory are still open.
       the total as an upper bound. For comparison, Firefox's
       `about:processes` shows the YouTube Music tab's memory.
 
-If sign-in fails, stay on Firefox and keep improving the bridge. If the gate
-passes, [`standalone-plan.md`](standalone-plan.md) plans the follow-up work:
-packaging for Linux and macOS, a background mode so closing the player need
-not stop music, media keys, and retiring the extension and helper.
+The gate passed on macOS, and the Firefox extension and native helper were
+removed. [`standalone-plan.md`](standalone-plan.md) plans the remaining
+work: packaging for Linux and macOS, built-in ad blocking and "continue
+playing", and media keys.
 
 ## Results so far
 
@@ -151,7 +121,7 @@ player page with YouTube Music's own toggle, waits until the result's menu is
 visible, then starts the mix. If that layout has no toggle, it asks you to
 close the player page yourself. This was observed live in a signed-out
 session in a Linux container
-(`extension/tests/fixtures/player-page-2026-10-05.json`); the whole flow in a
+(`web/tests/fixtures/player-page-2026-10-05.json`); the whole flow in a
 signed-in session still needs your check.
 
 These were checked in a Linux container, not on your desktop:
@@ -166,7 +136,7 @@ These were checked in a Linux container, not on your desktop:
   next, search, play result, recent searches, like, show and hide, page
   scripts unable to reach the bridge, rebinding after a reload, and an old
   binding rejected. This is `native/tests/test_embedded_e2e.py`, run in CI by
-  the "Embedded QtWebEngine prototype end to end" job.
+  the "Page bridge end to end in Qt WebEngine" job.
 - `PySide6-Addons` adds 438 MB installed. That covers every add-on module;
   `libQt6WebEngineCore.so` alone is 195 MB. Packaging would need to trim it,
   or use the Flatpak QtWebEngine base app.
@@ -180,7 +150,9 @@ memory, and desktop X11 or Wayland behavior.
 
 ## Extensions
 
-Not available yet. QtWebEngine 6.10 added an API for Chrome extensions
+Chrome extensions are not available. Ad blocking and "continue playing" are
+planned as built-in features instead (see the plan). QtWebEngine 6.10 added
+an API for Chrome extensions
 (Manifest V3 only, from an unpacked folder or a zip), but enabling an
 extension crashes the process in every PySide6 release that has it. Tested
 in a Linux container on 2026-10-05:
@@ -194,7 +166,9 @@ The crash also happens for a minimal extension with no toolbar button, for
 Qt's own built-in PDF extension, when called from pure QML with no Python
 involved, under a real X11 display, and with Chromium's sandbox on. So it is
 a Qt WebEngine bug, not Amberfader's. Installed extensions also start
-disabled after every restart, so nothing can be turned on.
+disabled after every restart, so nothing can be turned on. An extension
+loaded unpacked with `loadExtension()` also stays disabled: its content
+script never runs and its request rules never apply.
 
 Even once that is fixed, Qt exposes only part of the extension platform:
 Chromium's core extension APIs plus `chrome.tabs.update`, with no
@@ -212,7 +186,8 @@ A minimal reproduction for a Qt bug report: load a `WebEngineProfile` with
 ## Security and privacy
 
 - The adapter bundle and Qt's `qwebchannel.js` run in QtWebEngine's
-  application world, the equivalent of an extension content script. Page
+  application world, the equivalent of a browser extension's content
+  script. Page
   scripts run in the main world and cannot reach the bridge (tested).
 - Injection is limited to the top frame of `https://music.youtube.com`, by
   `@match` and by an origin check in the bundle. The host also accepts page
@@ -224,8 +199,8 @@ A minimal reproduction for a Qt bug report: load a `WebEngineProfile` with
 - Every permission prompt is denied (notifications, camera, microphone,
   location and others). Downloads are cancelled. WebRTC is limited to public
   network interfaces.
-- Artwork is fetched without cookies on a separate network stack, with the
-  same host allowlist and size limits as the extension.
+- Artwork is fetched without cookies on a separate network stack, limited to
+  YouTube's image hosts and to 2 MiB input and 256 px / 64 KiB thumbnails.
 - Page console output is discarded because it can contain track names.
 - Chromium's sandbox stays enabled. Only the automated test disables it, for
   the offline test page.
@@ -234,11 +209,11 @@ A minimal reproduction for a Qt bug report: load a `WebEngineProfile` with
 
 ## Known limitations
 
-- Closing the player stops playback. There is no tray mode yet.
+- Closing the player quits Amberfader and stops playback, by design.
 - A pop-up opened by sign-in or YouTube Music loads in the main view and
   replaces the music page.
-- Not packaged. It runs from a checkout only.
-- Recent searches are kept separately from Firefox mode's.
+- Packages for Linux and macOS are in progress; for now it runs from a
+  checkout.
 - No MPRIS or media keys.
 - Google may refuse sign-in from QtWebEngine. Detecting that is the purpose
   of the gate. Changing the user agent to imitate Chrome might get past the

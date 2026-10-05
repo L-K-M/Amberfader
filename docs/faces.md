@@ -288,8 +288,8 @@ QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
 
 The preview script renders the actual player widgets with synthetic metadata,
 and saves individual renders plus long-metadata, offline/unknown, and pending
-contact sheets in `build/face-previews/`. It does not connect to Firefox or send
-playback commands. Repeat `--face ID` to select a subset; this requires a separate
+contact sheets in `build/face-previews/`. It does not connect to YouTube Music or
+send playback commands. Repeat `--face ID` to select a subset; this requires a separate
 `--output PATH` for its sample poster. Subset state sheets include the selected
 face IDs in their filenames. The face chooser also honors the selected
 fonts and fits the complete time readout.

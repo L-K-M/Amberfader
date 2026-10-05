@@ -1,10 +1,9 @@
 """Shared wire protocol: framing + schema validation.
 
-Two hops use this module:
-  * Firefox <-> helper: native messaging, 4-byte length prefix in native byte
-    order (little-endian on our platforms) + UTF-8 JSON. Browser cap is 1 MiB
-    per helper->browser message; our own cap is stricter.
-  * helper <-> GUI: the same framed JSON over a per-user Unix socket.
+Messages between the page router and the player client are validated
+against protocol/schemas. The single-instance socket frames JSON with a
+4-byte length prefix in native byte order (little-endian on our platforms)
+followed by UTF-8 JSON.
 
 Measure bytes, never characters: struct.pack("=I", len(encoded_bytes)).
 """
@@ -102,7 +101,7 @@ def load_schema() -> dict[str, Any]:
 def validate_message(msg: dict[str, Any]) -> list[str]:
     """Validate against the envelope schema; returns a list of problems
     (empty = valid). Uses jsonschema when available; otherwise a minimal
-    structural check so the helper still gates obvious garbage."""
+    structural check so obvious garbage is still rejected."""
     try:
         import jsonschema
     except ImportError:  # pragma: no cover - dependency is declared

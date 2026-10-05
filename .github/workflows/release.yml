@@ -27,7 +27,7 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Match tag, manifest, package, python files, and main history
+      - name: Match tag, version files, and main history
         env:
           TAG: ${{ github.ref_name }}
         run: |
@@ -40,9 +40,9 @@ jobs:
             exit 1
           fi
 
-          MANIFEST_VERSION="$(node -p "JSON.parse(require('node:fs').readFileSync('extension/manifest.json','utf8')).version")"
-          if [[ "$VERSION" != "$MANIFEST_VERSION" ]]; then
-            echo "::error::Tag $TAG must match extension/manifest.json ($MANIFEST_VERSION)."
+          SOURCE_VERSION="$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' native/amberfader/__init__.py)"
+          if [[ "$VERSION" != "$SOURCE_VERSION" ]]; then
+            echo "::error::Tag $TAG must match __version__ in native/amberfader/__init__.py ($SOURCE_VERSION)."
             exit 1
           fi
 
@@ -60,7 +60,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   artifacts:
-    name: Build extension, deb, and flatpak
+    name: Build deb and flatpak
     needs: ci
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -80,9 +80,6 @@ jobs:
 
       - name: Install locked dependencies
         run: npm ci
-
-      - name: Build extension package
-        run: npm run ext:package
 
       - name: Build .deb
         # The verify job already proved ref_name is vX.Y.Z; strip the v —
@@ -108,7 +105,6 @@ jobs:
         with:
           name: amberfader-${{ github.ref_name }}
           path: |
-            dist/web-ext-artifacts/
             dist/*.deb
             dist/*.flatpak
           if-no-files-found: warn
@@ -120,7 +116,7 @@ jobs:
         run: |
           set -euo pipefail
           artifacts=()
-          while IFS= read -r f; do artifacts+=("$f"); done < <(find dist -maxdepth 2 -type f \( -name '*.zip' -o -name '*.deb' -o -name '*.flatpak' \))
+          while IFS= read -r f; do artifacts+=("$f"); done < <(find dist -maxdepth 2 -type f \( -name '*.deb' -o -name '*.flatpak' \))
           if [ ${#artifacts[@]} -eq 0 ]; then
             echo "::error::no release artifacts produced"
             exit 1

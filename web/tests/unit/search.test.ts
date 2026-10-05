@@ -44,7 +44,7 @@ async function radioSearch() {
   return { search, token, rows, result };
 }
 
-const mixMenu = () => readFileSync("extension/tests/fixtures/mix-menu-2026-10-02.html", "utf8");
+const mixMenu = () => readFileSync("web/tests/fixtures/mix-menu-2026-10-02.html", "utf8");
 
 // Mirrors the 2026-10-05 observation (fixtures/player-page-2026-10-05.json):
 // an open player page hides the search page; the player bar toggle closes it.

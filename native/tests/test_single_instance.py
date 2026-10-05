@@ -3,7 +3,7 @@
 The second-instance check is exercised two ways: a stdlib-socket client that
 emulates a second process (the real `try_activate_existing` blocks on the
 socket peer, which deadlocks inside one process/event-loop), and a real
-subprocess running `python -m amberfader.app`.
+subprocess running `python -m amberfader`.
 """
 import json
 import os
@@ -77,7 +77,7 @@ def _frame_from(conn: pysock.socket, timeout=5.0) -> dict:
 def app(qapp, tmp_path):
     from amberfader.app import AmberfaderApp
 
-    a = AmberfaderApp(str(tmp_path / "control.sock"))
+    a = AmberfaderApp(str(tmp_path / "control.sock"), show_page=lambda _visible: True)
     assert a.start()
     yield a
     a.close()
@@ -123,18 +123,21 @@ def test_second_instance_handshake_activates_first(app, qapp):
 
 
 def test_cli_second_instance_exits_zero(app, qapp):
-    """`python -m amberfader.app` against a live socket: raise first, exit 0."""
+    """`python -m amberfader` against a live socket: raise first, exit 0,
+    without building the page bundle or loading YouTube Music."""
+    pytest.importorskip(
+        "PySide6.QtWebEngineWidgets", reason="Qt WebEngine unavailable", exc_type=ImportError,
+    )
     activated = []
     app.window.raise_requested = lambda: activated.append(True)  # type: ignore[attr-defined]
 
     env = dict(os.environ)
     env["QT_QPA_PLATFORM"] = "offscreen"
-    env["AMBERFADER_SOCKET"] = app.socket_path
     env["PYTHONPATH"] = os.pathsep.join(
         p for p in [os.path.join(os.path.dirname(__file__), ".."), *sys.path] if p
     )
     proc = subprocess.Popen(
-        [sys.executable, "-m", "amberfader.app"],
+        [sys.executable, "-m", "amberfader", "--socket", app.socket_path],
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -151,8 +154,9 @@ def test_cli_second_instance_exits_zero(app, qapp):
             proc.kill()
 
 
-def test_socket_roundtrip_state(app, qapp):
-    """A helper peer sends hello, then a framed state event reaches the window."""
+def test_helper_hello_is_refused(app, qapp):
+    """The socket only raises the running instance. A peer that introduces
+    itself as the old Firefox helper is dropped, and its state never applies."""
     seen = []
     app.window.apply_state = lambda s: seen.append(s)  # type: ignore[attr-defined]
 
@@ -167,10 +171,6 @@ def test_socket_roundtrip_state(app, qapp):
                 "componentVersion": "0.1.0",
             }
         )
-    )
-    # Identify as helper first; the app then sends state.get back over the link.
-    assert pump(qapp, lambda: app.conn is not None, timeout_s=5), (
-        "helper peer was never accepted"
     )
     conn.sendall(
         encode_frame(
@@ -196,8 +196,19 @@ def test_socket_roundtrip_state(app, qapp):
             }
         )
     )
-    assert pump(qapp, lambda: bool(seen), timeout_s=5), "state event never applied"
-    conn.close()
+    conn.setblocking(False)
+
+    def peer_closed():
+        try:
+            return conn.recv(1) == b""
+        except BlockingIOError:
+            return False
+        except OSError:
+            return True
+
+    assert pump(qapp, peer_closed, timeout_s=3), "helper peer was not disconnected"
+    assert app.conn is None
+    assert seen == []
 
 
 @pytest.mark.parametrize("source", ["event", "response"])
@@ -231,7 +242,7 @@ def test_request_ids_do_not_repeat_when_the_gui_reopens(app, qapp):
 
     messages = []
     app._send = lambda value: messages.append(value) or True
-    second = AmberfaderApp(app.socket_path + "-second")
+    second = AmberfaderApp(app.socket_path + "-second", show_page=lambda _visible: True)
     second.window = app.window
     second._send = lambda value: messages.append(value) or True
     app.request("state.get", {})
@@ -298,7 +309,7 @@ def test_late_snapshot_cannot_restore_an_old_track_and_cover_on_the_same_binding
     app._settle(sent[-1]["id"], True, {})
 
 
-@pytest.mark.parametrize("reset", ["target", "adapter", "gui", "binding", "helper"])
+@pytest.mark.parametrize("reset", ["target", "adapter", "gui", "binding", "upstream"])
 def test_late_snapshot_cannot_revive_state_after_connection_reset(app, qapp, reset):
     from test_gui_artwork import _track_state
 
@@ -310,8 +321,8 @@ def test_late_snapshot_cannot_revive_state_after_connection_reset(app, qapp, res
     app.request("state.get", {})
     request_id = sent[-1]["id"]
     assert request_id in app._pending
-    if reset == "helper":
-        app._on_helper_gone()
+    if reset == "upstream":
+        app._on_upstream_gone()
     else:
         data = {"status": "revoked"} if reset == "binding" else {
             "component": reset, "status": "disconnected",
@@ -465,7 +476,7 @@ def test_foreign_first_frame_rejected(app, qapp):
             }
         )
     )
-    # Invalid peer: never promoted to helper, and the server closes it.
+    # Invalid peer: never treated as a second launch, and the server closes it.
     conn.setblocking(False)
 
     def peer_closed():

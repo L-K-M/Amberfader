@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..face_library import BUNDLED_FACE_ERROR, DEFAULT_FACE_ID, Face, FaceError, FaceLibrary
-from ..hosts import HOST_COPY, PlaybackHost
+from ..player_copy import PLAYER_COPY
 from .face_surface import (
     READOUT_CONTROLS,
     CoverLabel,
@@ -67,8 +67,8 @@ def _fmt(sec: Any) -> str:
 
 
 class MainWindow(QMainWindow):
-    # Emitted after the player closes. The embedded host quits on it, since
-    # its playback lives in this process.
+    # Emitted after the player closes. Amberfader quits on it, since playback
+    # lives in this process.
     closed = Signal()
 
     def __init__(
@@ -76,11 +76,10 @@ class MainWindow(QMainWindow):
         request: Callable[[str, dict], None],
         scale: float = 1.0,
         faces: FaceLibrary | None = None,
-        host: PlaybackHost = PlaybackHost.FIREFOX,
     ) -> None:
         super().__init__()
         self._request = request
-        self._copy = HOST_COPY[host]
+        self._copy = PLAYER_COPY
         self._state: dict | None = None
         self._state_at = QElapsedTimer()
         self._seeking = False

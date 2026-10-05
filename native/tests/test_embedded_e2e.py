@@ -1,7 +1,7 @@
 """Embedded prototype end to end in real QtWebEngine (scripted test page).
 
 Skips without the `embedded` extra or the built page bundle
-(npm run embedded:build), unless AMBERFADER_REQUIRE_EMBEDDED=1 makes that a
+(npm run build), unless AMBERFADER_REQUIRE_EMBEDDED=1 makes that a
 failure (CI sets it so the job cannot pass by skipping). Fixtures prove the
 bridge; they never prove that YouTube Music accepts an action.
 """
@@ -33,7 +33,7 @@ def test_embedded_stack_end_to_end():
         _unavailable("embedded extra not installed (uv sync --extra gui --extra embedded)")
     bundle = resources.files("amberfader.embedded") / "web" / "adapter.js"
     if not bundle.is_file():
-        _unavailable("page bundle not built (npm run embedded:build)")
+        _unavailable("page bundle not built (npm run build)")
 
     env = {
         **os.environ,

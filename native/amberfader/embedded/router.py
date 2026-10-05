@@ -1,8 +1,8 @@
 """In-process router for the embedded YouTube Music page.
 
-Takes the role the extension's background router plays in Firefox mode, but
-for exactly one page that this process owns. It speaks the public protocol
-(protocol/schemas) to the desktop client, so the client's deadlines, binding
+Routes for exactly one page, which this process owns. It speaks the public
+protocol
+(protocol/schemas) to the player client, so the client's deadlines, binding
 checks and schema validation apply unchanged.
 
 Binding: every page document registers with a fresh nonce and receives a new
@@ -131,7 +131,7 @@ class EmbeddedRouter:
             case _:
                 self._error(
                     rid, "unsupported_operation",
-                    "The embedded prototype has a single YouTube Music page.",
+                    "Amberfader has a single YouTube Music page.",
                 )
 
     def _forward(self, rid: str, method: str, params: dict[str, Any], msg: dict[str, Any]) -> None:

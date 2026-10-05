@@ -1,17 +1,18 @@
 # AGENTS.md — engineering guide for Amberfader
 
-Amberfader is a compact classic-style remote for YouTube Music in Firefox.
-Firefox owns authentication, streaming, decoding, and audio output; this repo
-ships (a) a Firefox MV3 extension whose content-script adapter reads and drives
-the site's own player UI, and (b) a Python native-messaging helper + PySide6
-desktop app that talks to the extension over a private Unix socket. Read
-[`PLAN.md`](PLAN.md) for the execution plan and the review amendments that
-supplement the original spec.
+Amberfader is a compact classic-style player for YouTube Music. It hosts
+music.youtube.com in its own Qt WebEngine (Chromium) profile, which owns
+authentication, streaming, decoding and audio output. An injected page
+adapter (TypeScript, `web/`) reads and drives the site's own player UI and
+talks over QWebChannel to the Python app (`native/`, PySide6), which shows
+the player, faces and search. Read
+[`docs/standalone-plan.md`](docs/standalone-plan.md) for the current plan;
+[`PLAN.md`](PLAN.md) is the original Firefox-era plan, kept for history.
 
 ## Critical honesty rule
 
-Every YouTube Music selector in `extension/src/adapter/selectors.ts` is marked
-**UNVERIFIED** until the Phase 0 probe suite has run against a live session
+Every YouTube Music selector in `web/src/adapter/selectors.ts` is marked
+**UNVERIFIED** until it has been observed in a live session
 (`docs/manual-test-plan.md`). Do not invent selectors from how the page is
 "expected" to look, do not claim live behavior that was only tested against
 fixtures, and keep `docs/compatibility.md` free of unverified claims. Fixture
@@ -22,67 +23,70 @@ tests prove parsing logic, not that YouTube Music accepts an action.
 ```sh
 scripts/check.sh        # the one command to run before committing: tsc + eslint +
                         # vitest, ruff + pytest, shellcheck
-scripts/build.sh        # multi-target build → dist/ (ext, wheel, deb, flatpak)
-npm run ext:run         # build + web-ext run against a dedicated dev profile
-uv run amberfader       # desktop GUI (after uv sync --extra gui)
-uv run amberfader-helper  # native-messaging helper (stdio, normally launched by Firefox)
+scripts/build.sh        # multi-target build → dist/ (wheel, deb, flatpak)
+npm start               # build the page bundle and run the app
+uv run amberfader-face-editor  # standalone face editor
 ```
 
-Node 22+ (`.nvmrc`), Python 3.11+ via uv (`uv sync`, add `--extra gui` for
-PySide6). `uv.lock` and `package-lock.json` are committed.
+Node 22+ (`.nvmrc`), Python 3.11+ via uv (`uv sync`). `uv.lock` and
+`package-lock.json` are committed.
 
-## Architecture rules (from the spec — enforce them in review)
+## Architecture rules (enforce them in review)
 
 - **Selector ownership:** all YouTube Music selectors live in
-  `extension/src/adapter/`. Python code must never contain site selectors.
-- **One command path:** the selected-tab adapter owns playback commands and
-  search. No MPRIS path in v1.
-- **Permissions:** no `<all_urls>`, cookies, history, or web-request APIs.
-  `nativeMessaging` and `tabHide` stay optional permissions requested at
-  runtime. Artwork host permissions are added only for origins observed in
-  Phase 0 probes.
+  `web/src/adapter/`. Python code must never contain site selectors.
+- **One command path:** the page adapter owns playback commands and search.
+  Every input surface (player buttons, menus, keyboard, and later media keys)
+  issues the same `AmberfaderApp` requests; none touches the page directly.
+- **Embedded browser policy:** the adapter bundle is injected only into the
+  top frame of `https://music.youtube.com`, in the application world; page
+  scripts must not reach the bridge. Top-level navigation stays on the
+  allowlist in `native/amberfader/embedded/navigation.py`; every web
+  permission prompt is denied and downloads are cancelled. Never change the
+  user agent or disable Chromium's sandbox outside tests. Artwork hosts are
+  added only for origins observed live.
 - **Bounds:** 256 KiB transport messages, 500-char queries, 30 search results
   per batch, 5 s control / 15 s search deadlines, 2 MiB artwork input, 256 px /
   64 KiB thumbnails, 20 MiB artwork cache.
 - **Truthful states:** explicit `play`/`pause` (no toggle-retry), report
   completion only after an observed outcome, `pending_outcome` on timeout,
   unknown states rendered as unknown, no blind fallback clicks.
-- **Helper stays PySide6-free** (imports stdlib + jsonschema only) and
-  network-free. Its stdout is exclusively framed protocol — diagnostics go to
-  stderr, redacted.
-- **GUI never spawns from the helper's process tree**; closing the GUI must
-  never stop playback.
-- **Dedup:** the content-script executor dedups request IDs within a document
+- **Lifecycle:** playback runs in this process; closing the player quits the
+  app. A second launch only raises the running instance; two processes must
+  never share one browser profile.
+- **Dedup:** the page executor dedups request IDs within a document
   generation; non-idempotent ops are never replayed after reconnect.
-- **Framing:** native messaging is 4-byte LE length + UTF-8 JSON;
-  `struct.pack("=I", len(encoded_bytes))` — measure bytes, not characters.
+- **Framing:** the single-instance socket uses a 4-byte native-order length +
+  UTF-8 JSON; `struct.pack("=I", len(encoded_bytes))`. Measure bytes, not
+  characters.
+- **Logging:** diagnostics go to stderr and name error codes and message
+  kinds, never track names, queries or page content. Page console output is
+  discarded.
 
-## Firefox package matrix
+## Platforms
 
-Native-host registration supports **deb/rpm** (`~/.mozilla/native-messaging-hosts/`)
-and **Flatpak** (`~/.var/app/org.mozilla.firefox/.mozilla/native-messaging-hosts/`,
-helper launched through `flatpak-spawn --host`). `scripts/install-user` detects
-both; `scripts/doctor` verifies registration and the Flatpak
-`org.freedesktop.Flatpak` talk permission. Snap is out of scope.
+Linux (deb and Flatpak) and macOS 13+ on Apple silicon. Snap, Intel Macs and
+Windows are out of scope.
 
 ## Identities (keep stable)
 
 | Item | Value |
 | --- | --- |
-| Add-on ID (`browser_specific_settings.gecko.id`) | `amberfader@ch.lkmc` |
-| Native host name | `amberfader` |
-| Socket | `$XDG_RUNTIME_DIR/amberfader/control.sock` |
-| Install prefix | `~/.local/share/amberfader` |
+| App and Flatpak ID, macOS bundle ID | `ch.lkmc.amberfader` |
+| Single-instance socket | `$XDG_RUNTIME_DIR/amberfader/embedded.sock` (Linux), `$TMPDIR/amberfader/embedded.sock` (macOS) |
+| Browser profile name | `amberfader-embedded` |
 | Desktop entry | `ch.lkmc.amberfader.desktop` |
 
 ## Testing
 
-- `extension/tests/unit` (vitest + jsdom): protocol vectors, router logic with a
-  fake `browser` API, dedup, search state machine, adapter parsing vs fixtures.
+- `web/tests/unit` (vitest + jsdom): protocol vectors, dedup, the page bridge,
+  search state machine, adapter parsing vs fixtures.
 - `native/tests` (pytest): framing edge cases, the same protocol vectors
-  (`protocol/examples/` is shared by both suites), helper relay over pipes,
-  socket single-instance logic (Qt offscreen: `QT_QPA_PLATFORM=offscreen`).
-- Live YouTube Music behavior is a manual gate — fixtures never prove the site
+  (`protocol/examples/` is shared by both suites), router, artwork, player
+  client, socket single-instance logic (Qt offscreen:
+  `QT_QPA_PLATFORM=offscreen`), and the page bridge end to end in real Qt
+  WebEngine against a scripted test page.
+- Live YouTube Music behavior is a manual gate. Fixtures never prove the site
   accepts an action.
 
 <!-- shared-rules:start -->

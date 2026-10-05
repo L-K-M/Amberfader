@@ -1,4 +1,4 @@
-"""Standalone face authoring tool, independent of the Firefox bridge."""
+"""Standalone face authoring tool, independent of YouTube Music."""
 from __future__ import annotations
 
 import argparse
@@ -19,7 +19,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     args = parser.parse_args(argv)
 
-    # Help and version work in helper-only environments without importing Qt.
+    # Help and version work without importing Qt.
     try:
         from PySide6.QtWidgets import QApplication
     except ImportError as exc:

@@ -13,8 +13,8 @@ export default tseslint.config(
       "scripts/*.sh",
       ".venv/**",
       "eslint.config.js",
-      "extension/src/protocol/validators.gen.js",
-      "extension/src/protocol/validators.gen.d.ts",
+      "web/src/protocol/validators.gen.js",
+      "web/src/protocol/validators.gen.d.ts",
     ],
   },
   js.configs.recommended,
@@ -31,7 +31,7 @@ export default tseslint.config(
     },
     rules: {
       // The TS compiler resolves identifiers; no-undef only produces false
-      // positives on WebExtension and DOM globals.
+      // positives on DOM globals.
       "no-undef": "off",
       "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
       "@typescript-eslint/no-confusing-void-expression": "off",
@@ -64,7 +64,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["extension/tests/**/*.ts"],
+    files: ["web/tests/**/*.ts"],
     rules: {
       "@typescript-eslint/no-non-null-assertion": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
