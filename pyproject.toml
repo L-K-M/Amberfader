@@ -26,8 +26,15 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+# Built by `npm run build` and ignored by git; ship them anyway.
+artifacts = ["native/amberfader/embedded/web/*.js"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["native/amberfader"]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
 
 [tool.pytest.ini_options]
 testpaths = ["native/tests"]

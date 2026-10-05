@@ -58,3 +58,35 @@ def test_embedded_stack_end_to_end():
         f"driver exited {run.returncode}\nstdout:\n{run.stdout}\nstderr:\n{run.stderr}"
     )
     assert len(report["checks"]) >= 23
+
+
+def test_self_test_reports_each_check_and_a_disabled_sandbox():
+    """`amberfader --self-test` drives the real stack. With Chromium's sandbox
+    disabled, as CI must, every functional check passes and the sandbox
+    check fails, so the run fails. Package builds run it with the sandbox."""
+    try:
+        webengine = importlib.util.find_spec("PySide6.QtWebEngineWidgets")
+    except ImportError:
+        webengine = None
+    if webengine is None:
+        _unavailable("Qt WebEngine not installed (uv sync)")
+    scripts = resources.files("amberfader.embedded") / "web"
+    if not all((scripts / name).is_file() for name in ("adapter.js", "ad-filter.js")):
+        _unavailable("page scripts not built (npm run build)")
+
+    env = {**os.environ, "QT_QPA_PLATFORM": "offscreen", "QTWEBENGINE_DISABLE_SANDBOX": "1"}
+    run = subprocess.run(
+        [sys.executable, "-m", "amberfader", "--self-test"],
+        capture_output=True, text=True, timeout=180, env=env, check=False,
+    )
+    lines = run.stdout.splitlines()
+    expected = [
+        "self-test: attach: ok", "self-test: player.play: ok", "self-test: player.pause: ok",
+        "self-test: search.songs: ok", "self-test: search.playResult: ok",
+        "self-test: ad filter: ok",
+    ]
+    assert lines[:len(expected)] == expected, run.stdout + run.stderr
+    if sys.platform.startswith("linux"):
+        assert "self-test: renderer sandbox: FAILED (off)" in lines
+        assert lines[-1] == "amberfader self-test: FAILED"
+        assert run.returncode == 1

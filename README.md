@@ -99,8 +99,13 @@ scripts/build.sh       # wheel, .deb, .flatpak (skips what this machine can't bu
 
 `npm start` passes no options; run `uv run python -m amberfader --help` for
 the rest, such as `--background` (start with the YouTube Music window
-hidden) and `--test-page` (drive a scripted local page instead of YouTube
-Music).
+hidden), `--test-page` (drive a scripted local page instead of YouTube
+Music) and `--self-test` (check that an installation works, then exit; it
+fails on Linux when Chromium's sandbox is off).
+
+Wheels and packages include the page scripts, so build them first:
+`scripts/build.sh` does, and a bare `uv build` stops with a reminder to run
+`npm run build`.
 
 See [`AGENTS.md`](AGENTS.md) for conventions,
 [`docs/embedded-browser.md`](docs/embedded-browser.md) for how the embedded

@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import os
+import shutil
 import signal
 import sys
 import tempfile
@@ -74,7 +75,14 @@ def main(argv: list[str] | None = None) -> int:
         "--test-page", action="store_true",
         help="drive a scripted local page instead of YouTube Music (no network, no sign-in)",
     )
+    parser.add_argument(
+        "--self-test", action="store_true",
+        help="check that this installation works, on the scripted test page, then exit",
+    )
     args = parser.parse_args(argv)
+    if args.self_test:
+        # Never touches a running instance, the profile or saved settings.
+        args.test_page = args.background = True
 
     # QtWebEngineWidgets must be imported before the QApplication exists.
     try:
@@ -85,6 +93,18 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+
+    # The scripted test page keeps its recent searches (and the self-test its
+    # socket) in a scratch folder, never in your own files.
+    scratch = tempfile.mkdtemp(prefix="amberfader-test-page-") if args.test_page else None
+    try:
+        return _run(args, scratch)
+    finally:
+        if scratch:
+            shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _run(args: argparse.Namespace, scratch: str | None) -> int:
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
 
@@ -94,7 +114,12 @@ def main(argv: list[str] | None = None) -> int:
     from .runtime import EmbeddedRuntime, RuntimeOptions
 
     try:
-        socket_path = args.socket or default_socket_path()
+        if args.socket:
+            socket_path = args.socket
+        elif args.self_test and scratch:
+            socket_path = os.path.join(scratch, "self-test.sock")
+        else:
+            socket_path = default_socket_path()
     except (RuntimeError, OSError) as exc:
         print(f"amberfader: {exc}", file=sys.stderr)
         return 2
@@ -109,8 +134,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     # Only now is this the one running instance, so files can move safely.
-    for problem in migrate_legacy_files():
-        print(f"amberfader: {problem}", file=sys.stderr)
+    if not args.self_test:
+        for problem in migrate_legacy_files():
+            print(f"amberfader: {problem}", file=sys.stderr)
 
     try:
         bundle = load_bundle()
@@ -136,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     options = RuntimeOptions(
         mode=mode,
         socket_path=socket_path,
-        history_path=default_history_path(),
+        history_path=Path(scratch) / "history.json" if scratch else default_history_path(),
         scale=args.scale,
         # The scripted test page never changes your saved settings.
         settings_path=None if mode is PageMode.TEST_PAGE else default_settings_path(),
@@ -159,6 +185,11 @@ def main(argv: list[str] | None = None) -> int:
         runtime.amber.window.closed.connect(app.quit)
         if not args.background:
             runtime.host.set_visible(True)
+
+        if args.self_test:
+            from .selftest import SelfTest
+
+            return SelfTest(runtime).run()
 
         poll = QTimer()
         poll.timeout.connect(lambda: None)

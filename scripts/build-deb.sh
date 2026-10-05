@@ -10,6 +10,8 @@
 # including Qt WebEngine, arrives inside the pip --target tree.
 #
 # Usage: scripts/build-deb.sh <version> <dist-dir>
+# Build the page scripts first (npm run build); the wheel build refuses to
+# run without them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

@@ -91,8 +91,21 @@ jobs:
       - name: Schema sync
         run: cmp protocol/schemas/envelope.schema.json native/amberfader/schema/envelope.schema.json
 
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Build the page scripts
+        run: npm ci && npm run build
+
       - name: Build wheel and sdist
         run: uv build --out-dir dist
+
+      - name: Wheel ships the page scripts
+        run: |
+          unzip -l dist/*.whl | grep -q "amberfader/embedded/web/adapter.js"
+          unzip -l dist/*.whl | grep -q "amberfader/embedded/web/ad-filter.js"
 
       - name: Upload Python distributions
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -181,6 +194,14 @@ jobs:
           persist-credentials: false
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Build the page scripts
+        run: npm ci && npm run build
 
       - name: Build the .deb
         run: scripts/build-deb.sh "$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' native/amberfader/__init__.py)" dist

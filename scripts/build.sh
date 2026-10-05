@@ -13,8 +13,9 @@
 #   --clean  remove dist/ first
 #   --check  print the plan and exit
 #
-# Requirements: Python 3.11+ + uv (wheel), dpkg-deb (deb), flatpak-builder +
-# org.kde.Platform//6.8 (flatpak, Linux only).
+# Requirements: Node 22+ (page scripts, every target), Python 3.11+ + uv
+# (wheel), dpkg-deb (deb), flatpak-builder + org.kde.Platform//6.8 (flatpak,
+# Linux only).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -58,12 +59,27 @@ skip_or_fail() { # target reason
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Every target ships the page scripts (npm run build); build them once.
+PAGE_SCRIPTS=""
+page_scripts() {
+  [[ -n $PAGE_SCRIPTS ]] && { [[ $PAGE_SCRIPTS == ok ]]; return; }
+  PAGE_SCRIPTS=failed
+  if ! have node || ! have npm; then
+    echo "!! page scripts: node/npm not found"; return 1
+  fi
+  if [[ ! -d node_modules ]]; then
+    npm ci --no-audit --no-fund || return 1
+  fi
+  npm run --silent build || return 1
+  PAGE_SCRIPTS=ok
+}
+
 if [[ $CHECK -eq 1 ]]; then
   echo "==> plan"
   echo "-- targets:  ${TARGETS[*]}${EXPLICIT:+ (explicit)}"
   echo "-- version:  $VERSION"
   echo "-- staged:   $DIST/"
-  for t in python3 uv dpkg-deb flatpak-builder; do
+  for t in node npm python3 uv dpkg-deb flatpak-builder; do
     printf -- "-- %-16s %s\n" "$t:" "$(command -v "$t" 2>/dev/null || echo missing)"
   done
   exit 0
@@ -77,6 +93,7 @@ for target in "${TARGETS[@]}"; do
     wheel)
       echo "==> python wheel"
       if ! have uv; then skip_or_fail wheel "uv not found (https://docs.astral.sh/uv/)"; continue; fi
+      page_scripts || { FAILED+=("wheel"); continue; }
       if uv build --out-dir "$DIST"; then
         OK+=("wheel → $DIST/")
       else
@@ -86,6 +103,7 @@ for target in "${TARGETS[@]}"; do
     deb)
       echo "==> deb"
       if ! have dpkg-deb; then skip_or_fail deb "dpkg-deb not found"; continue; fi
+      page_scripts || { FAILED+=("deb"); continue; }
       if scripts/build-deb.sh "$VERSION" "$DIST"; then
         OK+=("deb → $DIST/")
       else
@@ -103,6 +121,7 @@ for target in "${TARGETS[@]}"; do
       deb="$(ls -t "$DIST"/amberfader_*_*.deb 2>/dev/null | head -1 || true)"
       if [[ -z "$deb" ]]; then
         if ! have dpkg-deb; then skip_or_fail flatpak "no .deb to repack and dpkg-deb missing"; continue; fi
+        page_scripts || { FAILED+=("flatpak"); continue; }
         scripts/build-deb.sh "$VERSION" "$DIST" || { FAILED+=("flatpak"); continue; }
         deb="$(ls -t "$DIST"/amberfader_*_*.deb 2>/dev/null | head -1 || true)"
       fi

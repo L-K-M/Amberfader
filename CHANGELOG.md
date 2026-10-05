@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recent searches and the sign-in from the old XDG-style folders, never
   overwriting newer files.
 
+- `amberfader --self-test` checks an installation on the scripted test
+  page: attach, playback, search, the ad filter and, on Linux, Chromium's
+  renderer sandbox.
+- Wheels and sdists now include the page scripts; building a wheel without
+  them fails with a reminder to run `npm run build`.
+
 ### Removed
 
 - The Firefox extension, the native-messaging helper (`amberfader-helper`),
