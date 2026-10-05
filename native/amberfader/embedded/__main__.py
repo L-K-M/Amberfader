@@ -5,16 +5,44 @@ From a checkout: npm run embedded:run (builds the page bundle first).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import signal
+import stat
 import sys
+import tempfile
+from pathlib import Path
 
+from .. import NATIVE_HOST_NAME
+from ..transport.paths import runtime_socket_dir
 from .history import default_history_path
 
 EMBEDDED_SOCKET_NAME = "embedded.sock"
 # Python runs signal handlers only between bytecodes; a short timer gives it
 # that chance while Qt's event loop blocks in C++.
 SIGNAL_POLL_MS = 250
+
+
+def default_socket_path() -> str:
+    """$XDG_RUNTIME_DIR/amberfader/embedded.sock. macOS has no
+    XDG_RUNTIME_DIR; its per-user temporary directory ($TMPDIR) takes that
+    role there. Linux still refuses to start without XDG_RUNTIME_DIR rather
+    than placing the socket somewhere shared."""
+    if sys.platform != "darwin" or os.environ.get("XDG_RUNTIME_DIR"):
+        return os.path.join(runtime_socket_dir(), EMBEDDED_SOCKET_NAME)
+
+    directory = Path(tempfile.gettempdir()) / NATIVE_HOST_NAME
+    with contextlib.suppress(FileExistsError):
+        directory.mkdir(mode=0o700)
+    # gettempdir() falls back to the shared /tmp when $TMPDIR is unset, so
+    # only use a real directory that this user owns.
+    info = directory.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+        raise RuntimeError(
+            f"{directory} is not a directory owned by you; pass --socket with a private path"
+        )
+    directory.chmod(0o700)
+    return str(directory / EMBEDDED_SOCKET_NAME)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,7 +53,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scale", type=float, default=1.0, choices=(1.0, 1.5, 2.0))
     parser.add_argument(
         "--socket",
-        help="single-instance socket (default: $XDG_RUNTIME_DIR/amberfader/embedded.sock)",
+        help="single-instance socket (default: $XDG_RUNTIME_DIR/amberfader/embedded.sock, "
+        "or $TMPDIR/amberfader/embedded.sock on macOS)",
     )
     parser.add_argument(
         "--background", action="store_true",
@@ -51,14 +80,13 @@ def main(argv: list[str] | None = None) -> int:
 
     from ..face_library import FaceError
     from ..transport.local import try_activate_existing
-    from ..transport.paths import runtime_socket_dir
     from .page import BundleMissingError, PageMode, load_bundle
     from .runtime import EmbeddedRuntime, RuntimeOptions
 
     try:
         bundle = load_bundle()
-        socket_path = args.socket or os.path.join(runtime_socket_dir(), EMBEDDED_SOCKET_NAME)
-    except (BundleMissingError, RuntimeError) as exc:
+        socket_path = args.socket or default_socket_path()
+    except (BundleMissingError, RuntimeError, OSError) as exc:
         print(f"amberfader: {exc}", file=sys.stderr)
         return 2
 
