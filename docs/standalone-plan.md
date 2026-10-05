@@ -167,9 +167,11 @@ Everything here is platform-neutral code plus the hooks that packaging needs.
 7. **Self-test mode.** `amberfader --self-test` loads the scripted test page
    with Chromium's sandbox on and the real bundle. It checks attach, play,
    pause, search and play result, prints a marker and exits 0. It also
-   reports whether the renderer sandbox is active and fails when it is not,
-   so a silent fallback to no sandbox cannot pass. Any failure or a 60 s
-   timeout exits non-zero. Every package smoke test in Phases 2 and 3
+   checks from the app's side that the renderer sandbox is active and fails
+   when it is not, so a silent fallback to no sandbox cannot pass. On Linux,
+   every `QtWebEngineProcess` renderer must show `Seccomp: 2` in
+   `/proc/<pid>/status`; the macOS check is part of the Phase 3 work. Any
+   failure or a 60 s timeout exits non-zero. Every package smoke test in Phases 2 and 3
    runs it, so CI proves the packaged app can start Chromium, inject the
    bundle and talk to it.
 8. **Docs.** Make the README lead with the app instead of the extension.
@@ -242,10 +244,10 @@ on Linux and macOS.
 
 **CI**
 
-- The `deb` job builds, installs and self-tests the deb, then repacks and
-  self-tests the Flatpak.
-- The Flatpak steps relax the AppArmor knob, so the deb smoke runs in its
-  own job with the knob set to 1.
+- The `deb` job builds, installs and self-tests the deb with the AppArmor
+  knob set to 1.
+- A separate `flatpak` job repacks that deb and self-tests the Flatpak.
+  Only this job relaxes the knob, which flatpak-builder needs.
 
 **Exit:** deb and Flatpak artifacts self-test green in CI. You confirm sign-in
 and one hour of hidden playback from the installed deb or Flatpak on your
@@ -262,7 +264,9 @@ Linux desktop.
   `QtWebEngineProcess.app`, its resources and locales.
 - Build with a uv-managed CPython for arm64. The PySide6 wheels are
   `universal2`, so `lipo -thin arm64` the Qt binaries for an Apple-silicon-only
-  build (D3). Record the size before and after.
+  build (D3), before freezing. Record the size before and after. Signing is
+  the last step that changes the bundle: anything edited afterwards,
+  including `Info.plist`, means signing again.
 - `Info.plist`:
   - `CFBundleIdentifier` `ch.lkmc.amberfader`
   - `CFBundleShortVersionString` and `CFBundleVersion` from the numeric
@@ -313,6 +317,8 @@ Linux desktop.
   roles).
 - Retest hidden playback for one hour from the frozen app to rule out App
   Nap throttling.
+- Find a reliable way for `--self-test` to confirm the renderer sandbox on
+  macOS. If there is none, record that this check runs on Linux only.
 
 **CI**
 
@@ -418,7 +424,8 @@ acceptance matrix passed on Linux and macOS.
 | `typescript` | ubuntu-24.04 | tsc, eslint, vitest, page bundle builds |
 | `python` | ubuntu-24.04 | ruff, pytest (offscreen), global menu over D-Bus, wheel contains the bundle |
 | `embedded` | ubuntu-24.04 | Bridge end to end in real QtWebEngine against the test page |
-| `linux-packages` | ubuntu-24.04 | deb installs and self-tests with the sandbox on and the AppArmor restriction set; Flatpak installs and self-tests |
+| `deb` | ubuntu-24.04 | deb installs and self-tests with the sandbox on and the AppArmor restriction set |
+| `flatpak` | ubuntu-24.04 | Flatpak repacks the deb, installs and self-tests |
 | `macos` | macos-15 | Unit and e2e tests, frozen `.app` self-tests, `.dmg` uploaded |
 | `face-editor-macos` | macos-14 | Kept as is, or folded into `macos` |
 | Release | same jobs | Adds signing and notarization in the `release` environment, publishes `.deb`, `.flatpak`, `.dmg`, wheel and checksums |
