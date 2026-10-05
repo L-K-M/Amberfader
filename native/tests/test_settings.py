@@ -1,6 +1,7 @@
 """App settings: defaults, round trip, and recovery from broken files."""
 import json
 import os
+import sys
 
 import pytest
 
@@ -69,7 +70,8 @@ def test_memory_store_never_touches_disk(tmp_path, monkeypatch):
     assert list(tmp_path.iterdir()) == []
 
 
-def test_default_path_follows_xdg_config_home(monkeypatch, tmp_path):
+def test_default_path_follows_xdg_config_home_on_linux(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     assert default_settings_path() == tmp_path / "amberfader" / "settings.json"
     monkeypatch.setenv("XDG_CONFIG_HOME", "relative")

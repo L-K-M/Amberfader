@@ -16,6 +16,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from .paths import app_dirs
+
 MAX_FILE_BYTES = 64 * 1024
 _LOG = logging.getLogger(__name__)
 
@@ -82,6 +84,4 @@ class SettingsStore:
 
 
 def default_settings_path() -> Path:
-    config = os.environ.get("XDG_CONFIG_HOME", "")
-    base = Path(config) if config and Path(config).is_absolute() else Path.home() / ".config"
-    return base / "amberfader" / "settings.json"
+    return app_dirs().config / "settings.json"

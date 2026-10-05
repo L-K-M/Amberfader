@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 
 from .. import APP_NAME
+from ..paths import migrate_legacy_files
 from ..settings import default_settings_path
 from ..transport.paths import runtime_socket_dir
 from .history import default_history_path
@@ -106,6 +107,10 @@ def main(argv: list[str] | None = None) -> int:
     # Checked before anything else, so a second launch only raises the first.
     if try_activate_existing(socket_path):
         return 0
+
+    # Only now is this the one running instance, so files can move safely.
+    for problem in migrate_legacy_files():
+        print(f"amberfader: {problem}", file=sys.stderr)
 
     try:
         bundle = load_bundle()

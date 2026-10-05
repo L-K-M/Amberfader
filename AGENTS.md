@@ -77,6 +77,7 @@ Windows are out of scope.
 | App and Flatpak ID, macOS bundle ID | `ch.lkmc.amberfader` |
 | Single-instance socket | `$XDG_RUNTIME_DIR/amberfader/embedded.sock` (Linux), `$TMPDIR/amberfader/embedded.sock` (macOS) |
 | Browser profile name | `amberfader-embedded` |
+| Data folders | XDG base directories + `amberfader` (Linux); `~/Library/Application Support/Amberfader`, `~/Library/Caches/Amberfader` (macOS); see `native/amberfader/paths.py` |
 | Desktop entry | `ch.lkmc.amberfader.desktop` |
 
 ## Testing

@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Both are on by default, with switches in the Playback and ☰ menus, saved
   in `settings.json`. Neither is confirmed against live YouTube Music yet.
 
+- macOS keeps Amberfader's files in `~/Library/Application Support/Amberfader`
+  and `~/Library/Caches/Amberfader`. The first start moves faces, appearance,
+  recent searches and the sign-in from the old XDG-style folders, never
+  overwriting newer files.
+
 ### Removed
 
 - The Firefox extension, the native-messaging helper (`amberfader-helper`),

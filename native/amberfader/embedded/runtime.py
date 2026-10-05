@@ -5,13 +5,13 @@ Requires a QApplication created after QtWebEngineWidgets was imported.
 """
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
 
 from ..app import AmberfaderApp
+from ..paths import app_dirs
 from ..settings import AppSettings, SettingsStore
 from .artwork import ArtworkFetcher
 from .history import SearchHistoryStore
@@ -29,14 +29,6 @@ SETTING_SAVED = "Saved. It applies fully the next time YouTube Music loads."
 SETTING_NOT_SAVED = "Applied for now, but could not be saved: {reason}"
 
 
-def _xdg_path(variable: str, fallback: str) -> Path:
-    configured = os.environ.get(variable, "")
-    base = Path(configured) if configured and Path(configured).is_absolute() else (
-        Path.home() / fallback
-    )
-    return base / "amberfader"
-
-
 @dataclass(frozen=True)
 class RuntimeOptions:
     mode: PageMode
@@ -46,10 +38,10 @@ class RuntimeOptions:
     # None keeps settings in memory (the scripted test page uses this).
     settings_path: Path | None = None
     profile_storage: Path = field(
-        default_factory=lambda: _xdg_path("XDG_DATA_HOME", ".local/share") / "webengine",
+        default_factory=lambda: app_dirs().data / "webengine",
     )
     profile_cache: Path = field(
-        default_factory=lambda: _xdg_path("XDG_CACHE_HOME", ".cache") / "webengine",
+        default_factory=lambda: app_dirs().cache / "webengine",
     )
 
 

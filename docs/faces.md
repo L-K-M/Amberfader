@@ -67,17 +67,19 @@ Only files declared by the manifest are copied. Existing face IDs and folders
 are never replaced. You can also place packs in the folder opened by **Open
 faces folder**, then reopen **Faces** to rescan it.
 
-Native packages use `$XDG_DATA_HOME/amberfader/faces`, normally
+On Linux, native packages use `$XDG_DATA_HOME/amberfader/faces`, normally
 `~/.local/share/amberfader/faces`. Flatpak uses its own app-local data directory,
-normally `~/.var/app/ch.lkmc.amberfader/data/amberfader/faces`. Remove a pack's
+normally `~/.var/app/ch.lkmc.amberfader/data/amberfader/faces`. On macOS, faces
+live in `~/Library/Application Support/Amberfader/faces`. Remove a pack's
 folder to uninstall it. Bundled faces remain available.
 
-Preferences live at `$XDG_CONFIG_HOME/amberfader/appearance.json`, normally
-`~/.config/amberfader/appearance.json`. If a saved face disappears or becomes
-invalid, the app reports the problem and returns to Amber Classic.
+Preferences live at `$XDG_CONFIG_HOME/amberfader/appearance.json` on Linux,
+normally `~/.config/amberfader/appearance.json`, and in
+`~/Library/Application Support/Amberfader/appearance.json` on macOS. If a saved
+face disappears or becomes invalid, the app reports the problem and returns to
+Amber Classic.
 
-The per-user uninstall script removes its installation prefix, including packs
-stored there. Damaged bundled faces report a reinstall error at startup.
+Damaged bundled faces report a reinstall error at startup.
 
 ## Create a plugin
 

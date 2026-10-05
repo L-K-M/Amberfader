@@ -16,11 +16,13 @@ for the full policy.
 
 | Data | Where |
 |---|---|
-| Google cookies, site storage | Amberfader's own browser profile, `~/.local/share/amberfader/webengine` on Linux |
-| HTTP cache | `~/.cache/amberfader/webengine` on Linux |
-| Recent searches and played artists | `~/.local/state/amberfader/embedded-search-history.json` on Linux, 20 entries per list |
-| Faces and appearance | `~/.local/share/amberfader/faces`, `~/.config/amberfader/appearance.json` |
-| Ad blocking and continue playing switches | `~/.config/amberfader/settings.json` |
+| Google cookies, site storage | Amberfader's own browser profile (`webengine`) |
+| HTTP cache | `webengine` in the cache folder |
+| Recent searches and played artists | `embedded-search-history.json`, 20 entries per list |
+| Faces and appearance | `faces`, `appearance.json` |
+| Ad blocking and continue playing switches | `settings.json` |
+
+The README lists the exact folders on Linux and macOS.
 
 Delete the profile folder to sign out completely. **Clear recents** in the
 search window removes both recent lists; the current track is not

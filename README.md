@@ -45,15 +45,21 @@ Both are built in and on by default. Turn them off in **Playback** (or the
 
 Neither has been confirmed against live YouTube Music yet.
 
-Where your data lives on Linux:
+Where your data lives. On macOS, everything except the cache is in
+`~/Library/Application Support/Amberfader`, shown as *Support* below.
 
-| Data | Location |
-| --- | --- |
-| Profile: cookies and sign-in | `~/.local/share/amberfader/webengine` (delete it to sign out completely) |
-| HTTP cache | `~/.cache/amberfader/webengine` |
-| Recent searches and artists | `~/.local/state/amberfader/embedded-search-history.json` |
-| Faces and appearance | `~/.local/share/amberfader/faces`, `~/.config/amberfader/appearance.json` |
-| Ad blocking and continue playing switches | `~/.config/amberfader/settings.json` |
+| Data | Linux | macOS |
+| --- | --- | --- |
+| Profile: cookies and sign-in (delete it to sign out completely) | `~/.local/share/amberfader/webengine` | *Support*`/webengine` |
+| HTTP cache | `~/.cache/amberfader/webengine` | `~/Library/Caches/Amberfader/webengine` |
+| Recent searches and artists | `~/.local/state/amberfader/embedded-search-history.json` | *Support*`/embedded-search-history.json` |
+| Faces | `~/.local/share/amberfader/faces` | *Support*`/faces` |
+| Appearance | `~/.config/amberfader/appearance.json` | *Support*`/appearance.json` |
+| Ad blocking and continue playing switches | `~/.config/amberfader/settings.json` | *Support*`/settings.json` |
+
+On macOS, the first start moves faces, appearance, recent searches and the
+sign-in from the old `~/.local/share/amberfader`-style folders, without
+overwriting anything already in the new place.
 
 ## Likes, recents and mixes
 

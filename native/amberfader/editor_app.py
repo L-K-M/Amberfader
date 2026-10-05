@@ -24,10 +24,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         from PySide6.QtWidgets import QApplication
     except ImportError as exc:
         print(
-            f"amberfader-face-editor: install Amberfader with the gui extra ({exc})",
+            f"amberfader-face-editor: PySide6 is missing; reinstall Amberfader ({exc})",
             file=sys.stderr,
         )
         return 2
+
+    from .paths import migrate_legacy_files
+
+    for problem in migrate_legacy_files():
+        print(f"amberfader-face-editor: {problem}", file=sys.stderr)
 
     from .face_document import FaceDocument
 
