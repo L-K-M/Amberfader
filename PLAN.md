@@ -1,5 +1,10 @@
 # Classic Music Remote — Execution Plan
 
+> [!NOTE]
+> [`docs/standalone-plan.md`](docs/standalone-plan.md) plans the move to a
+> standalone app with an embedded browser on Linux and macOS. Once its Phase 0
+> gate is done, it replaces the Firefox-specific parts of this plan.
+
 Derived from `firefox-youtube-music-classic-player-implementation-plan.md` (uploaded
 2026-09-29, "the spec"). The spec remains the design authority; this document is the
 executable task breakdown plus a review delta.

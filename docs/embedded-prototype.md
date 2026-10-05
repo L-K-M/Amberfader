@@ -136,9 +136,9 @@ needs a new measurement. Linux hidden playback and memory are still open.
       `about:processes` shows the YouTube Music tab's memory.
 
 If sign-in fails, stay on Firefox and keep improving the bridge. If the gate
-passes, the follow-up work is: packaging QtWebEngine (deb and Flatpak), a tray
-or background mode so closing the player need not stop music, MPRIS media
-keys, and retiring the extension and helper.
+passes, [`standalone-plan.md`](standalone-plan.md) plans the follow-up work:
+packaging for Linux and macOS, a background mode so closing the player need
+not stop music, media keys, and retiring the extension and helper.
 
 ## Results so far
 
