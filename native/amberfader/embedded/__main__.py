@@ -8,7 +8,6 @@ import argparse
 import contextlib
 import os
 import signal
-import stat
 import sys
 import tempfile
 from pathlib import Path
@@ -35,13 +34,22 @@ def default_socket_path() -> str:
     with contextlib.suppress(FileExistsError):
         directory.mkdir(mode=0o700)
     # gettempdir() falls back to the shared /tmp when $TMPDIR is unset, so
-    # only use a real directory that this user owns.
-    info = directory.lstat()
-    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
-        raise RuntimeError(
-            f"{directory} is not a directory owned by you; pass --socket with a private path"
-        )
-    directory.chmod(0o700)
+    # only use a real directory that this user owns. Check and tighten it
+    # through one descriptor opened without following symlinks, so the path
+    # cannot be swapped between the check and the chmod.
+    refused = RuntimeError(
+        f"{directory} is not a directory owned by you; pass --socket with a private path"
+    )
+    try:
+        fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as exc:
+        raise refused from exc
+    try:
+        if os.fstat(fd).st_uid != os.getuid():
+            raise refused
+        os.fchmod(fd, 0o700)
+    finally:
+        os.close(fd)
     return str(directory / EMBEDDED_SOCKET_NAME)
 
 

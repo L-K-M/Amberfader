@@ -67,3 +67,10 @@ def test_linux_still_requires_xdg_runtime_dir(monkeypatch):
 
     with pytest.raises(RuntimeError, match="XDG_RUNTIME_DIR is not set"):
         launcher.default_socket_path()
+
+
+def test_macos_refuses_a_file_in_place_of_the_folder(macos):
+    (macos / "amberfader").write_text("not a folder")
+
+    with pytest.raises(RuntimeError, match="not a directory owned by you"):
+        launcher.default_socket_path()

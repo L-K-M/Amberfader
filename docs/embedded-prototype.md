@@ -65,7 +65,8 @@ npm run embedded:run
 - A second launch raises the running instance. Its socket is
   `$XDG_RUNTIME_DIR/amberfader/embedded.sock`, separate from Firefox mode.
   macOS has no `XDG_RUNTIME_DIR`, so there the socket goes in your private
-  temporary folder, `$TMPDIR/amberfader/embedded.sock`.
+  temporary folder, `$TMPDIR/amberfader/embedded.sock`, unless you have set
+  `XDG_RUNTIME_DIR` yourself.
 
 Amberfader targets Linux, but the prototype also starts on macOS. A Mac is
 enough to test Google sign-in, persistence and the controls. Hidden playback
