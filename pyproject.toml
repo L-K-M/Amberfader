@@ -28,8 +28,8 @@ amberfader-face-editor = "amberfader.editor_app:main"
 
 [dependency-groups]
 dev = [
-    "pytest>=8.3,<9",
-    "ruff>=0.11,<0.13",
+    "pytest>=8.3,<10",
+    "ruff>=0.11,<0.17",
 ]
 
 [build-system]
