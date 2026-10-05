@@ -1,0 +1,30 @@
+{
+  "capturedAt": "2026-10-05",
+  "session": "signed-out music.youtube.com in QtWebEngine 6.11.2 (Chromium 140), Linux container; not the user's session",
+  "flow": "search, click a result row's ytmusic-play-button-renderer, then click the player bar toggle",
+  "beforePlay": {
+    "url": "/search?q=...",
+    "layoutAttributes": ["player-ui-state=INACTIVE"],
+    "rowActionMenu": "ytmusic-menu-renderer button[aria-label='Action menu']: present and visible in every probed row, without hover"
+  },
+  "afterPlay": {
+    "url": "/watch?v=...",
+    "layoutAttributes": ["player-ui-state=PLAYER_PAGE_OPEN", "player-visible", "player-page-open"],
+    "rowActionMenu": "still connected, but computed visibility:hidden, inherited through ytmusic-responsive-list-item-renderer",
+    "closeToggle": {
+      "selector": "ytmusic-player-bar .toggle-player-page-button",
+      "element": "yt-icon-button inside div#right-controls of ytmusic-player-bar",
+      "ariaLabel": "Close player page",
+      "visible": true
+    }
+  },
+  "afterToggleClick": {
+    "url": "/search?q=...",
+    "layoutAttributes": ["player-ui-state=MINIPLAYER", "player-visible"],
+    "rowActionMenu": "visible again in every probed row"
+  },
+  "variant": {
+    "layoutAttributes": ["is-wiz-miniplayer-enabled", "is-contained-content-layout-enabled"],
+    "note": "seen in 1 of 3 runs; no element labelled for closing or minimizing the player page was found"
+  }
+}

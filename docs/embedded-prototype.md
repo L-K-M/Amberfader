@@ -87,47 +87,72 @@ Faces and their preferences are shared with Firefox mode.
 
 Run these on your desktop and record each result in the PR or below.
 
-- [ ] **Sign-in.** Press Show YT, choose Sign in and complete Google sign-in,
+**2026-10-05, macOS:** sign-in, persistence, playback, hidden playback,
+controls and reload/navigation all passed. One finding: Start mix failed
+after playing a result, because the open player page hides the search
+results; see [Results so far](#results-so-far). The memory figure taken with
+the first version of the command below missed the app's own process, so it
+needs a new measurement. Linux hidden playback and memory are still open.
+
+- [x] **Sign-in.** Press Show YT, choose Sign in and complete Google sign-in,
       including two-step verification. Record whether it is accepted or what
       Google shows instead, for example "This browser or app may not be
       secure". The toolbar shows the origin of the page you are on. If any
       step opens your system browser instead, record that address: the view
       only allows the hosts listed under [Security and privacy](#security-and-privacy).
-- [ ] **Persistence.** Quit with the player's close button, relaunch, and
+- [x] **Persistence.** Quit with the player's close button, relaunch, and
       check that YouTube Music is still signed in.
-- [ ] **Playback.** Play several songs from Amberfader's search, including a
+- [x] **Playback.** Play several songs from Amberfader's search, including a
       track that YouTube Music plays as a music video. Note any track that
       does not play.
-- [ ] **Hidden playback.** Hide the YouTube Music window and minimize the
-      player. Playback continues for at least 10 minutes and the player keeps
-      updating position and track changes. Pause for at least 5 minutes while
-      hidden, then resume from the player.
+- [x] **Hidden playback** (macOS; Linux still open). Hide the YouTube
+      Music window and minimize the player. Playback continues for at least
+      10 minutes and the player keeps updating position and track changes.
+      Pause for at least 5 minutes while hidden, then resume from the player.
 - [ ] **Controls.** Play, pause, previous, next, seek, volume, like, search,
       play result and Start mix each act once and report failures honestly,
       as in the [acceptance matrix](manual-test-plan.md#acceptance-matrix).
-- [ ] **Reload and navigation.** Reload from the window toolbar while
+      2026-10-05: all passed except Start mix after playing a result, which
+      is fixed since and needs a recheck.
+- [x] **Reload and navigation.** Reload from the window toolbar while
       playing: the player reports the reload, then reattaches. Opening the
       Google sign-in page makes the player report that YouTube Music is
       showing another page.
 - [ ] **Memory.** After 5 minutes of playback, record the combined resident
-      memory of Amberfader and its QtWebEngine processes:
+      memory of Amberfader and its QtWebEngine processes. This works on
+      Linux and macOS, and the first line lists what it counts: one Python
+      process and the QtWebEngine helpers, never the `npm`, `uv` or shell
+      wrappers.
 
       ```sh
-      pid=$(pgrep -f 'amberfader.embedded' | head -1)
-      ps -o rss= -p "$pid" $(pgrep -f QtWebEngineProcess) |
-        awk '{s += $1} END {printf "%.0f MiB\n", s / 1024}'
+      pids=$(pgrep -d, -f '^[^ ]*[Pp]ython[0-9.]* -m amberfader\.embedded|^[^ ]*/QtWebEngineProcess')
+      ps -o pid=,rss=,comm= -p "$pids"
+      ps -o rss= -p "$pids" | awk '{s += $1} END {printf "%.0f MiB\n", s / 1024}'
       ```
 
-      RSS counts shared pages more than once, so treat this as an upper
-      bound. For comparison, Firefox's `about:processes` shows the YouTube
-      Music tab's memory.
+      The app's own process matters: QtWebEngine runs Chromium's browser
+      process inside it. RSS counts shared pages more than once, so treat
+      the total as an upper bound. For comparison, Firefox's
+      `about:processes` shows the YouTube Music tab's memory.
 
 If sign-in fails, stay on Firefox and keep improving the bridge. If the gate
 passes, the follow-up work is: packaging QtWebEngine (deb and Flatpak), a tray
 or background mode so closing the player need not stop music, MPRIS media
 keys, and retiring the extension and helper.
 
-## Verified so far
+## Results so far
+
+On your Mac (2026-10-05): the gate items above passed, including Google
+sign-in with the default QtWebEngine user agent.
+
+Start mix after playing a result: the open player page hides the search
+results, so each row's action menu is hidden too. Amberfader now closes the
+player page with YouTube Music's own toggle, waits until the result's menu is
+visible, then starts the mix. If that layout has no toggle, it asks you to
+close the player page yourself. This was observed live in a signed-out
+session in a Linux container
+(`extension/tests/fixtures/player-page-2026-10-05.json`); the whole flow in a
+signed-in session still needs your check.
 
 These were checked in a Linux container, not on your desktop:
 
@@ -146,8 +171,43 @@ These were checked in a Linux container, not on your desktop:
   `libQt6WebEngineCore.so` alone is 195 MB. Packaging would need to trim it,
   or use the Flatpak QtWebEngine base app.
 
-Not verified: anything against live YouTube Music, Google sign-in, real
-playback memory, and desktop X11 or Wayland behavior.
+- With the corrected memory command, the scripted test page (no YouTube
+  Music) uses about 454 MiB here: about 258 MiB in the app process, the rest
+  in three QtWebEngine helper processes.
+
+Not verified on Linux: playback against live YouTube Music, real playback
+memory, and desktop X11 or Wayland behavior.
+
+## Extensions
+
+Not available yet. QtWebEngine 6.10 added an API for Chrome extensions
+(Manifest V3 only, from an unpacked folder or a zip), but enabling an
+extension crashes the process in every PySide6 release that has it. Tested
+in a Linux container on 2026-10-05:
+
+| PySide6 | Install | Enable |
+| --- | --- | --- |
+| 6.10.0, 6.10.1 | works | aborts; listing installed extensions also returns nothing usable |
+| 6.11.0, 6.11.2 | works | segmentation fault |
+
+The crash also happens for a minimal extension with no toolbar button, for
+Qt's own built-in PDF extension, when called from pure QML with no Python
+involved, under a real X11 display, and with Chromium's sandbox on. So it is
+a Qt WebEngine bug, not Amberfader's. Installed extensions also start
+disabled after every restart, so nothing can be turned on.
+
+Even once that is fixed, Qt exposes only part of the extension platform:
+Chromium's core extension APIs plus `chrome.tabs.update`, with no
+`chrome.action`, `windows`, `tabs.query`, `contextMenus`, `cookies` or native
+messaging. The Chrome Web Store's install button does not work in an embedded
+browser either, so extensions would be installed from a downloaded zip or
+folder.
+
+A minimal reproduction for a Qt bug report: load a `WebEngineProfile` with
+`offTheRecord: false`, install any Manifest V3 extension with
+`extensionManager.installExtension(path)`, then call
+`extensionManager.setExtensionEnabled(info, true)` with the `info` from
+`installFinished`.
 
 ## Security and privacy
 

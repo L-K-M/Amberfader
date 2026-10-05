@@ -4,7 +4,7 @@
 // reload the player). One search in flight; a newer query supersedes the old.
 //
 // All selectors come from selectors.ts and are UNVERIFIED until Phase 0.
-import { RADIO, SEARCH } from "./selectors";
+import { PLAYER_PAGE, RADIO, SEARCH } from "./selectors";
 import { isEnabledControl, isVisibleControl } from "./dom";
 import { cleanId, cleanText, isFiniteSeconds } from "../shared/sanitize";
 import type {
@@ -13,6 +13,10 @@ import type {
 } from "../protocol/types";
 
 export const SEARCH_RESULT_CAP = 30;
+// How often to re-check the results while the player page closes. The change
+// arrives through CSS on a layout attribute, so there is no single mutation
+// to wait for.
+const REVEAL_POLL_MS = 50;
 
 export type SearchOutcome =
   | { ok: true; result: SearchSongsResult }
@@ -30,9 +34,14 @@ interface ResolvedRow {
 }
 
 type RowResolution = { ok: true; row: Element } | { ok: false; error: string };
+type RadioFailure = {
+  ok: false;
+  error: string;
+  code: "stale_result" | "unsupported_operation" | "timeout" | "user_interaction_required";
+};
 type RadioPreparation =
   | { ok: true; playlistId: string; activate: () => RowResolution }
-  | { ok: false; error: string; code: "stale_result" | "unsupported_operation" | "timeout" | "user_interaction_required" };
+  | RadioFailure;
 
 interface EntryIdentity {
   title: string;
@@ -369,8 +378,17 @@ export class SiteSearch {
   }
 
   async prepareRadio(searchToken: string, resultId: string, deadlineMs: number): Promise<RadioPreparation> {
+    const startedAt = Date.now();
     const resolved = this.resolveResult(searchToken, resultId);
     if (!resolved.ok) return { ...resolved, code: "stale_result" };
+
+    const revealed = await this.revealResults(resolved.row, deadlineMs);
+    if (!revealed.ok) return revealed;
+    const current = this.resolveResult(searchToken, resultId);
+    if (!current.ok || current.row !== resolved.row) {
+      return { ok: false, code: "stale_result", error: "Search result changed while closing the player page" };
+    }
+    const remainingMs = Math.max(0, deadlineMs - (Date.now() - startedAt));
 
     const menu = queryFirst(resolved.row, SEARCH.rowActionMenu);
     if (!menu || !isVisibleControl(menu) || !isEnabledControl(menu)) {
@@ -448,7 +466,7 @@ export class SiteSearch {
         ok: false, code: sawFreshMenu ? "unsupported_operation" : "timeout",
         error: sawFreshMenu ? "Start mix was unavailable before the deadline"
           : "The result menu did not expose a fresh mix action before the deadline",
-      }), deadlineMs);
+      }), remainingMs);
       this.cancelRadio = () => finish({ ok: false, code: "stale_result", error: "Search superseded while opening the mix menu" });
       observer.observe(this.doc.body, {
         childList: true, subtree: true, characterData: true, attributes: true,
@@ -456,6 +474,65 @@ export class SiteSearch {
       });
       menu.click();
       check(observer.takeRecords());
+    });
+  }
+
+  // Playing a result opens the player page, which hides the search page and
+  // every row menu without removing them. Close it with the player bar's own
+  // toggle, then wait until the row's menu is visible: an observed outcome,
+  // never an assumed one. The open state comes from a layout attribute, so
+  // this does not depend on the interface language.
+  private async revealResults(row: Element, deadlineMs: number): Promise<{ ok: true } | RadioFailure> {
+    const menuVisible = (): boolean => {
+      const menu = queryFirst(row, SEARCH.rowActionMenu);
+      return menu !== null && isVisibleControl(menu);
+    };
+    if (menuVisible()) return { ok: true };
+
+    const layout = this.doc.querySelector(PLAYER_PAGE.layout);
+    // Not hidden by the player page; the menu check reports what is missing.
+    if (!layout?.hasAttribute(PLAYER_PAGE.openAttribute)) return { ok: true };
+
+    const toggle = this.doc.querySelector(PLAYER_PAGE.closeToggle);
+    if (!toggle || !isVisibleControl(toggle) || !isEnabledControl(toggle)) {
+      return {
+        ok: false, code: "user_interaction_required",
+        error: "Close the YouTube Music player page, then try Start mix again",
+      };
+    }
+    toggle.click();
+
+    const shown = await this.waitUntil(
+      () => !layout.hasAttribute(PLAYER_PAGE.openAttribute) && menuVisible(), deadlineMs,
+    );
+    if (shown === "cancelled") {
+      return { ok: false, code: "stale_result", error: "Search superseded while closing the player page" };
+    }
+    if (!shown) {
+      return {
+        ok: false, code: "timeout",
+        error: "The player page did not close in time; close it, then try Start mix again",
+      };
+    }
+    return { ok: true };
+  }
+
+  private waitUntil(condition: () => boolean, deadlineMs: number): Promise<boolean | "cancelled"> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (outcome: boolean | "cancelled"): void => {
+        if (settled) return;
+        settled = true;
+        clearInterval(poll);
+        clearTimeout(timer);
+        this.cancelRadio = null;
+        resolve(outcome);
+      };
+      const poll = setInterval(() => {
+        if (condition()) finish(true);
+      }, REVEAL_POLL_MS);
+      const timer = setTimeout(() => finish(condition()), deadlineMs);
+      this.cancelRadio = () => finish("cancelled");
     });
   }
 }

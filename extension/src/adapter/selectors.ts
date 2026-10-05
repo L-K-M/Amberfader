@@ -99,6 +99,18 @@ export const ARIA_STATE_ATTRS = ["aria-label", "title", "aria-pressed"];
 export const LIKE_BUTTON_SELECTOR =
   "ytmusic-player-bar ytmusic-like-button-renderer #button-shape-like button";
 
+// Observed live on 2026-10-05 in a signed-out QtWebEngine session (see
+// tests/fixtures/player-page-2026-10-05.json): playing a search result opens
+// the player page. ytmusic-app-layout gains player-page-open and the search
+// page underneath turns visibility:hidden, hiding every row's action menu.
+// The player bar's toggle closes the player page and shows the rows again.
+// A newer layout experiment (is-wiz-miniplayer-enabled) had no such toggle.
+export const PLAYER_PAGE = {
+  layout: "ytmusic-app-layout",
+  openAttribute: "player-page-open",
+  closeToggle: "ytmusic-player-bar .toggle-player-page-button",
+} as const;
+
 // Observed Start mix navigation item. Activation/navigation remains UNVERIFIED.
 export const RADIO = {
   popup: "ytmusic-menu-popup-renderer",
