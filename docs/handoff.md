@@ -74,9 +74,22 @@ mix), #34 (plan).
      `/opt/amberfader/lib`, but `Depends` lacks Qt WebEngine's system
      libraries. CI's embedded job installs: `libnss3 libasound2t64
      libxkbfile1 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libgbm1
-     libxcb-dri3-0 libgssapi-krb5-2`. Prefer computing them
-     (`dpkg-shlibdeps` or `ldd` + `dpkg -S`), and prove them with
-     `amberfader --self-test` in a clean Ubuntu 24.04 container.
+     libxcb-dri3-0 libgssapi-krb5-2`. Computed on 2026-10-05 from
+     `readelf -d` over PySide6 6.11.2's Qt libraries, `QtWebEngineProcess`
+     and platform plugins, minus libraries the wheel bundles, mapped with
+     `ldconfig -p` + `dpkg -S` on Ubuntu 24.04: `libegl1 libgl1 libx11-6
+     libx11-xcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2
+     libxtst6 libasound2t64 libbrotli1 libdbus-1-3 libdrm2 libexpat1
+     libfontconfig1 libfreetype6 libgbm1 libglib2.0-0t64 libgssapi-krb5-2
+     libnspr4 libnss3 libudev1 libwayland-client0 libwayland-cursor0
+     libwayland-egl1 libxcb1 libxcb-cursor0 libxcb-dri3-0 libxcb-glx0
+     libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0
+     libxcb-render0 libxcb-render-util0 libxcb-shape0 libxcb-shm0
+     libxcb-sync1 libxcb-util1 libxcb-xfixes0 libxcb-xkb1 libxkbcommon0
+     libxkbcommon-x11-0 libxkbfile1 zlib1g libzstd1` (libc, libstdc++ and
+     libgcc are essential). For Debian 12 write `libasound2t64 | libasound2`
+     and `libglib2.0-0t64 | libglib2.0-0`. Prove the list with
+     `amberfader --self-test` in a clean `ubuntu:24.04` container.
    - **Open problem: Chromium's sandbox on Ubuntu 23.10+.** AppArmor
      restricts unprivileged user namespaces
      (`kernel.apparmor_restrict_unprivileged_userns=1`). Chromium's
