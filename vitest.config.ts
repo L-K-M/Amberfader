@@ -38,7 +38,7 @@ export default defineConfig({
       },
     ],
   },
-  esbuild: {
+  oxc: {
     target: "es2022",
   },
 });
