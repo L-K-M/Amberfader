@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The face editor opens with a **Faces** panel listing the installed and
+  built-in faces. Installed faces open for editing in place; built-in faces
+  open as a copy.
+- **File → Import all Audion faces from ZIP…** in the face editor converts
+  and installs every face in an Audion collection ZIP, with progress and a
+  Stop button. Importing the same ZIP again skips installed faces.
+
+### Changed
+
+- Up to 1024 installed faces load, up from 64, so Panic's complete Audion
+  collection (883 faces) fits. A catalog cache (`.catalog.json` in the faces
+  folder) keeps listing them fast: about 0.4 s for 900 faces instead of 4.6 s.
+
 ## [0.2.0] - 2026-10-06
 
 ### Changed

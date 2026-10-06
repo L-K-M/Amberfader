@@ -5,6 +5,7 @@ declared artwork enters the document; the source and its credits stay intact.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -12,12 +13,14 @@ import stat
 import struct
 import sys
 import zlib
+from collections.abc import Callable
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any, BinaryIO
 from uuid import uuid4
-from zipfile import ZIP_DEFLATED, ZIP_STORED, BadZipFile, ZipFile
+from zipfile import ZIP_DEFLATED, ZIP_STORED, BadZipFile, ZipFile, ZipInfo
 
 from PySide6.QtCore import QBuffer, QByteArray, QIODevice, Qt
 from PySide6.QtGui import QImage, QPainter
@@ -28,7 +31,9 @@ from .face_library import (
     MAX_IMAGE_BYTES,
     MAX_MANIFEST_BYTES,
     MAX_PACK_BYTES,
+    Face,
     FaceError,
+    FaceLibrary,
     _png_dimensions,
 )
 
@@ -62,6 +67,19 @@ class AudionFaceSource:
 class AudionImportResult:
     document: FaceDocument
     warnings: tuple[str, ...]
+
+
+class AudionInstallStatus(Enum):
+    INSTALLED = "installed"
+    ALREADY_INSTALLED = "already installed"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class AudionInstallOutcome:
+    face: AudionFaceSource
+    status: AudionInstallStatus
+    detail: str  # The installed face ID, or why the face was not installed.
 
 
 @contextmanager
@@ -216,56 +234,79 @@ def list_audion_faces(source: Path) -> tuple[AudionFaceSource, ...]:
                     if len(faces) > MAX_AUDION_FACES:
                         raise FaceError("Audion collection contains too many faces")
         elif path.is_file() and path.suffix.lower() == ".zip":
-            faces = []
             with _archive(path) as archive:
-                seen = set()
-                for entry in archive.infolist():
-                    if entry.filename.startswith("__MACOSX/"):
-                        continue
-                    if PurePosixPath(entry.filename).name != "index.json":
-                        continue
-                    member = _member_path(entry.filename)
-                    if not _regular_zip_entry(entry):
-                        raise FaceError("Audion ZIP face indexes must be regular files")
-                    if entry.filename in seen:
-                        raise FaceError("Audion ZIP contains duplicate face indexes")
-                    seen.add(entry.filename)
-                    prefix = str(member.parent)
-                    prefix = "" if prefix == "." else prefix + "/"
-                    name = member.parent.name or path.stem
-                    faces.append(AudionFaceSource(path, prefix, name))
-                    if len(faces) > MAX_AUDION_FACES:
-                        raise FaceError("Audion collection contains too many faces")
+                faces = _archive_faces(path, archive)
         else:
             raise FaceError(SOURCE_HELP)
-        if not faces:
-            raise FaceError("No converted Audion faces containing index.json were found. "
-                            + SOURCE_HELP)
-        return tuple(sorted(faces, key=lambda face: (face.name.casefold(), face.prefix)))
+        return _sorted_faces(faces)
     except (OSError, BadZipFile, RuntimeError) as exc:
         raise FaceError(f"Cannot read Audion collection: {exc}") from exc
 
 
+def _archive_faces(path: Path, archive: ZipFile) -> list[AudionFaceSource]:
+    faces = []
+    seen = set()
+    for entry in archive.infolist():
+        if entry.filename.startswith("__MACOSX/"):
+            continue
+        if PurePosixPath(entry.filename).name != "index.json":
+            continue
+        member = _member_path(entry.filename)
+        if not _regular_zip_entry(entry):
+            raise FaceError("Audion ZIP face indexes must be regular files")
+        if entry.filename in seen:
+            raise FaceError("Audion ZIP contains duplicate face indexes")
+        seen.add(entry.filename)
+        prefix = str(member.parent)
+        prefix = "" if prefix == "." else prefix + "/"
+        name = member.parent.name or path.stem
+        faces.append(AudionFaceSource(path, prefix, name))
+        if len(faces) > MAX_AUDION_FACES:
+            raise FaceError("Audion collection contains too many faces")
+    return faces
+
+
+def _sorted_faces(faces: list[AudionFaceSource]) -> tuple[AudionFaceSource, ...]:
+    if not faces:
+        raise FaceError("No converted Audion faces containing index.json were found. "
+                        + SOURCE_HELP)
+    return tuple(sorted(faces, key=lambda face: (face.name.casefold(), face.prefix)))
+
+
+class _ZipMembers:
+    """An open ZIP's members by name, shared by every face read from it."""
+
+    def __init__(self, archive: ZipFile) -> None:
+        self.archive = archive
+        self.entries: dict[str, ZipInfo] = {}
+        self.duplicates: set[str] = set()
+        for entry in archive.infolist():
+            if entry.filename in self.entries:
+                self.duplicates.add(entry.filename)
+                continue
+            self.entries[entry.filename] = entry
+
+
 class _SourceReader:
-    def __init__(self, source: AudionFaceSource) -> None:
+    """Reads one face within its own size budgets. A bulk import passes the
+    archive it already opened; otherwise a ZIP source is opened here."""
+
+    def __init__(self, source: AudionFaceSource, members: _ZipMembers | None = None) -> None:
         self._source = source
         self._root = source.source.resolve()
         self._resources = ExitStack()
-        self._archive = (
-            self._resources.enter_context(_archive(self._root)) if self._root.is_file() else None
-        )
+        if members is None and self._root.is_file():
+            members = _ZipMembers(self._resources.enter_context(_archive(self._root)))
+        self._members = members
         self._total = 0
         self._cache: dict[str, bytes] = {}
         self._decoded_names: set[str] = set()
         self._decoded_pixels = 0
-        self._entries = {}
-        if self._archive is not None:
-            for entry in self._archive.infolist():
-                if entry.filename.startswith(source.prefix):
-                    if entry.filename in self._entries:
-                        self.close()
-                        raise FaceError("Audion ZIP contains duplicate artwork paths")
-                    self._entries[entry.filename] = entry
+        if members is not None and any(
+            name.startswith(source.prefix) for name in members.duplicates
+        ):
+            self.close()
+            raise FaceError("Audion ZIP contains duplicate artwork paths")
 
     def close(self) -> None:
         self._resources.close()
@@ -274,7 +315,7 @@ class _SourceReader:
         if name in self._cache:
             return self._cache[name]
         limit = MAX_MANIFEST_BYTES if name == "index.json" else MAX_IMAGE_BYTES
-        if self._archive is None:
+        if self._members is None:
             path = (self._root / name).resolve()
             if not path.is_relative_to(self._root):
                 raise FaceError(f"Audion asset {name} must stay inside the face folder")
@@ -287,7 +328,7 @@ class _SourceReader:
         else:
             member = self._source.prefix + name
             _member_path(member)
-            entry = self._entries.get(member)
+            entry = self._members.entries.get(member)
             if entry is None:
                 if optional:
                     return None
@@ -301,7 +342,7 @@ class _SourceReader:
                 raise FaceError(ZIP_COMPRESSION_ERROR)
             if entry.file_size > limit:
                 raise FaceError(f"Audion asset {name} exceeds its size limit")
-            with self._archive.open(entry) as stream:
+            with self._members.archive.open(entry) as stream:
                 data = stream.read(limit + 1)
             if len(data) > limit:
                 raise FaceError(f"Audion asset {name} exceeds its size limit")
@@ -364,8 +405,15 @@ def _rectangle(index: dict, key: str, size: tuple[int, int]) -> list[int] | None
     return [left, top, right - left, bottom - top] if right > left and bottom > top else None
 
 
+def _face_id(source: AudionFaceSource, suffix: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", source.name.lower()).strip("-")[:28]
+    return "audion-" + (slug or "face") + "-" + suffix
+
+
 class _Converter:
-    def __init__(self, source: AudionFaceSource, reader: _SourceReader, index: dict) -> None:
+    def __init__(
+        self, source: AudionFaceSource, reader: _SourceReader, index: dict, face_id: str,
+    ) -> None:
         self._reader, self._index = reader, index
         self._background = reader.image("base.png")
         self._size = self._background.width(), self._background.height()
@@ -385,9 +433,8 @@ class _Converter:
         credit = "\n".join(info)
         if len(credit) > 4096:
             raise FaceError("Audion credits exceed the 4096-character limit")
-        slug = re.sub(r"[^a-z0-9]+", "-", source.name.lower()).strip("-")[:28]
         self.manifest: dict[str, Any] = {
-            "formatVersion": 3, "id": "audion-" + (slug or "face") + "-" + uuid4().hex[:8],
+            "formatVersion": 3, "id": face_id,
             "name": source.name[:64] or "Audion face", "author": (info[0] if info else
             "Original Audion face author")[:96] or "Original Audion face author",
             "description": "Imported from Panic's preserved Audion face collection.",
@@ -595,14 +642,22 @@ class _Converter:
 
 
 def import_audion_face(source: AudionFaceSource) -> AudionImportResult:
-    """Snapshot and convert one selected face, without writing to its source."""
+    """Snapshot and convert one selected face, without writing to its source.
+
+    Each import gets a new ID, so importing a face twice gives two copies."""
+    return _convert(source, _face_id(source, uuid4().hex[:8]))
+
+
+def _convert(
+    source: AudionFaceSource, face_id: str, members: _ZipMembers | None = None,
+) -> AudionImportResult:
     reader = None
     try:
-        reader = _SourceReader(source)
+        reader = _SourceReader(source, members)
         index = json.loads(reader.read("index.json"))
         if not isinstance(index, dict):
             raise FaceError("Audion index.json must contain an object")
-        return _Converter(source, reader, index).convert()
+        return _Converter(source, reader, index, face_id).convert()
     except (
         OSError, ValueError, RecursionError, BadZipFile, RuntimeError, EOFError, zlib.error,
     ) as exc:
@@ -615,3 +670,66 @@ def import_audion_face(source: AudionFaceSource) -> AudionImportResult:
     finally:
         if reader is not None:
             reader.close()
+
+
+class AudionArchive:
+    """Installs every face of a collection ZIP into the face library.
+
+    The archive is opened, checked and indexed once. Panic's 2021 collection
+    holds 856 faces in 81,111 members; reopening it for each face, as a
+    single import does, costs about 0.7 s per face.
+
+        with AudionArchive(path) as archive:
+            for face in archive.faces:
+                outcome = archive.install(face, library, check)
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._resources = ExitStack()
+        try:
+            source = Path(path).resolve()
+            archive = self._resources.enter_context(_archive(source))
+            self._faces = _sorted_faces(_archive_faces(source, archive))
+            self._members = _ZipMembers(archive)
+        except (OSError, BadZipFile, RuntimeError) as exc:
+            self.close()
+            raise FaceError(f"Cannot read Audion collection: {exc}") from exc
+        except FaceError:
+            self.close()
+            raise
+
+    def __enter__(self) -> AudionArchive:
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close()
+
+    @property
+    def faces(self) -> tuple[AudionFaceSource, ...]:
+        return self._faces
+
+    def close(self) -> None:
+        self._resources.close()
+
+    def install(
+        self, face: AudionFaceSource, library: FaceLibrary, check: Callable[[Face], object],
+    ) -> AudionInstallOutcome:
+        """Convert one face and install it unless its ID is already installed.
+
+        The ID derives from the face's path in the archive, so importing the
+        same ZIP again skips faces it installed before. `check` gets the
+        converted face and raises FaceError to reject it, e.g. when it cannot
+        be decoded for display.
+        """
+        suffix = hashlib.sha256(f"{face.prefix}\n{face.name}".encode()).hexdigest()[:8]
+        face_id = _face_id(face, suffix)
+        if any(info.id == face_id for info in library.faces):
+            return AudionInstallOutcome(face, AudionInstallStatus.ALREADY_INSTALLED, face_id)
+
+        try:
+            document = _convert(face, face_id, self._members).document
+            check(document.preview(validate_layout=True))
+            info = library.install_snapshot(document.manifest, document.assets)
+        except (OSError, ValueError) as exc:  # FaceError is a ValueError.
+            return AudionInstallOutcome(face, AudionInstallStatus.FAILED, str(exc))
+        return AudionInstallOutcome(face, AudionInstallStatus.INSTALLED, info.id)

@@ -192,3 +192,5 @@ YouTube Music and playback. See the [editor guide](docs/face-editor.md).
 
 Choose **File → Import Audion face…** to turn a converted Audion face folder or
 collection ZIP into an editable copy, retaining its artwork and original credits.
+**File → Import all Audion faces from ZIP…** installs a whole collection at
+once. The **Faces** panel lists your installed and built-in faces for editing.

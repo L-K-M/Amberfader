@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QColorDialog,
     QComboBox,
+    QDockWidget,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -42,6 +43,7 @@ from ..face_library import (
     FaceLibrary,
 )
 from .face_editor_canvas import FaceEditorCanvas
+from .face_library_panel import FaceLibraryPanel
 from .face_surface import READOUT_CONTROLS, FaceArtwork, prepare_face, prepare_face_preview
 
 if TYPE_CHECKING:
@@ -91,13 +93,22 @@ class FaceEditorWindow(QMainWindow):
         self,
         parent: QWidget | None = None,
         document: FaceDocument | None = None,
+        library: FaceLibrary | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("faceEditorWindow")
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
-        self.resize(1220, 780)
+        self.resize(1440, 780)
         self.setMinimumSize(940, 600)
         self._document = document or FaceDocument.from_template(BUILTIN_DIRECTORY / DEFAULT_FACE_ID)
+        # A shared library (the player's) may predate faces added since.
+        if library is None:
+            library = FaceLibrary()
+        else:
+            library.refresh()
+        self._library = library
+        self._faces_panel = FaceLibraryPanel(library, self)
+        self._faces_panel.editRequested.connect(self.open_face)
         self._syncing = False
         self._metadata_model_values: dict[str, str] = {}
         self._readout_family_model: tuple[str, str] | None = None
@@ -161,6 +172,9 @@ class FaceEditorWindow(QMainWindow):
             "Open face folder…", QKeySequence.StandardKey.Open, self._open
         )
         self._audion_import_action = self._action("Import Audion face…", None, self._import_audion)
+        self._audion_archive_action = self._action(
+            "Import all Audion faces from ZIP…", None, self._import_audion_archive,
+        )
         self._save_action = self._action("Save", QKeySequence.StandardKey.Save, self.save)
         self._save_as_action = self._action(
             "Save as…", QKeySequence.StandardKey.SaveAs, self.save_as
@@ -179,6 +193,7 @@ class FaceEditorWindow(QMainWindow):
             self._new_action,
             self._open_action,
             self._audion_import_action,
+            self._audion_archive_action,
             self._save_action,
             self._save_as_action,
             self._export_action,
@@ -197,6 +212,16 @@ class FaceEditorWindow(QMainWindow):
         view_menu = self.menuBar().addMenu("&View")
         view_menu.addAction(self._fit_action)
         view_menu.addAction(self._actual_action)
+        faces_dock = QDockWidget("Faces", self)
+        faces_dock.setObjectName("facesDock")
+        faces_dock.setWidget(self._faces_panel)
+        faces_dock.setFeatures(
+            QDockWidget.DockWidgetFeature.DockWidgetClosable
+            | QDockWidget.DockWidgetFeature.DockWidgetMovable
+        )
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, faces_dock)
+        view_menu.addSeparator()
+        view_menu.addAction(faces_dock.toggleViewAction())
         toolbar = QToolBar("Face editing", self)
         toolbar.setMovable(False)
         for action in (self._new_action, self._open_action, self._save_action):
@@ -470,6 +495,7 @@ class FaceEditorWindow(QMainWindow):
         self._refresh_layers()
         self._changed()
         self._canvas.fit_face()
+        self._faces_panel.select(document.path)
 
     def _refresh_layers(self) -> None:
         names = [*self._document.manifest["controls"], "drag"]
@@ -866,8 +892,8 @@ class FaceEditorWindow(QMainWindow):
         return self.save() if choice == QMessageBox.StandardButton.Save else True
 
     def _new(self) -> None:
-        library = FaceLibrary()
-        templates = list(library.faces)
+        self._library.refresh()
+        templates = list(self._library.faces)
         names = [face.name for face in templates]
         labels = [
             f"{face.name} ({face.id})" if names.count(face.name) > 1 else face.name
@@ -906,6 +932,39 @@ class FaceEditorWindow(QMainWindow):
                 self.import_audion_result(dialog.import_result)
         finally:
             dialog.deleteLater()
+
+    def _import_audion_archive(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Choose an Audion face ZIP archive", str(Path.home()), "ZIP archives (*.zip)",
+        )
+        if path:
+            self.import_audion_archive(Path(path))
+
+    def import_audion_archive(self, path: Path) -> bool:
+        """Install every face in the ZIP and list them for editing.
+
+        The open document is unaffected; installed faces open from the panel.
+        """
+        from .audion_archive_import import import_audion_archive
+
+        try:
+            batch = import_audion_archive(path, self._library, self)
+        except FaceError as exc:
+            self._show_error("Could not import Audion faces", exc)
+            return False
+        self._faces_panel.reload(self._document.path)
+        if batch.installed:
+            first_id = batch.installed[0].detail
+            first = next((info for info in self._library.faces if info.id == first_id), None)
+            if first is not None:
+                self._faces_panel.select(first.source)
+        text, details = batch.summary()
+        message = QMessageBox(QMessageBox.Icon.Information, "Audion faces imported", text,
+                              QMessageBox.StandardButton.Ok, self)
+        message.setDetailedText(details)
+        message.exec()
+        message.deleteLater()
+        return True
 
     def import_audion_result(self, result: AudionImportResult) -> bool:
         """Apply a prepared conversion only after preserving the current working face."""
@@ -981,6 +1040,8 @@ class FaceEditorWindow(QMainWindow):
             self._show_error("Could not save face", exc)
             return False
         self._changed()
+        # A saved installed face may have a new name.
+        self._faces_panel.reload(saved)
         self.statusBar().showMessage(f"Saved portable face pack to {saved}", 8000)
         return True
 

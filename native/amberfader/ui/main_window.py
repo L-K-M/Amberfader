@@ -387,7 +387,7 @@ class MainWindow(QMainWindow):
                 if self._face_editor is not None:
                     self._face_editor.deleteLater()
                 document = FaceDocument.from_template(source)
-                self._face_editor = FaceEditorWindow(document=document)
+                self._face_editor = FaceEditorWindow(document=document, library=self._faces)
         except FaceError as exc:
             self.show_status(f"Could not open face editor: {exc}", error=True)
             return

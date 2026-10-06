@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 import struct
-from collections.abc import Mapping
-from dataclasses import dataclass, field
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from functools import lru_cache
 from math import cos, isfinite, radians, sin
@@ -21,6 +22,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from . import __version__
 from .paths import app_dirs
 
 DEFAULT_FACE_ID = "amber-classic"
@@ -33,7 +35,10 @@ MAX_PACK_BYTES = 16 * 1024 * 1024
 MAX_IMAGE_DIMENSION = 2048
 MAX_DECODED_PIXELS = 32 * 1024 * 1024
 MAX_DRAFT_GEOMETRY = 2048
-MAX_USER_FACES = 64
+# Panic's preserved Audion collection alone holds 883 faces.
+MAX_USER_FACES = 1024
+CATALOG_CACHE = ".catalog.json"
+MAX_CATALOG_CACHE_BYTES = 16 * 1024 * 1024
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 PNG_HEADER = struct.Struct(">8sI4sII5BI")
 PNG_HEADER_BYTES = PNG_HEADER.size
@@ -44,6 +49,7 @@ DECODED_LIMIT_ERROR = "Face images exceed the 128 MiB decoded image limit"
 BUILTIN_DIRECTORY = Path(__file__).with_name("faces")
 Rect = tuple[int, int, int, int]
 Polygon = tuple[tuple[float, float], ...]
+INFO_FIELDS = ("id", "name", "author", "description")
 
 
 class FaceValidation(Enum):
@@ -289,8 +295,9 @@ def _check_background_size(
         raise FaceError(f"{name} must match the face size at 1x or 2x")
 
 
-def _probe_face(directory: Path) -> FaceInfo:
-    """List validated metadata without buffering discarded PNG payloads."""
+def _probe_face(directory: Path) -> tuple[FaceInfo, list[str]]:
+    """List validated metadata and image names without buffering discarded
+    PNG payloads."""
     try:
         directory = directory.resolve()
         data, names = _pack_manifest(directory)
@@ -312,9 +319,60 @@ def _probe_face(directory: Path) -> FaceInfo:
         _check_background_size(data["size"], dimensions[data["background"]])
         if "alphaMask" in data:
             _check_background_size(data["size"], dimensions[data["alphaMask"]], name="Alpha mask")
-        return FaceInfo(data["id"], data["name"], data["author"], data["description"], directory)
+        info = FaceInfo(data["id"], data["name"], data["author"], data["description"], directory)
+        return info, names
     except (OSError, ValueError, RecursionError, struct.error) as exc:
         raise FaceError(str(exc)) from exc
+
+
+def _signature(directory: Path, names: Iterable[str]) -> list[list[Any]] | None:
+    """Identify a face's files by lstat; None when one is not a plain file.
+
+    Every write or rename updates ctime, and ctime cannot be set back, so an
+    unchanged signature means unchanged bytes. Faces with symbolic links are
+    never cached.
+    """
+    signature = []
+    folder = os.fspath(directory)  # Plain strings: pathlib dominates 60,000 lstat calls.
+    for name in ("face.json", *sorted(names)):
+        status = os.lstat(os.path.join(folder, name))
+        if not stat.S_ISREG(status.st_mode):
+            return None
+        signature.append([
+            name, status.st_dev, status.st_ino, status.st_size,
+            status.st_mtime_ns, status.st_ctime_ns,
+        ])
+    return signature
+
+
+def _catalog_entry(info: FaceInfo, names: Iterable[str]) -> dict[str, Any] | None:
+    try:
+        signature = _signature(info.source, names)
+    except OSError:
+        return None
+    if signature is None:
+        return None
+    return {
+        "signature": signature,
+        "info": [info.id, info.name, info.author, info.description],
+    }
+
+
+def _cached_info(directory: Path, entry: Any) -> FaceInfo | None:
+    """Reuse the probe of a face whose files are unchanged.
+
+    The cache only lists a face: load() validates it in full again.
+    """
+    try:
+        signature, fields = entry["signature"], entry["info"]
+        source = directory.resolve()
+        if _signature(source, [file[0] for file in signature[1:]]) != signature:
+            return None
+        if len(fields) != len(INFO_FIELDS) or not all(isinstance(f, str) for f in fields):
+            return None
+        return FaceInfo(*fields, source)
+    except (OSError, TypeError, KeyError, IndexError, ValueError):
+        return None
 
 
 def load_face_snapshot(
@@ -430,6 +488,8 @@ class FaceLibrary:
         self._catalog: dict[str, FaceInfo] = {}
         self._problems: list[str] = []
         self._preference_problem: str | None = None
+        # Cache entries of faces installed since the last refresh().
+        self._installed_entries: dict[str, Any] = {}
         self.refresh()
 
     @property
@@ -450,8 +510,17 @@ class FaceLibrary:
                     self._discover(directory)
         except OSError as exc:
             raise FaceError(BUNDLED_FACE_ERROR) from exc
+        known = self._installed_entries
+        self._installed_entries = {}
         if not self._directory.exists():
             return
+
+        # Probing validates every image header, about 5 ms for an imported
+        # Audion face. The cache skips faces whose files did not change, so a
+        # library of 900 faces lists in a fraction of a second.
+        stored = self._read_cache()
+        known = {**stored, **known}
+        entries = {}
         try:
             # The limit applies before loading image data, including invalid packs.
             count = 0
@@ -464,18 +533,57 @@ class FaceLibrary:
                         f"Only the first {MAX_USER_FACES} installed face folders are loaded"
                     )
                     break
-                self._discover(directory)
+                entry = self._discover(directory, known.get(directory.name))
+                if entry is not None:
+                    entries[directory.name] = entry
         except OSError as exc:
             self._problems.append(f"Cannot read faces folder: {exc}")
+            return
+        if entries != stored:
+            self._write_cache(entries)
 
-    def _discover(self, directory: Path) -> None:
-        try:
-            info = _probe_face(directory)
-            if info.id in self._catalog:
-                raise FaceError(f"Duplicate face ID: {info.id}")
+    def _discover(self, directory: Path, cached: Any = None) -> dict[str, Any] | None:
+        """Catalog a valid face. Returns its cache entry, if it can have one."""
+        info = _cached_info(directory, cached) if cached is not None else None
+        entry = cached
+        if info is None:
+            try:
+                info, names = _probe_face(directory)
+            except FaceError as exc:
+                self._problems.append(f"{directory.name}: {exc}")
+                return None
+            entry = _catalog_entry(info, names)
+        if info.id in self._catalog:
+            self._problems.append(f"{directory.name}: Duplicate face ID: {info.id}")
+        else:
             self._catalog[info.id] = info
-        except FaceError as exc:
-            self._problems.append(f"{directory.name}: {exc}")
+        return entry
+
+    def _read_cache(self) -> dict[str, Any]:
+        """A missing, stale or unreadable cache only costs a full probe."""
+        try:
+            data = json.loads(
+                _read_bounded(self._directory / CATALOG_CACHE, MAX_CATALOG_CACHE_BYTES)
+            )
+        except (OSError, ValueError, RecursionError):
+            return {}
+        # Validation rules can change between releases.
+        if not isinstance(data, dict) or data.get("version") != __version__:
+            return {}
+        faces = data.get("faces")
+        return faces if isinstance(faces, dict) else {}
+
+    def _write_cache(self, entries: dict[str, Any]) -> None:
+        try:
+            with TemporaryDirectory(prefix=".catalog-", dir=self._directory) as temp:
+                staged = Path(temp) / CATALOG_CACHE
+                staged.write_text(
+                    json.dumps({"version": __version__, "faces": entries}, separators=(",", ":")),
+                    encoding="utf-8",
+                )
+                staged.replace(self._directory / CATALOG_CACHE)
+        except OSError:
+            pass  # Listing works without the cache; the next refresh tries again.
 
     def load(self, face_id: str) -> Face:
         info = self._catalog.get(face_id)
@@ -522,12 +630,57 @@ class FaceLibrary:
     def install(self, source: Path) -> FaceInfo:
         face = load_face(source)
         self.refresh()
-        if face.info.id in self._catalog:
-            raise FaceError(f"Face ID already installed: {face.info.id}")
+
+        def copy(staging: Path) -> None:
+            data = _manifest(face.info.source)
+            (staging / "face.json").write_text(
+                json.dumps(data, indent=2) + "\n", encoding="utf-8"
+            )
+            for name in declared_image_names(data):
+                (staging / name).write_bytes(_image(face.info.source, name)[0])
+
+        self._install(face.info.id, copy)
+        self.refresh()
+        info = self._catalog.get(face.info.id)
+        if info is None:
+            raise FaceError(f"Installed face failed to load: {face.info.id}")
+        return info
+
+    def install_snapshot(
+        self, manifest: Mapping[str, Any], images: Mapping[str, bytes],
+    ) -> FaceInfo:
+        """Install an in-memory face, such as a converted Audion face.
+
+        IDs are checked against the catalog of the last refresh() plus the
+        faces installed since, so a batch of N faces probes N folders instead
+        of rescanning the library N times.
+        """
+        face = load_face_snapshot(dict(manifest), images, self._directory)
+
+        def write(staging: Path) -> None:
+            (staging / "face.json").write_text(
+                json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+            )
+            for name in declared_image_names(manifest):
+                (staging / name).write_bytes(images[name])
+
+        # _install validated the staged files that now form the target.
+        info = replace(face.info, source=self._install(face.info.id, write).resolve())
+        self._catalog[info.id] = info
+        entry = _catalog_entry(info, declared_image_names(manifest))
+        if entry is not None:
+            self._installed_entries[info.source.name] = entry
+        return info
+
+    def _install(self, face_id: str, write: Callable[[Path], None]) -> Path:
+        """Stage the files `write` creates, validate them, then publish the
+        folder under the face ID in one rename."""
+        if face_id in self._catalog:
+            raise FaceError(f"Face ID already installed: {face_id}")
         root = self.ensure_directory()
-        target = root / face.info.id
+        target = root / face_id
         if target.exists() or target.is_symlink():
-            raise FaceError(f"Face folder already exists: {face.info.id}")
+            raise FaceError(f"Face folder already exists: {face_id}")
         try:
             count = sum(p.is_dir() and not p.name.startswith(".") for p in root.iterdir())
             if count >= MAX_USER_FACES:
@@ -535,23 +688,14 @@ class FaceLibrary:
                     f"Remove an installed face before adding another ({MAX_USER_FACES}-face limit)"
                 )
             with TemporaryDirectory(prefix=".install-", dir=root) as temp:
-                staging = Path(temp) / face.info.id
+                staging = Path(temp) / face_id
                 staging.mkdir()
-                data = _manifest(face.info.source)
-                (staging / "face.json").write_text(
-                    json.dumps(data, indent=2) + "\n", encoding="utf-8"
-                )
-                for name in declared_image_names(data):
-                    (staging / name).write_bytes(_image(face.info.source, name)[0])
+                write(staging)
                 # Validate the staged snapshot, not a source that may have changed.
                 installed = load_face(staging)
-                if installed.info.id != face.info.id:
+                if installed.info.id != face_id:
                     raise FaceError("Face changed during installation; try again")
                 staging.rename(target)
         except (OSError, ValueError, RecursionError, struct.error) as exc:
             raise FaceError(f"Cannot install face: {exc}") from exc
-        self.refresh()
-        info = self._catalog.get(face.info.id)
-        if info is None:
-            raise FaceError(f"Installed face failed to load: {face.info.id}")
-        return info
+        return target

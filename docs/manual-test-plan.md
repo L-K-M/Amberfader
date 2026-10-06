@@ -151,6 +151,15 @@ can run without YouTube Music; playback checks still need a live session.
   controls, track changes during a gesture and switching back to bundled faces.
   Check the right-click menu exposes commands absent from the original artwork.
   Playback acceptance still requires the live YouTube Music session gate.
+- Choose **File → Import all Audion faces from ZIP…** with Panic's
+  `Faces - 2021-01-05.zip`. Check progress, **Stop**, the summary and its
+  details. Confirm the faces appear under **Installed** in the editor's Faces
+  panel and in the player's **Faces** window, and that importing again reports
+  them as already installed. Restart the player with the collection installed
+  and confirm it starts without a noticeable delay.
+- Open the editor and check the Faces panel lists installed and built-in faces.
+  Edit an installed face, save, and confirm the player shows the change after
+  selecting it again. A built-in face must open as an unsaved copy.
 - In Flatpak, select the containing folder through the native file picker,
   then a ZIP. Verify access includes the selected face's images. An unreadable
   source must show an error and leave the existing document intact.

@@ -408,3 +408,125 @@ def test_header_only_discovery_still_rejects_image_budget_violations(pack, libra
     library.refresh()
     assert "my-face" not in {face.id for face in library.faces}
     assert any("limit" in problem for problem in library.problems)
+
+
+def _snapshot(pack):
+    directory, data = pack
+    return data, {"background.png": (directory / "background.png").read_bytes()}
+
+
+def _count_probes(monkeypatch):
+    probed = []
+    original = face_module._probe_face
+
+    def counting(directory):
+        probed.append(directory.name)
+        return original(directory)
+
+    monkeypatch.setattr(face_module, "_probe_face", counting)
+    return probed
+
+
+def test_snapshot_install_lists_the_face_without_rescanning(pack, library, monkeypatch):
+    manifest, images = _snapshot(pack)
+    monkeypatch.setattr(library, "refresh", lambda: pytest.fail("a batch must not rescan"))
+    info = library.install_snapshot(manifest, images)
+    assert info.id == "my-face" and info in library.faces
+    assert {p.name for p in info.source.iterdir()} == {"face.json", "background.png"}
+    assert load_face(info.source).background == images["background.png"]
+    with pytest.raises(FaceError, match="already installed"):
+        library.install_snapshot(manifest, images)
+
+
+def test_snapshot_install_validates_before_writing(pack, library):
+    manifest, images = _snapshot(pack)
+    manifest["controls"]["play"] = manifest["controls"]["next"]
+    with pytest.raises(FaceError, match="overlaps"):
+        library.install_snapshot(manifest, images)
+    assert not (library.ensure_directory() / "my-face").exists()
+
+
+def test_snapshot_install_respects_the_face_limit(pack, library, monkeypatch):
+    monkeypatch.setattr(face_module, "MAX_USER_FACES", 1)
+    manifest, images = _snapshot(pack)
+    library.install_snapshot(manifest, images)
+    manifest["id"] = "my-second-face"
+    with pytest.raises(FaceError, match="1-face limit"):
+        library.install_snapshot(manifest, images)
+
+
+def test_catalog_cache_skips_probing_unchanged_faces(pack, library, monkeypatch, tmp_path):
+    info = library.install(pack[0])
+    assert (library.ensure_directory() / face_module.CATALOG_CACHE).is_file()
+    probed = _count_probes(monkeypatch)
+    restarted = FaceLibrary(library.ensure_directory(), tmp_path / "appearance.json")
+    assert info in restarted.faces
+    assert "my-face" not in probed
+
+
+def test_snapshot_installs_are_cached_for_the_next_refresh(pack, library, monkeypatch):
+    library.install_snapshot(*_snapshot(pack))
+    probed = _count_probes(monkeypatch)
+    library.refresh()
+    assert "my-face" in {face.id for face in library.faces}
+    assert "my-face" not in probed
+
+
+def test_catalog_cache_probes_a_changed_face_again(pack, library, monkeypatch):
+    info = library.install(pack[0])
+    (info.source / "background.png").write_bytes(png(1, 1))
+    probed = _count_probes(monkeypatch)
+    library.refresh()
+    assert "my-face" in probed
+    assert "my-face" not in {face.id for face in library.faces}
+    assert any("Background must match" in problem for problem in library.problems)
+
+
+def test_catalog_cache_lists_a_renamed_face(pack, library):
+    info = library.install(pack[0])
+    data = json.loads((info.source / "face.json").read_text())
+    data["name"] = "Renamed"
+    (info.source / "face.json").write_text(json.dumps(data))
+    library.refresh()
+    assert {face.id: face.name for face in library.faces}["my-face"] == "Renamed"
+
+
+@pytest.mark.parametrize("contents", [
+    "not json", "[]", '{"version": "0.0.0", "faces": {}}', '{"version": "%s", "faces": []}',
+])
+def test_stale_or_corrupt_catalog_cache_is_rebuilt(pack, library, monkeypatch, contents):
+    from amberfader import __version__
+
+    library.install(pack[0])
+    cache = library.ensure_directory() / face_module.CATALOG_CACHE
+    cache.write_text(contents.replace("%s", __version__))
+    probed = _count_probes(monkeypatch)
+    library.refresh()
+    assert "my-face" in probed and "my-face" in {face.id for face in library.faces}
+    stored = json.loads(cache.read_text())
+    assert stored["version"] == __version__ and "my-face" in stored["faces"]
+
+
+def test_forged_catalog_entry_is_not_trusted(pack, library):
+    library.install(pack[0])
+    cache = library.ensure_directory() / face_module.CATALOG_CACHE
+    data = json.loads(cache.read_text())
+    entry = data["faces"]["my-face"]
+    entry["info"][1] = "Forged"
+    entry["signature"][0][3] += 1
+    cache.write_text(json.dumps(data))
+    library.refresh()
+    assert {face.id: face.name for face in library.faces}["my-face"] == "My Face"
+
+
+def test_faces_with_symbolic_links_are_probed_every_time(pack, library, monkeypatch):
+    info = library.install(pack[0])
+    background = info.source / "background.png"
+    (info.source / "real.png").write_bytes(background.read_bytes())
+    background.unlink()
+    background.symlink_to(info.source / "real.png")
+    library.refresh()
+    assert "my-face" in {face.id for face in library.faces}
+    probed = _count_probes(monkeypatch)
+    library.refresh()
+    assert "my-face" in probed

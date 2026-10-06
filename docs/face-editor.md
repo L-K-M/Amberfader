@@ -31,6 +31,12 @@ or grant access to the destination when starting the editor.
 
 ## Create and edit
 
+The **Faces** panel lists the player's faces when the editor opens. Double-click
+a face, or select it and click **Edit face**. Installed faces, from your faces
+folder, open in place: **Save** updates the installed face, and the player uses
+the change the next time it loads that face. Built-in faces open as an unsaved
+copy. Filter the list by name; **View → Faces** shows or hides the panel.
+
 Choose a bundled face as your starting template. The editor creates a custom
 copy with its own ID and name; it never saves over the bundled artwork. You can
 also use **Face editor…** in the player's menu or **Edit a copy…** in the face
@@ -76,6 +82,21 @@ the document. Importing does not install the face or change the player. Use
 **Save As** to create a portable face folder, then install it through the player.
 Original source credits remain visible in the Face panel and are included in
 the saved manifest.
+
+### Import a whole collection
+
+Choose **File → Import all Audion faces from ZIP…** and select a collection ZIP,
+such as `Faces - 2021-01-05.zip` from [Panic's
+downloads](https://download.panic.com/audion-viewer/) (856 faces). The editor
+converts every face and installs it in your faces folder. A progress window
+names each face; **Stop** ends the import and keeps the faces installed so far.
+The summary counts installed faces and lists any that could not be converted.
+
+Imported faces appear under **Installed** in the Faces panel, ready to edit, and
+in the player's **Faces** window. Importing the same ZIP again skips the faces
+it already installed. The open document is not changed. In testing, Panic's
+856-face collection took about a minute and used about 260 MiB of disk space.
+Up to 1024 installed faces load.
 
 The importer supports Panic's preserved JSON/PNG format containing `index.json`
 and its images. Original classic resource-fork and PICT files require conversion
