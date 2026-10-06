@@ -47,7 +47,8 @@ done
 
 echo "-- verify the ad-hoc signatures"
 for APP in "${APPS[@]}"; do
-  codesign --verify --deep --strict "$APP"
+  codesign --verify --deep --strict "$APP" ||
+    { echo "error: signature of $APP does not verify" >&2; exit 1; }
   codesign -dv "$APP" 2>&1 | grep -q "Signature=adhoc" ||
     { echo "error: $APP is not ad-hoc signed" >&2; exit 1; }
 done
@@ -56,7 +57,8 @@ echo "-- disk image"
 STAGE="$WORK/dmg"
 mkdir -p "$STAGE"
 for APP in "${APPS[@]}"; do
-  cp -R "$APP" "$STAGE/"
+  # ditto preserves the signature, resource forks and permissions.
+  ditto "$APP" "$STAGE/$(basename "$APP")"
 done
 ln -s /Applications "$STAGE/Applications"
 OUT="$DIST/Amberfader-${VERSION}-macos-arm64.dmg"

@@ -164,9 +164,13 @@ for target in "${TARGETS[@]}"; do
           for APP in "${APPS[@]}"; do
             name="$(basename "$APP")"
             exe="${name%.app}"
-            if pgrep -x "$exe" >/dev/null; then
+            # macOS truncates process names to 15 chars (MAXCOMLEN), so
+            # -x must match the truncated name or "Amberfader Face Editor"
+            # never quits.
+            short_exe="${exe:0:15}"
+            if pgrep -x "$short_exe" >/dev/null; then
               echo "-- quitting running $exe"
-              pkill -x "$exe"; sleep 1
+              pkill -x "$short_exe"; sleep 1
             fi
             echo "-- installing /Applications/$name"
             if ! rm -rf "/Applications/$name"; then
