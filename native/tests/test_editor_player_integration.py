@@ -130,3 +130,21 @@ def test_cancel_close_keeps_dirty_editor_and_menu_reuses_it(player, qapp, monkey
     assert editor.document is document
     assert len(prompts) == 1
     assert sent == []
+
+
+def test_player_editor_lists_faces_installed_after_startup(player, qapp):
+    from amberfader.face_document import FaceDocument
+    from amberfader.face_library import BUILTIN_DIRECTORY
+
+    window, library, sent = player
+    document = FaceDocument.from_template(
+        BUILTIN_DIRECTORY / "viridian", face_id="late-face", name="Late Face",
+    )
+    document.save(library.ensure_directory() / "late-face")
+    window.open_face_editor()
+    installed = window._face_editor._faces_panel._tree.topLevelItem(0)
+    assert [installed.child(index).text(0) for index in range(installed.childCount())] == [
+        "Late Face",
+    ]
+    assert "late-face" in {face.id for face in library.faces}
+    assert sent == []

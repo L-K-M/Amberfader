@@ -15,9 +15,14 @@ pytest.importorskip("PySide6")
 from PySide6.QtGui import QColor, QImage
 
 from amberfader import audion_import
-from amberfader.audion_import import import_audion_face, list_audion_faces
+from amberfader.audion_import import (
+    AudionArchive,
+    AudionInstallStatus,
+    import_audion_face,
+    list_audion_faces,
+)
 from amberfader.face_document import FaceDocument
-from amberfader.face_library import FaceError, load_face
+from amberfader.face_library import FaceError, FaceLibrary, load_face
 
 
 def _image(path: Path, size=(8, 10), color="#d54070", alpha=255):
@@ -471,3 +476,112 @@ def test_truncated_member_reports_face_error(tmp_path, monkeypatch):
     monkeypatch.setattr(ZipFile, "open", truncate_after_header)
     with pytest.raises(FaceError, match="Cannot import Audion face: ZIP ended unexpectedly"):
         import_audion_face(list_audion_faces(archive)[0])
+
+
+def _collection(audion_pack, archive, names=("Chromatic Orb", "Second Orb")):
+    with ZipFile(archive, "w") as writer:
+        for name in names:
+            for path in audion_pack.iterdir():
+                writer.write(path, f"Faces/{name}/{path.name}")
+    return archive
+
+
+def _install_all(archive, library, check=lambda face: None):
+    with AudionArchive(archive) as collection:
+        return [collection.install(face, library, check) for face in collection.faces]
+
+
+def test_archive_installs_every_face_and_skips_them_on_reimport(
+    audion_pack, tmp_path, monkeypatch, qapp,
+):
+    archive = _collection(audion_pack, tmp_path / "Faces.zip")
+    library = FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json")
+    opened = []
+    original = audion_import._archive
+
+    def counting(path):
+        opened.append(path)
+        return original(path)
+
+    monkeypatch.setattr(audion_import, "_archive", counting)
+    checked = []
+    outcomes = _install_all(archive, library, checked.append)
+    # One open for the collection, not one per face.
+    assert len(opened) == 1
+    assert [outcome.status for outcome in outcomes] == [AudionInstallStatus.INSTALLED] * 2
+    assert len(checked) == 2
+    ids = [outcome.face_id for outcome in outcomes]
+    for outcome in outcomes:
+        face = library.load(outcome.face_id)
+        assert face.info.name == outcome.face.name
+        assert face.source_credit.startswith("Chromatic Orb by Sample Artist")
+    assert len(set(ids)) == 2
+
+    restarted = FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json")
+    again = _install_all(archive, restarted)
+    assert [outcome.status for outcome in again] == [AudionInstallStatus.ALREADY_INSTALLED] * 2
+    assert [outcome.face_id for outcome in again] == ids
+
+
+def test_archive_reports_a_broken_face_and_installs_the_rest(audion_pack, tmp_path, qapp):
+    archive = tmp_path / "Faces.zip"
+    with ZipFile(archive, "w") as writer:
+        for path in audion_pack.iterdir():
+            writer.write(path, f"Faces/Good/{path.name}")
+        writer.writestr("Faces/Broken/index.json", "{}")
+    library = FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json")
+    outcomes = {outcome.face.name: outcome for outcome in _install_all(archive, library)}
+    assert outcomes["Broken"].status is AudionInstallStatus.FAILED
+    assert "base.png" in outcomes["Broken"].problem
+    assert outcomes["Good"].status is AudionInstallStatus.INSTALLED
+    assert [face.id for face in library.faces if face.id.startswith("audion-")] == [
+        outcomes["Good"].face_id,
+    ]
+
+
+def test_duplicate_artwork_fails_only_its_own_face(audion_pack, tmp_path, qapp):
+    archive = _collection(audion_pack, tmp_path / "Faces.zip", ("Good", "Doubled"))
+    with ZipFile(archive, "a") as writer, pytest.warns(UserWarning, match="Duplicate name"):
+        writer.write(audion_pack / "play.png", "Faces/Doubled/play.png")
+    library = FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json")
+    outcomes = {outcome.face.name: outcome for outcome in _install_all(archive, library)}
+    assert outcomes["Doubled"].status is AudionInstallStatus.FAILED
+    assert "duplicate artwork" in outcomes["Doubled"].problem
+    assert outcomes["Good"].status is AudionInstallStatus.INSTALLED
+
+
+def test_rejected_face_is_not_installed(audion_pack, tmp_path, qapp):
+    archive = _collection(audion_pack, tmp_path / "Faces.zip", ("Chromatic Orb",))
+    library = FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json")
+
+    def reject(face):
+        raise FaceError("Cannot display this face")
+
+    [outcome] = _install_all(archive, library, reject)
+    assert outcome.status is AudionInstallStatus.FAILED
+    assert outcome.problem == "Cannot display this face"
+    assert not any(face.id.startswith("audion-") for face in library.faces)
+    assert not any(library.ensure_directory().iterdir())
+
+
+def test_unreadable_archive_is_a_face_error(tmp_path):
+    (tmp_path / "Text.zip").write_text("not a ZIP")
+    with ZipFile(tmp_path / "Empty.zip", "w") as writer:
+        writer.writestr("readme.txt", "no faces")
+    for archive in (tmp_path / "Missing.zip", tmp_path / "Text.zip", tmp_path / "Empty.zip"):
+        with pytest.raises(FaceError):
+            AudionArchive(archive)
+
+
+def test_same_path_in_another_collection_is_a_different_face(audion_pack, tmp_path, qapp):
+    first = _collection(audion_pack, tmp_path / "First.zip", ("Chromatic Orb",))
+    index = json.loads((audion_pack / "index.json").read_text())
+    index["faceInfo"] = ["Another Orb by Another Artist"]
+    (audion_pack / "index.json").write_text(json.dumps(index))
+    second = _collection(audion_pack, tmp_path / "Second.zip", ("Chromatic Orb",))
+    library = FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json")
+    [installed] = _install_all(first, library)
+    [other] = _install_all(second, library)
+    assert other.status is AudionInstallStatus.INSTALLED
+    assert other.face_id != installed.face_id
+    assert library.load(other.face_id).source_credit.startswith("Another Orb")

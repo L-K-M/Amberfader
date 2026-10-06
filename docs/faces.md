@@ -54,7 +54,8 @@ rectangular backings; the empty metal regions let you drag the window.
 These are original designs inspired by [Audion Faces](https://panic.com/blog/facing-forward/),
 SoundJam MP, and late-1990s desktop players. They do not contain those apps'
 artwork. The [visual editor](face-editor.md#import-audion-faces) can import Panic's
-preserved JSON/PNG Audion face folders and ZIP collections. Classic resource-fork
+preserved JSON/PNG Audion face folders and ZIP collections, or install every
+face in a collection ZIP at once. Classic resource-fork
 or PICT faces need conversion first; Winamp skin archives are unsupported.
 
 ## Install a face
@@ -240,7 +241,7 @@ preview reports these limitations before you accept the copy.
 ### Resource and path limits
 
 - Manifest: 64 KiB. Each PNG: 4 MiB and at most 2048×2048 pixels.
-- All declared images together: 16 MiB. Installed folders loaded: at most 64.
+- All declared images together: 16 MiB. Installed folders loaded: at most 1024.
 - Declared PNG dimensions together: 33,554,432 pixels (128 MiB at 32 bits),
   checked before decoding. Repeated asset references share decoded storage.
 - Image filenames use letters, digits, underscores and hyphens plus `.png`.
@@ -252,6 +253,9 @@ preview reports these limitations before you accept the copy.
 
 Discovery reads metadata and PNG headers, not full image payloads. Selected
 faces and installation snapshots are loaded and validated again before use.
+A `.catalog.json` file in the faces folder records faces that passed discovery,
+so later scans skip faces whose files have not changed. Delete it to rescan
+every face.
 
 Qt styles are generated from validated palette tokens. Packs cannot import
 stylesheets, load fonts, make network requests, or execute code. New format
