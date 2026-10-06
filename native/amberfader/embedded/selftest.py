@@ -50,6 +50,17 @@ def _seccomp_mode(proc: Path, pid: int) -> str | None:
     return None
 
 
+def _pid_namespace_depth(proc: Path, pid: int) -> int:
+    # NSpid lists the process's id in each PID namespace it belongs to.
+    try:
+        for line in (proc / str(pid) / "status").read_text().splitlines():
+            if line.startswith("NSpid:"):
+                return len(line.split()) - 1
+    except OSError:
+        return 0
+    return 0
+
+
 def _descends_from(proc: Path, pid: int, ancestor: int) -> bool:
     seen: set[int] = set()
     current: int | None = pid
@@ -73,9 +84,17 @@ def _is_webengine(argv: list[bytes]) -> bool:
 
 
 def renderer_sandbox(proc: Path = Path("/proc"), root_pid: int | None = None) -> str:
-    """'on' when every Qt WebEngine renderer below `root_pid` runs under a
-    seccomp filter (Seccomp: 2), 'off' when one does not, 'absent' when no
-    renderer was found.
+    """'on' when every Qt WebEngine renderer below `root_pid` runs under both
+    sandbox layers, 'seccomp only' when the namespace layer is missing, 'off'
+    when a renderer has no seccomp filter, 'absent' when no renderer was found.
+
+    Chromium's sandbox has two layers: a seccomp filter (Seccomp: 2) and its
+    own user and PID namespaces. The namespace layer is the one Ubuntu's
+    AppArmor userns restriction takes away, and without it Chromium still
+    runs with the filter alone, so both are checked. A renderer inside the
+    namespaces has more than one id in NSpid (observed with Qt WebEngine
+    6.11: `NSpid: 4432 4 1` with it, `NSpid: 4478` with
+    --disable-namespace-sandbox).
 
     Chromium forks renderers from its sandboxed zygote, and they keep the
     zygote's command line (`--type=zygote`). With the namespace sandbox the
@@ -106,7 +125,11 @@ def renderer_sandbox(proc: Path = Path("/proc"), root_pid: int | None = None) ->
     ]
     if not renderers:
         return "absent"
-    return "on" if all(_seccomp_mode(proc, pid) == "2" for pid in renderers) else "off"
+    if not all(_seccomp_mode(proc, pid) == "2" for pid in renderers):
+        return "off"
+    if not all(_pid_namespace_depth(proc, pid) > 1 for pid in renderers):
+        return "seccomp only"
+    return "on"
 
 
 class SelfTest:

@@ -287,6 +287,9 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends ./dist/amberfader_*_*.deb
           sudo aa-status | grep amberfader
+          # Under the restriction an unconfined process cannot map itself
+          # into a new user namespace.
+          if unshare -Ur true; then echo "userns: unrestricted"; else echo "userns: restricted"; fi
           QT_QPA_PLATFORM=offscreen amberfader --self-test
           # Control: started outside the profile's path, the same app must
           # not get the sandbox, or the restriction was never in effect.

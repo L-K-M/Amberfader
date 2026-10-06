@@ -104,7 +104,11 @@ not a test failure; a re-run (or the owner) got them through.
   keep the zygote's `--type=zygote` command line; with the namespace
   sandbox there is an init process between the browser and the zygote.
   A renderer is a sandboxed-zygote process forked by another one with no
-  such child; sandbox on means `Seccomp: 2` for all of them.
+  such child; sandbox on means `Seccomp: 2` and a nested PID namespace
+  (more than one id in `NSpid`) for all of them. Seccomp alone is reported
+  as "seccomp only": Chromium keeps running with just the filter when the
+  namespace layer is missing (`--disable-namespace-sandbox`, or Ubuntu's
+  userns restriction without a profile).
 - Shell heredocs: when editing files that contain `EOF` lines (the build
   scripts), use a different delimiter for the outer heredoc.
 - Repo rules: no em dashes or emojis in new prose; commit subject imperative,
