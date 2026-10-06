@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds every Amberfader target and stages results in dist/.
 #
-# Usage: scripts/build.sh [target...] [--clean] [--check]
+# Usage: scripts/build.sh [target...] [--clean] [--check] [--install] [--run]
 #   targets: wheel deb flatpak macos   (default: all this machine can build)
 #   A missing toolchain skips a target on a default run, but fails when the
 #   target was named explicitly.
@@ -11,8 +11,11 @@
 #   flatpak  the wheel on Flathub's PySide BaseApp      -> dist/amberfader_<ver>.flatpak
 #   macos    Amberfader.app in an ad-hoc signed .dmg    -> dist/Amberfader-<ver>-macos-arm64.dmg
 #
-#   --clean  remove dist/ first
-#   --check  print the plan and exit
+#   --clean    remove dist/ first
+#   --check    print the plan and exit
+#   --install  build the macOS app and install it into /Applications, then
+#              reveal it (implies the macos target)
+#   --run      launch the installed/built app (implies the macos target)
 #
 # Requirements: Node 22+ (page scripts, every target), Python 3.11+ + uv
 # (wheel), dpkg-deb (deb), flatpak + flatpak-builder + uv (flatpak, Linux
@@ -28,6 +31,8 @@ fi
 DIST="dist"
 CLEAN=0
 CHECK=0
+INSTALL=0
+RUN=0
 EXPLICIT=""
 TARGETS=()
 
@@ -35,10 +40,24 @@ for arg in "$@"; do
   case "$arg" in
     --clean) CLEAN=1 ;;
     --check) CHECK=1 ;;
+    --install) INSTALL=1 ;;
+    --run) RUN=1 ;;
     --*) echo "!! unknown option: $arg (see --help)" >&2; exit 2 ;;
     *) TARGETS+=("$arg") ;;
   esac
 done
+
+# --install/--run are about the macOS app: with no explicit targets they build
+# just that, and with explicit targets they make sure `macos` is among them.
+if [[ $INSTALL -eq 1 || $RUN -eq 1 ]]; then
+  if [[ ${#TARGETS[@]} -eq 0 ]]; then
+    TARGETS=(macos); EXPLICIT=1
+  else
+    found=0
+    for t in "${TARGETS[@]}"; do [[ "$t" == macos ]] && found=1; done
+    [[ $found -eq 0 ]] && TARGETS+=(macos)
+  fi
+fi
 
 if [[ ${#TARGETS[@]} -eq 0 ]]; then
   TARGETS=(wheel deb flatpak macos)
@@ -139,6 +158,24 @@ for target in "${TARGETS[@]}"; do
       page_scripts || { FAILED+=("macos"); continue; }
       if scripts/build-macos.sh "$VERSION" "$DIST"; then
         OK+=("macos → $DIST/")
+        APP="$DIST/macos/dist/Amberfader.app"
+        if [[ $INSTALL -eq 1 ]]; then
+          echo "-- installing /Applications/Amberfader.app"
+          rm -rf /Applications/Amberfader.app
+          # ditto preserves the signature, resource forks and permissions.
+          if [[ -d "$APP" ]] && ditto "$APP" /Applications/Amberfader.app; then
+            OK+=("installed → /Applications/Amberfader.app")
+            if [[ $RUN -eq 1 ]]; then
+              open /Applications/Amberfader.app
+            else
+              open -R /Applications/Amberfader.app
+            fi
+          else
+            FAILED+=("macos (install)")
+          fi
+        elif [[ $RUN -eq 1 ]]; then
+          open "$APP"
+        fi
       else
         FAILED+=("macos")
       fi

@@ -134,7 +134,8 @@ npm ci                 # page bundle toolchain
 uv sync                # python env incl. PySide6 and Qt WebEngine
 npm start              # build the page bundle and run Amberfader
 scripts/check.sh       # typecheck + lint + unit tests, both languages
-scripts/build.sh       # wheel, .deb, .flatpak (skips what this machine can't build)
+scripts/build.sh       # wheel, .deb, .flatpak, macOS .dmg (skips what this
+                       # machine can't build; --install puts the app in /Applications)
 ```
 
 `npm start` passes no options; run `uv run python -m amberfader --help` for
