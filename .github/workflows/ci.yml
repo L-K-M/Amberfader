@@ -257,14 +257,23 @@ jobs:
       # Depends must be complete: a clean container has only what they pull
       # in. Root in a container cannot start Chromium's sandbox, so every
       # check but that one must pass here; the next step covers the sandbox.
+      # The self-test runs offscreen, so the desktop platform plugins are
+      # checked with ldd (the Wayland server plugins are never loaded).
       - name: Self-test the .deb in a clean Ubuntu 24.04
         run: |
           docker run --rm -v "$PWD/dist:/dist:ro" ubuntu:24.04 sh -c '
             apt-get update -qq &&
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
               /dist/amberfader_*_*.deb >/dev/null &&
+            cd /opt/amberfader/lib/PySide6/Qt &&
+            ldd libexec/QtWebEngineProcess plugins/platforms/*.so plugins/xcbglintegrations/*.so \
+              plugins/wayland-decoration-client/*.so plugins/wayland-graphics-integration-client/*.so \
+              plugins/wayland-shell-integration/*.so | grep "not found" | sort -u | sed "s/^/missing: /"
             QT_QPA_PLATFORM=offscreen QTWEBENGINE_DISABLE_SANDBOX=1 amberfader --self-test
-          ' | tee self-test.log || true
+          ' | tee self-test.log
+          if grep "^missing: " self-test.log; then exit 1; fi
+          # The verdict line prints only when the self-test ran to the end.
+          grep -q "^amberfader self-test: " self-test.log
           grep -q "^self-test: attach: ok" self-test.log
           if grep "^self-test: .*: FAILED" self-test.log | grep -v "renderer sandbox"; then
             exit 1
@@ -279,6 +288,14 @@ jobs:
           sudo apt-get install -y --no-install-recommends ./dist/amberfader_*_*.deb
           sudo aa-status | grep amberfader
           QT_QPA_PLATFORM=offscreen amberfader --self-test
+          # Control: started outside the profile's path, the same app must
+          # not get the sandbox, or the restriction was never in effect.
+          PYTHONPATH=/opt/amberfader/lib QT_QPA_PLATFORM=offscreen timeout 120 \
+            python3 -m amberfader --self-test > control.log 2>&1 || true
+          grep "renderer sandbox" control.log || echo "control: no sandbox line"
+          if grep -q "renderer sandbox: ok (on)" control.log; then
+            echo "::error::the sandbox started without the AppArmor profile"; exit 1
+          fi
 
       - name: Upload .deb
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

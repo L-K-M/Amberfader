@@ -51,42 +51,16 @@ not a test failure; a re-run (or the owner) got them through.
 ## What remains, in order
 
 1. **Linux packages** (plan Phase 2):
-   - deb: today it installs `amberfader` (now incl. PySide6-Addons) into
-     `/opt/amberfader/lib`, but `Depends` lacks Qt WebEngine's system
-     libraries. CI's embedded job installs: `libnss3 libasound2t64
-     libxkbfile1 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libgbm1
-     libxcb-dri3-0 libgssapi-krb5-2`. Computed on 2026-10-05 from
-     `readelf -d` over PySide6 6.11.2's Qt libraries, `QtWebEngineProcess`
-     and platform plugins, minus libraries the wheel bundles, mapped with
-     `ldconfig -p` + `dpkg -S` on Ubuntu 24.04: `libegl1 libgl1 libx11-6
-     libx11-xcb1 libxcomposite1 libxdamage1 libxext6 libxfixes3 libxrandr2
-     libxtst6 libasound2t64 libbrotli1 libdbus-1-3 libdrm2 libexpat1
-     libfontconfig1 libfreetype6 libgbm1 libglib2.0-0t64 libgssapi-krb5-2
-     libnspr4 libnss3 libudev1 libwayland-client0 libwayland-cursor0
-     libwayland-egl1 libxcb1 libxcb-cursor0 libxcb-dri3-0 libxcb-glx0
-     libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0
-     libxcb-render0 libxcb-render-util0 libxcb-shape0 libxcb-shm0
-     libxcb-sync1 libxcb-util1 libxcb-xfixes0 libxcb-xkb1 libxkbcommon0
-     libxkbcommon-x11-0 libxkbfile1 zlib1g libzstd1` (libc, libstdc++ and
-     libgcc are essential). For Debian 12 write `libasound2t64 | libasound2`
-     and `libglib2.0-0t64 | libglib2.0-0`. Prove the list with
-     `amberfader --self-test` in a clean `ubuntu:24.04` container.
-   - **Open problem: Chromium's sandbox on Ubuntu 23.10+.** AppArmor
-     restricts unprivileged user namespaces
-     (`kernel.apparmor_restrict_unprivileged_userns=1`). Chromium's
-     namespace sandbox is set up when the browser process launches the
-     zygote, and in Qt WebEngine the browser process is the Python
-     interpreter, so a profile attached to `QtWebEngineProcess` alone may
-     not be enough. Not yet tested. Ubuntu's `apparmor` package may ship a
-     `QtWebEngineProcess` profile for the system Qt path (unverified; the
-     package download from this container 404'd). Find out in CI on
-     `ubuntu-24.04` with the knob set to 1 before choosing. Never ship with
-     the sandbox silently disabled; if no profile works, tell the owner.
+   - deb: PR #36 (Depends, Python launcher, AppArmor profile, two CI
+     self-tests). Its first CI run showed the profile works: with
+     `kernel.apparmor_restrict_unprivileged_userns=1` the installed deb
+     reported `renderer sandbox: ok (on)`. Desktop launch on a real Ubuntu
+     machine still needs the owner.
    - Flatpak: add `--share=network`, `--socket=pulseaudio`; keep the
      `xdg-run/amberfader` share (single-instance socket). Chromium's sandbox
      inside Flatpak needs the spike described in the plan.
-   - CI: separate `deb` and `flatpak` jobs; each runs `amberfader --self-test`
-     on the installed package; the deb job sets the AppArmor knob to 1.
+   - CI: a `flatpak` job that runs `amberfader --self-test` on the
+     installed bundle (the `deb` job already does this for the deb).
    - Desktop entry and hicolor icons from `media-sources/icon.png`.
 2. **macOS target** (plan Phase 3): `4dd2452`; CI builds the `.dmg` and the
    frozen app's self-test passes on macos-15. The owner still has to install
