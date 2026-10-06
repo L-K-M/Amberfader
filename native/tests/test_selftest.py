@@ -1,5 +1,7 @@
 """Renderer sandbox detection for --self-test, on synthetic /proc trees
 shaped like Qt WebEngine 6.11's processes with and without the sandbox."""
+import shutil
+
 import pytest
 
 pytest.importorskip(
@@ -72,6 +74,12 @@ def test_outer_pid_namespace_alone_is_seccomp_only(tmp_path):
     tree[110] = (104, ZYGOTE, 2, (5, 1))
     (tmp_path / "nested").mkdir()
     assert renderer_sandbox(make_proc(tmp_path / "nested", tree), BROWSER) == "on"
+
+
+def test_unreadable_browser_namespace_depth_is_not_on(tmp_path):
+    proc = make_proc(tmp_path, sandboxed())
+    shutil.rmtree(proc / str(BROWSER))
+    assert renderer_sandbox(proc, BROWSER) == "seccomp only"
 
 
 def test_one_unfiltered_renderer_is_off(tmp_path):

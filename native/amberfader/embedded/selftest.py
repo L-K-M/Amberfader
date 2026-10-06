@@ -130,8 +130,12 @@ def renderer_sandbox(proc: Path = Path("/proc"), root_pid: int | None = None) ->
         return "absent"
     if not all(_seccomp_mode(proc, pid) == "2" for pid in renderers):
         return "off"
+    # An unreadable browser depth would turn this into "deeper than 0", which
+    # every renderer passes, so it counts as unproven.
     browser_depth = _pid_namespace_depth(proc, root_pid)
-    if not all(_pid_namespace_depth(proc, pid) > browser_depth for pid in renderers):
+    if browser_depth == 0 or not all(
+        _pid_namespace_depth(proc, pid) > browser_depth for pid in renderers
+    ):
         return "seccomp only"
     return "on"
 
