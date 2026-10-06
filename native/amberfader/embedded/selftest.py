@@ -119,7 +119,7 @@ def _argv(proc: Path, pid: int) -> list[bytes]:
     # Chromium can rewrite its command line into one string, as the Flatpak
     # build does: "/app/lib/libexec/QtWebEngineProcess --type=renderer ...".
     if len(argv) == 1 and b" --" in argv[0]:
-        return argv[0].split(b" ")
+        return argv[0].split()
     return argv
 
 

@@ -116,9 +116,10 @@ not a test failure; a re-run (or the owner) got them through.
   all of them. Inside Flatpak the portal starts the sandboxed zygote below
   the sandbox's init process, not the browser, and Chromium shows its
   command line as one string, so there every Qt WebEngine process in the
-  app's PID namespace counts (`Scope.PID_NAMESPACE`). Comparing with the browser matters inside Flatpak and
-  containers, where every process has an outer PID namespace. Seccomp alone is reported
-  as "seccomp only": Chromium keeps running with just the filter when the
+  app's PID namespace counts (`Scope.PID_NAMESPACE`). The seccomp filter
+  count is still compared with the browser's there and in containers,
+  where every process inherits a filter. Seccomp alone is reported as
+  "seccomp only": Chromium keeps running with just the filter when the
   namespace layer is missing (`--disable-namespace-sandbox`, or Ubuntu's
   userns restriction without a profile).
 - Shell heredocs: when editing files that contain `EOF` lines (the build

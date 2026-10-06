@@ -246,3 +246,6 @@ def test_flatpak_keeps_chromiums_sandbox_through_the_pyside_baseapp():
         assert f"  - {arg}\n" in manifest
     assert "QTWEBENGINE_DISABLE_SANDBOX" not in manifest
     assert "no-sandbox" not in manifest
+    # docs/privacy.md lists the one shared folder; nothing broader.
+    filesystems = [line for line in manifest.splitlines() if "--filesystem=" in line]
+    assert filesystems == ["  - --filesystem=xdg-run/amberfader:create"]

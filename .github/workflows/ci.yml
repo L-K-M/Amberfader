@@ -369,9 +369,10 @@ jobs:
         run: |
           dbus-run-session -- bash -euo pipefail -c '
             app=(flatpak run --env=QT_QPA_PLATFORM=offscreen ch.lkmc.amberfader --test-page --background)
+            socket="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/amberfader/embedded.sock"
+            rm -f "$socket"
             "${app[@]}" > first.log 2>&1 &
             first=$!
-            socket="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/amberfader/embedded.sock"
             for _ in $(seq 90); do [ -S "$socket" ] && break; sleep 1; done
             [ -S "$socket" ] || { cat first.log; echo "::error::no socket from the first instance"; exit 1; }
             timeout 60 "${app[@]}"

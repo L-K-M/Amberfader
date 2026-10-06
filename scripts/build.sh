@@ -116,8 +116,8 @@ for target in "${TARGETS[@]}"; do
       if [[ "$(uname -s)" != "Linux" ]]; then
         skip_or_fail flatpak "Flatpak builds run on Linux"; continue
       fi
-      if ! have flatpak-builder || ! have uv; then
-        skip_or_fail flatpak "flatpak-builder or uv not installed"; continue
+      if ! have flatpak || ! have flatpak-builder || ! have uv; then
+        skip_or_fail flatpak "flatpak, flatpak-builder or uv not installed"; continue
       fi
       page_scripts || { FAILED+=("flatpak"); continue; }
       wheels="$(mktemp -d)"

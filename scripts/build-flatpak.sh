@@ -39,10 +39,12 @@ echo "-- wheels for the runtime's Python $PYTHON_VERSION"
 rm -rf dist/flatpak
 mkdir -p "$SRC/wheels" "$BUILD" "$REPO"
 cp "$WHEEL" "$SRC/wheels/"
-# PySide6 and shiboken6 come from the BaseApp, built against its Qt.
+# PySide6 and shiboken6 come from the BaseApp, built against its Qt. pip
+# evaluates the lock's environment markers against the Python it runs on,
+# so it runs on the runtime's version.
 uv export --frozen --no-dev --no-hashes --no-emit-project --format requirements-txt |
   grep -viE '^(pyside6|shiboken6)' > "$SRC/requirements.txt"
-uv tool run pip download --quiet --only-binary=:all: --no-deps \
+uv tool run --python "$PYTHON_VERSION" pip download --quiet --only-binary=:all: --no-deps \
   --python-version "$PYTHON_VERSION" --implementation cp \
   --platform manylinux_2_28_x86_64 --platform manylinux_2_17_x86_64 \
   --platform manylinux2014_x86_64 \
