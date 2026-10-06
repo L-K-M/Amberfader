@@ -18,9 +18,7 @@ def build_environment(tmp_path):
     scripts.mkdir(parents=True)
     shutil.copyfile(ROOT / "scripts/build-deb.sh", scripts / "build-deb.sh")
     shutil.copytree(ROOT / "packaging/icons", root / "packaging/icons")
-    linux = root / "packaging/linux"
-    linux.mkdir(parents=True)
-    shutil.copyfile(ROOT / "packaging/linux/apparmor-amberfader", linux / "apparmor-amberfader")
+    shutil.copytree(ROOT / "packaging/linux", root / "packaging/linux")
 
     # Bash functions isolate external tooling, including the absolute launcher
     # interpreter. File staging still runs through the unmodified build script.
@@ -228,3 +226,26 @@ def test_deb_python_bounds_reject_next_minor_prereleases(build_environment, vers
         assert comparison.returncode in (0, 1), comparison.stderr
         comparisons.append(comparison.returncode == 0)
     assert all(comparisons) == accepted
+
+
+def test_flatpak_keeps_chromiums_sandbox_through_the_pyside_baseapp():
+    """The BaseApp's Qt WebEngine sandboxes renderers through Flatpak's own
+    sandbox; the manifest must never turn Chromium's sandbox off."""
+    manifest = (ROOT / "packaging/flatpak/ch.lkmc.amberfader.yml").read_text()
+    fields = dict(
+        line.split(": ", 1) for line in manifest.splitlines()
+        if ": " in line and not line.startswith((" ", "#"))
+    )
+    assert fields["base"] == "io.qt.PySide.BaseApp"
+    assert fields["runtime"] == "org.kde.Platform"
+    assert fields["base-version"] == fields["runtime-version"]
+    for arg in (
+        "--share=network", "--socket=pulseaudio", "--filesystem=xdg-run/amberfader:create",
+        "--env=QTWEBENGINEPROCESS_PATH=/app/bin/QtWebEngineProcess",
+    ):
+        assert f"  - {arg}\n" in manifest
+    assert "QTWEBENGINE_DISABLE_SANDBOX" not in manifest
+    assert "no-sandbox" not in manifest
+    # docs/privacy.md lists the one shared folder; nothing broader.
+    filesystems = [line for line in manifest.splitlines() if "--filesystem=" in line]
+    assert filesystems == ["  - --filesystem=xdg-run/amberfader:create"]

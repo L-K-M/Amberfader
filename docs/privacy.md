@@ -62,3 +62,9 @@ current track is not immediately re-added.
   allowlist; redirects are re-validated against it.
 - Python dependencies: PySide6 (Qt, including Qt WebEngine) and jsonschema.
   No runtime network SDKs.
+- The Flatpak may use the network, audio, the display and the GPU, talk to
+  Plasma's global-menu registrar, and share one folder in your runtime
+  directory (`amberfader`) for the single-instance socket. The KDE runtime
+  adds read access to your KDE settings (`kdeglobals`) and their change
+  notifications. Chromium's renderers run in a further Flatpak sandbox of
+  their own.

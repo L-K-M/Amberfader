@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (standalone app)
 
+- The Flatpak runs the standalone app with Chromium's renderer sandbox on.
+  It is built from the wheel on Flathub's PySide BaseApp, whose Qt
+  WebEngine sandboxes renderers through Flatpak's own sandbox, instead of
+  repacking the deb, whose Qt WebEngine cannot. It moves to the KDE 6.11
+  runtime (6.8 is end of life) and gains network and audio access. CI
+  self-tests the installed bundle and checks that a second launch hands
+  over to the first.
 - The `.deb` declares the system libraries Qt WebEngine needs and ships an
   AppArmor profile, so Chromium's sandbox can start on Ubuntu 23.10 and
   later, which restrict unprivileged user namespaces.
@@ -63,11 +70,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   YouTube Music in Amberfader's own window, driven by the unchanged site
   adapter through an in-process router. Requires the new `embedded` extra.
   Pending a manual gate; see docs/embedded-browser.md.
-- CI now repacks the .deb as a Flatpak bundle and smoke-checks the installed
-  app in the real runtime (command exists in /app/bin; QApplication import
-  probe loads the full PySide6/Qt chain). release.yml installs
-  flatpak-builder instead of soft-skipping the flatpak artifact on every
-  release.
 
 ### Fixed
 

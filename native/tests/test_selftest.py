@@ -8,7 +8,7 @@ pytest.importorskip(
     "PySide6.QtWebEngineCore", reason="Qt WebEngine unavailable", exc_type=ImportError,
 )
 
-from amberfader.embedded.selftest import renderer_sandbox
+from amberfader.embedded.selftest import Scope, renderer_sandbox
 
 ENGINE = "/opt/amberfader/lib/PySide6/Qt/libexec/QtWebEngineProcess"
 ZYGOTE = [ENGINE, "--type=zygote", "--application-name=amberfader"]
@@ -17,16 +17,20 @@ BROWSER = 100
 
 
 def make_proc(tmp_path, processes):
-    """processes: {pid: (ppid, argv, seccomp[, nspid])}; nspid lists the
-    ids in nested PID namespaces after the pid itself."""
-    for pid, (ppid, argv, seccomp, *nested) in processes.items():
+    """processes: {pid: (ppid, argv, seccomp[, nspid[, filters]])}; nspid
+    lists the ids in nested PID namespaces after the pid itself, filters is
+    the Seccomp_filters count (left out unless given)."""
+    for pid, (ppid, argv, seccomp, *extra) in processes.items():
+        nested = extra[0] if extra else ()
+        filters = extra[1] if len(extra) > 1 else None
         entry = tmp_path / str(pid)
         entry.mkdir()
         (entry / "cmdline").write_bytes("\0".join(argv).encode() + b"\0")
-        nspid = "\t".join(str(i) for i in (pid, *(nested[0] if nested else ())))
-        (entry / "status").write_text(
-            f"Name:\tx\nPPid:\t{ppid}\nNSpid:\t{nspid}\nSeccomp:\t{seccomp}\n"
-        )
+        nspid = "\t".join(str(i) for i in (pid, *nested))
+        status = f"Name:\tx\nPPid:\t{ppid}\nNSpid:\t{nspid}\nSeccomp:\t{seccomp}\n"
+        if filters is not None:
+            status += f"Seccomp_filters:\t{filters}\n"
+        (entry / "status").write_text(status)
     (tmp_path / "self").mkdir()
     return tmp_path
 
@@ -78,8 +82,18 @@ def test_outer_pid_namespace_alone_is_seccomp_only(tmp_path):
 
 def test_unreadable_browser_namespace_depth_is_not_on(tmp_path):
     proc = make_proc(tmp_path, sandboxed())
-    shutil.rmtree(proc / str(BROWSER))
+    status = proc / str(BROWSER) / "status"
+    status.write_text("".join(
+        line for line in status.read_text().splitlines(keepends=True)
+        if not line.startswith("NSpid:")
+    ))
     assert renderer_sandbox(proc, BROWSER) == "seccomp only"
+
+
+def test_vanished_browser_is_unknown(tmp_path):
+    proc = make_proc(tmp_path, sandboxed())
+    shutil.rmtree(proc / str(BROWSER))
+    assert renderer_sandbox(proc, BROWSER) == "unknown"
 
 
 def test_one_unfiltered_renderer_is_off(tmp_path):
@@ -116,6 +130,68 @@ def test_renderer_started_without_a_zygote_counts(tmp_path):
         120: (BROWSER, [ENGINE, "--type=renderer"], 2, (1,)),
     }
     assert renderer_sandbox(make_proc(tmp_path, tree), BROWSER) == "on"
+
+
+# Inside the Flatpak, as seen from the app's own /proc (Qt WebEngine 6.11.1
+# from Flathub's QtWebEngine BaseApp, CI run 37407123340): every process
+# inherits Flatpak's seccomp filter, the portal starts the sandboxed zygote in
+# a sub-sandbox below the sandbox's init process rather than the browser, and
+# Chromium's processes show their command line as one string.
+FLATPAK_ENGINE = "/app/lib/libexec/QtWebEngineProcess"
+FLATPAK_BROWSER = 2
+
+
+def flatpak_tree(renderer_filters=2, renderer_nspid=(3,)):
+    return {
+        1: (0, ["bwrap", "--args", "38", "--", "amberfader"], 2, (), 1),
+        FLATPAK_BROWSER: (1, ["python3", "/app/bin/amberfader"], 2, (), 1),
+        5: (2, [f"{FLATPAK_ENGINE} --type=zygote --no-zygote-sandbox"], 2, (), 1),
+        8: (1, ["bwrap", "--args", "40", "--", "/app/bin/QtWebEngineProcess"], 2, (1,), 1),
+        9: (8, [f"{FLATPAK_ENGINE} --type=zygote --application-name=amberfader"], 2, (2,), 1),
+        41: (9, [f"{FLATPAK_ENGINE} --type=renderer --lang=en-US"], 2, renderer_nspid,
+             renderer_filters),
+    }
+
+
+def test_flatpak_sub_sandboxed_renderers_are_on(tmp_path):
+    proc = make_proc(tmp_path, flatpak_tree())
+    assert renderer_sandbox(proc, FLATPAK_BROWSER, Scope.PID_NAMESPACE) == "on"
+
+
+def test_flatpak_renderers_are_not_the_browsers_descendants(tmp_path):
+    proc = make_proc(tmp_path, flatpak_tree())
+    assert renderer_sandbox(proc, FLATPAK_BROWSER, Scope.DESCENDANTS) == "absent"
+
+
+def test_inherited_seccomp_filter_alone_is_off(tmp_path):
+    proc = make_proc(tmp_path, flatpak_tree(renderer_filters=1))
+    assert renderer_sandbox(proc, FLATPAK_BROWSER, Scope.PID_NAMESPACE) == "off"
+
+
+def test_flatpak_renderer_in_the_apps_pid_namespace_is_seccomp_only(tmp_path):
+    proc = make_proc(tmp_path, flatpak_tree(renderer_nspid=()))
+    assert renderer_sandbox(proc, FLATPAK_BROWSER, Scope.PID_NAMESPACE) == "seccomp only"
+
+
+def test_disabled_sandbox_under_an_inherited_filter_is_off(tmp_path):
+    """Observed in a Debian container with QTWEBENGINE_DISABLE_SANDBOX=1:
+    every process shows the container's one seccomp filter."""
+    disabled = [ENGINE, "--type=zygote", "--no-sandbox"]
+    tree = {
+        BROWSER: (1, ["python3"], 2, (), 1),
+        201: (BROWSER, disabled, 2, (), 1),
+        202: (201, disabled, 2, (), 1),
+    }
+    assert renderer_sandbox(make_proc(tmp_path, tree), BROWSER) == "off"
+
+
+def test_filtered_browser_without_filter_counts_is_unknown(tmp_path):
+    # Kernels before 5.9 have no Seccomp_filters line.
+    tree = {
+        pid: (ppid, argv, 2, *extra[:1])
+        for pid, (ppid, argv, _seccomp, *extra) in sandboxed().items()
+    }
+    assert renderer_sandbox(make_proc(tmp_path, tree), BROWSER) == "unknown"
 
 
 def test_self_test_never_uses_a_given_socket(tmp_path):

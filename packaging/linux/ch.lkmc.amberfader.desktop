@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Amberfader
+Comment=Compact classic-style player for YouTube Music
+Exec=amberfader
+Icon=ch.lkmc.amberfader
+Terminal=false
+Categories=AudioVideo;Audio;Music;Player;
+StartupWMClass=amberfader

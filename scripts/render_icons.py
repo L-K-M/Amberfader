@@ -3,7 +3,7 @@
   uv run python scripts/render_icons.py
 
 writes packaging/icons/hicolor/<n>x<n>/apps/ch.lkmc.amberfader.png for each
-size below. Commit the output: the deb installs it, and the Flatpak repack
+size below. Commit the output: the deb installs it, and the Flatpak build
 exports it, because the file is named after the app ID. The macOS build
 renders its own .icns from the same source (scripts/build-macos.sh).
 native/tests/test_icons.py fails when the committed files drift from the

@@ -8,15 +8,15 @@
 #
 #   wheel    python wheel + sdist (uv build)            -> dist/*.whl, dist/*.tar.gz
 #   deb      per-user .deb packaging                    -> dist/amberfader_<ver>_*.deb
-#   flatpak  repack the .deb into a .flatpak bundle     -> dist/amberfader_<ver>.flatpak
+#   flatpak  the wheel on Flathub's PySide BaseApp      -> dist/amberfader_<ver>.flatpak
 #   macos    Amberfader.app in an ad-hoc signed .dmg    -> dist/Amberfader-<ver>-macos-arm64.dmg
 #
 #   --clean  remove dist/ first
 #   --check  print the plan and exit
 #
 # Requirements: Node 22+ (page scripts, every target), Python 3.11+ + uv
-# (wheel), dpkg-deb (deb), flatpak-builder + org.kde.Platform//6.8 (flatpak,
-# Linux only).
+# (wheel), dpkg-deb (deb), flatpak + flatpak-builder + uv (flatpak, Linux
+# only; it installs its runtime and BaseApp from Flathub).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -112,25 +112,21 @@ for target in "${TARGETS[@]}"; do
       fi
       ;;
     flatpak)
-      echo "==> flatpak (repack the .deb)"
+      echo "==> flatpak (the wheel on Flathub's PySide BaseApp)"
       if [[ "$(uname -s)" != "Linux" ]]; then
         skip_or_fail flatpak "Flatpak builds run on Linux"; continue
       fi
-      if ! have flatpak-builder; then
-        skip_or_fail flatpak "flatpak-builder not installed"; continue
+      if ! have flatpak || ! have flatpak-builder || ! have uv; then
+        skip_or_fail flatpak "flatpak, flatpak-builder or uv not installed"; continue
       fi
-      deb="$(ls -t "$DIST"/amberfader_*_*.deb 2>/dev/null | head -1 || true)"
-      if [[ -z "$deb" ]]; then
-        if ! have dpkg-deb; then skip_or_fail flatpak "no .deb to repack and dpkg-deb missing"; continue; fi
-        page_scripts || { FAILED+=("flatpak"); continue; }
-        scripts/build-deb.sh "$VERSION" "$DIST" || { FAILED+=("flatpak"); continue; }
-        deb="$(ls -t "$DIST"/amberfader_*_*.deb 2>/dev/null | head -1 || true)"
-      fi
-      if scripts/build-flatpak.sh "$deb"; then
+      page_scripts || { FAILED+=("flatpak"); continue; }
+      wheels="$(mktemp -d)"
+      if uv build --wheel --out-dir "$wheels" && scripts/build-flatpak.sh "$wheels"/amberfader-*.whl; then
         OK+=("flatpak → $DIST/")
       else
         FAILED+=("flatpak")
       fi
+      rm -rf "$wheels"
       ;;
     macos)
       echo "==> macOS app"

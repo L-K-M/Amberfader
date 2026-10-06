@@ -4,8 +4,9 @@ a Google account. Package smoke tests run it.
 
 It loads the scripted test page, then checks attach, play, pause, search,
 play result and the ad filter. On Linux it also requires Chromium's renderer
-sandbox: every renderer process must run under a seccomp filter, so a silent
-fallback to no sandbox fails the test. macOS has no such check yet.
+sandbox: every renderer process must run under a seccomp filter of its own
+and in a PID namespace below the app's, so a silent fallback to no sandbox
+fails the test, also inside Flatpak. macOS has no such check yet.
 
 Prints one line per check and a final verdict; exit status 0 means passed.
 """
@@ -15,6 +16,7 @@ import os
 import sys
 import time
 from collections.abc import Callable
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +30,19 @@ STEP_TIMEOUT_S = 15.0
 PASSED = "amberfader self-test: passed"
 FAILED = "amberfader self-test: FAILED"
 AD_PROBE = "JSON.stringify(JSON.parse('{\"adPlacements\":[1],\"keep\":1}'))"
+FLATPAK_INFO = Path("/.flatpak-info")
+
+
+class Scope(Enum):
+    """Which Qt WebEngine processes belong to the app being tested."""
+
+    # Chromium forks them below the browser process (deb, wheel, macOS).
+    DESCENDANTS = "descendants"
+    # Every process in the app's PID namespace: inside Flatpak, the portal
+    # starts the sandboxed zygote in a sub-sandbox below the sandbox's init
+    # process, not below the browser, and each app instance has its own
+    # namespace.
+    PID_NAMESPACE = "pid namespace"
 
 
 def _parent_pid(proc: Path, pid: int) -> int | None:
@@ -48,6 +63,30 @@ def _seccomp_mode(proc: Path, pid: int) -> str | None:
     except (OSError, IndexError):
         return None
     return None
+
+
+def _seccomp_filters(proc: Path, pid: int) -> int | None:
+    # Seccomp_filters (Linux 5.9 and later) counts inherited filters too.
+    try:
+        for line in (proc / str(pid) / "status").read_text().splitlines():
+            if line.startswith("Seccomp_filters:"):
+                return int(line.split()[1])
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _own_seccomp_filter(proc: Path, pid: int, browser: int) -> bool | None:
+    """Whether a renderer runs under a seccomp filter the browser process
+    does not have. A container or Flatpak filters every process, so Seccomp: 2
+    alone proves nothing there. None: the kernel cannot tell (no filter
+    counts and a filtered browser)."""
+    if _seccomp_mode(proc, pid) != "2":
+        return False
+    own, inherited = _seccomp_filters(proc, pid), _seccomp_filters(proc, browser)
+    if own is not None and inherited is not None:
+        return own > inherited
+    return True if _seccomp_mode(proc, browser) == "0" else None
 
 
 def _pid_namespace_depth(proc: Path, pid: int) -> int:
@@ -74,19 +113,28 @@ def _descends_from(proc: Path, pid: int, ancestor: int) -> bool:
 
 def _argv(proc: Path, pid: int) -> list[bytes]:
     try:
-        return (proc / str(pid) / "cmdline").read_bytes().split(b"\0")
+        argv = (proc / str(pid) / "cmdline").read_bytes().rstrip(b"\0").split(b"\0")
     except OSError:
         return []
+    # Chromium can rewrite its command line into one string, as the Flatpak
+    # build does: "/app/lib/libexec/QtWebEngineProcess --type=renderer ...".
+    if len(argv) == 1 and b" --" in argv[0]:
+        return argv[0].split()
+    return argv
 
 
 def _is_webengine(argv: list[bytes]) -> bool:
     return bool(argv) and argv[0].endswith(b"QtWebEngineProcess")
 
 
-def renderer_sandbox(proc: Path = Path("/proc"), root_pid: int | None = None) -> str:
-    """'on' when every Qt WebEngine renderer below `root_pid` runs under both
-    sandbox layers, 'seccomp only' when the namespace layer is missing, 'off'
-    when a renderer has no seccomp filter, 'absent' when no renderer was found.
+def renderer_sandbox(
+    proc: Path = Path("/proc"), root_pid: int | None = None,
+    scope: Scope = Scope.DESCENDANTS,
+) -> str:
+    """'on' when every Qt WebEngine renderer of the app (see Scope) runs under
+    both sandbox layers, 'seccomp only' when the namespace layer is missing,
+    'off' when a renderer has no seccomp filter of its own, 'unknown' when the
+    kernel cannot tell, 'absent' when no renderer was found.
 
     Chromium's sandbox has two layers: a seccomp filter (Seccomp: 2) and its
     own user and PID namespaces. The namespace layer is the one Ubuntu's
@@ -120,7 +168,7 @@ def renderer_sandbox(proc: Path = Path("/proc"), root_pid: int | None = None) ->
     zygote_parents = {parents[pid] for pid in pids if sandboxed_zygote(pid)}
     renderers = [
         pid for pid, argv in argvs.items()
-        if _descends_from(proc, pid, root_pid) and (
+        if (scope is Scope.PID_NAMESPACE or _descends_from(proc, pid, root_pid)) and (
             (_is_webengine(argv) and b"--type=renderer" in argv)
             or (sandboxed_zygote(pid) and sandboxed_zygote(parents[pid])
                 and pid not in zygote_parents)
@@ -128,8 +176,11 @@ def renderer_sandbox(proc: Path = Path("/proc"), root_pid: int | None = None) ->
     ]
     if not renderers:
         return "absent"
-    if not all(_seccomp_mode(proc, pid) == "2" for pid in renderers):
+    seccomp = {_own_seccomp_filter(proc, pid, root_pid) for pid in renderers}
+    if False in seccomp:
         return "off"
+    if None in seccomp:
+        return "unknown"
     # An unreadable browser depth would turn this into "deeper than 0", which
     # every renderer passes, so it counts as unproven.
     browser_depth = _pid_namespace_depth(proc, root_pid)
@@ -197,7 +248,8 @@ class SelfTest:
             self._report("ad filter", self._main_world(AD_PROBE) == '{"keep":1}')
 
         if self._platform.startswith("linux"):
-            state = renderer_sandbox()
+            scope = Scope.PID_NAMESPACE if FLATPAK_INFO.is_file() else Scope.DESCENDANTS
+            state = renderer_sandbox(scope=scope)
             self._report("renderer sandbox", state == "on", state)
         else:
             self._out("self-test: renderer sandbox: not checked on this platform")

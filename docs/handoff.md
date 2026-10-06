@@ -28,10 +28,11 @@ The standalone app, ad blocking, continue playing, macOS folders,
 (`4e6500d`). Its review triage is in the PR's commit messages.
 
 Since then, merged: #36 (deb: Depends, Python launcher, AppArmor profile,
-CI self-tests with the userns restriction; `8e752dc`) and #39 (privacy.md
-also names the HTTP cache folder; `dbf5363`). Current step: the hicolor
-icons, branch `feature/hicolor-icons` (#38). Next: the Flatpak on Flathub's
-PySide BaseApp (see the plan's Phase 2 outcome), then release 0.2.0.
+CI self-tests with the userns restriction; `8e752dc`), #39 (privacy.md
+also names the HTTP cache folder; `dbf5363`) and #38 (hicolor icons;
+`424bd47`). In review: the Flatpak on Flathub's PySide BaseApp, branch
+`feature/flatpak-pyside-baseapp` (see the plan's Phase 2 outcome). Then
+release 0.2.0.
 
 On 2026-10-06 two sessions worked in parallel for a while: the cloud
 session that wrote #36 kept pushing to it after the hand-over. Before
@@ -55,14 +56,18 @@ not a test failure; a re-run (or the owner) got them through.
      profile reports `FAILED (seccomp only)`. So the profile is what grants
      Chromium's namespace layer. Desktop launch on a real Ubuntu machine
      still needs the owner.
-   - Flatpak: add `--share=network`, `--socket=pulseaudio`; keep the
-     `xdg-run/amberfader` share (single-instance socket). Chromium's sandbox
-     inside Flatpak needs the spike described in the plan.
-   - CI: a `flatpak` job that runs `amberfader --self-test` on the
-     installed bundle (the `deb` job already does this for the deb).
-   - Desktop entry and hicolor icons: #38 (`scripts/render_icons.py`
+   - Flatpak: built from the wheel on `io.qt.PySide.BaseApp//6.11`, whose
+     Qt WebEngine sandboxes renderers through the Flatpak portal; network,
+     PulseAudio and the `xdg-run/amberfader` share. The `flatpak` CI job
+     self-tests the installed bundle under `dbus-run-session` (the portal
+     needs a session bus) and checks that a second launch hands over.
+     Sign-in and playback from the Flatpak still need the owner.
+   - Desktop entry and hicolor icons: merged in #38 (`scripts/render_icons.py`
      renders 128, 256 and 512 px from `media-sources/icon.png`; a test
      catches stale files). How docks show it needs the owner's desktop.
+     Declined in its review: an explicit X11 window icon
+     (`setWindowIcon`), since GNOME and Plasma match windows to the entry
+     through `StartupWMClass`; bare X11 window managers show no icon.
 2. **macOS target** (plan Phase 3): `4dd2452`; CI builds the `.dmg` and the
    frozen app's self-test passes on macos-15. The owner still has to install
    it and check sign-in, the data move, ad blocking and continue playing.
@@ -105,11 +110,16 @@ not a test failure; a re-run (or the owner) got them through.
   keep the zygote's `--type=zygote` command line; with the namespace
   sandbox there is an init process between the browser and the zygote.
   A renderer is a sandboxed-zygote process forked by another one with no
-  such child; sandbox on means `Seccomp: 2` and a PID namespace nested
+  such child; sandbox on means a seccomp filter the browser does not have
+  (`Seccomp_filters` higher than the browser's) and a PID namespace nested
   below the browser's (more ids in `NSpid` than the browser process) for
-  all of them. Comparing with the browser matters inside Flatpak and
-  containers, where every process has an outer PID namespace. Seccomp alone is reported
-  as "seccomp only": Chromium keeps running with just the filter when the
+  all of them. Inside Flatpak the portal starts the sandboxed zygote below
+  the sandbox's init process, not the browser, and Chromium shows its
+  command line as one string, so there every Qt WebEngine process in the
+  app's PID namespace counts (`Scope.PID_NAMESPACE`). The seccomp filter
+  count is still compared with the browser's there and in containers,
+  where every process inherits a filter. Seccomp alone is reported as
+  "seccomp only": Chromium keeps running with just the filter when the
   namespace layer is missing (`--disable-namespace-sandbox`, or Ubuntu's
   userns restriction without a profile).
 - Shell heredocs: when editing files that contain `EOF` lines (the build

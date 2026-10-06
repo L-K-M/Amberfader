@@ -66,6 +66,7 @@ EOF
 chmod 755 "$STAGE/usr/bin/amberfader" "$STAGE/usr/bin/amberfader-face-editor"
 
 cp -r packaging/icons/hicolor "$STAGE/usr/share/icons/"
+cp packaging/linux/ch.lkmc.amberfader.desktop "$STAGE/usr/share/applications/"
 
 cp packaging/linux/apparmor-amberfader "$STAGE/etc/apparmor.d/amberfader"
 echo /etc/apparmor.d/amberfader > "$STAGE/DEBIAN/conffiles"
@@ -104,17 +105,6 @@ libxcb-dri3-0, libxcb-glx0, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, \
 libxcb-randr0, libxcb-render0, libxcb-render-util0, libxcb-shape0, libxcb-shm0, \
 libxcb-sync1, libxcb-util1, libxcb-xfixes0, libxcb-xkb1, libxkbcommon0, \
 libxkbcommon-x11-0, libxkbfile1, zlib1g, libzstd1"
-cat > "$STAGE/usr/share/applications/ch.lkmc.amberfader.desktop" <<'EOF'
-[Desktop Entry]
-Type=Application
-Name=Amberfader
-Comment=Compact classic-style player for YouTube Music
-Exec=amberfader
-Icon=ch.lkmc.amberfader
-Terminal=false
-Categories=AudioVideo;Audio;Music;Player;
-StartupWMClass=amberfader
-EOF
 
 cat > "$STAGE/DEBIAN/control" <<EOF
 Package: amberfader

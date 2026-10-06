@@ -1,29 +1,47 @@
-# Flatpak manifest. scripts/build-flatpak.sh extracts the .deb into
-# dist/flatpak/stage and builds from that — the bundle ships the same files
-# the .deb installs, relaid under /app. The KDE runtime supplies python3;
-# the pip --target tree in the deb carries PySide6 and must match the
-# runtime's python abi — bump the wheel selection and runtime version
-# together when either moves.
+# Flatpak manifest, built by scripts/build-flatpak.sh from the Amberfader
+# wheel and its dependency wheels in dist/flatpak/src.
+#
+# Flathub's PySide BaseApp brings PySide6 built against the QtWebEngine
+# BaseApp, whose Chromium sandboxes its renderers through Flatpak's own
+# sandbox (a sub-sandbox started by the Flatpak portal). The PySide6 pip
+# wheels cannot do that: Flatpak denies the user namespaces their sandbox
+# needs. Keep runtime-version and base-version on the same Qt branch. The
+# BaseApp's PySide6 follows Flathub, not uv.lock; CI self-tests the bundle.
 id: ch.lkmc.amberfader
 runtime: org.kde.Platform
-runtime-version: '6.8'
+runtime-version: '6.11'
 sdk: org.kde.Sdk
+base: io.qt.PySide.BaseApp
+base-version: '6.11'
 command: amberfader
 finish-args:
   - --share=ipc
+  - --share=network
   - --socket=wayland
   - --socket=fallback-x11
+  - --socket=pulseaudio
   - --device=dri
+  # Python is the browser process, so Qt WebEngine cannot find its helper
+  # next to the executable.
+  - --env=QTWEBENGINEPROCESS_PATH=/app/bin/QtWebEngineProcess
   # Qt exports native menus to Plasma's global-menu registrar.
   - --talk-name=com.canonical.AppMenu.Registrar
   # The single-instance socket lives in the host's per-user runtime dir; every
   # instance must see the same subtree, even before the first launch made it.
   - --filesystem=xdg-run/amberfader:create
+build-options:
+  env:
+    BASEAPP_DISABLE_NUMPY: '1'
+cleanup-commands:
+  - /app/cleanup-BaseApp.sh
 modules:
   - name: amberfader
     buildsystem: simple
+    build-commands:
+      # build-flatpak.sh downloaded every wheel for the runtime's Python.
+      - pip3 install --no-index --no-deps --prefix=${FLATPAK_DEST} wheels/*.whl
+      - install -Dm644 ch.lkmc.amberfader.desktop -t ${FLATPAK_DEST}/share/applications/
+      - mkdir -p ${FLATPAK_DEST}/share/icons && cp -r hicolor ${FLATPAK_DEST}/share/icons/
     sources:
       - type: dir
-        path: ../../dist/flatpak/stage
-    build-commands:
-      - "if [ -d app ]; then cp -a app/. /app/; else cp -a . /app/; fi"
+        path: ../../dist/flatpak/src
