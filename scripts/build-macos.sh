@@ -7,7 +7,8 @@
 # Usage: scripts/build-macos.sh <version> <dist-dir>
 # Needs: macOS on Apple silicon, Xcode command line tools (iconutil, sips,
 # codesign, hdiutil), a Python 3.11+ environment with PyInstaller and this
-# project installed, and the page scripts built (npm run build).
+# project installed (PYTHON selects it; default python3), and the page
+# scripts built (npm run build).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -37,7 +38,7 @@ iconutil -c icns "$WORK/Amberfader.iconset" -o "$WORK/Amberfader.icns"
 echo "-- PyInstaller"
 for spec in amberfader face_editor; do
   AMBERFADER_VERSION="$VERSION" AMBERFADER_ICNS="$PWD/$WORK/Amberfader.icns" \
-    python3 -m PyInstaller --noconfirm --clean \
+    "${PYTHON:-python3}" -m PyInstaller --noconfirm --clean \
     --distpath "$WORK/dist" --workpath "$WORK/build" "packaging/macos/$spec.spec"
 done
 APPS=("$WORK/dist/Amberfader.app" "$WORK/dist/Amberfader Face Editor.app")
