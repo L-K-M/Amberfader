@@ -31,8 +31,8 @@ else
   FAILED=1
 fi
 
-step "Embedded page bundle (lets the embedded end-to-end test run)"
-run npm run --silent embedded:build
+step "Page bundle (lets the end-to-end test run)"
+run npm run --silent build
 
 step "Python: ruff + pytest"
 if command -v uv >/dev/null 2>&1 && [[ -d .venv ]]; then
@@ -47,7 +47,7 @@ fi
 
 step "shellcheck"
 if command -v shellcheck >/dev/null 2>&1; then
-  for f in scripts/install-user scripts/uninstall-user scripts/doctor scripts/build.sh scripts/build-deb.sh scripts/build-flatpak.sh scripts/check.sh scripts/release.sh; do
+  for f in scripts/build.sh scripts/build-deb.sh scripts/build-flatpak.sh scripts/build-macos.sh scripts/check.sh scripts/release.sh; do
     [[ -f "$f" ]] && run shellcheck -x "$f"
   done
 else

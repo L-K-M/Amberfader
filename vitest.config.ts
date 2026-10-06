@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-// Adapter/search/probe tests run against a music.youtube.com jsdom document so
+// Adapter and search tests run against a music.youtube.com jsdom document so
 // location.search and same-origin replaceState behave like the real page;
 // everything else runs under node.
 export default defineConfig({
@@ -14,10 +14,9 @@ export default defineConfig({
             jsdom: { url: "https://music.youtube.com/" },
           },
           include: [
-            "extension/tests/unit/adapter*.test.ts",
-            "extension/tests/unit/search*.test.ts",
-            "extension/tests/unit/probe*.test.ts",
-            "extension/tests/unit/popup*.test.ts",
+            "web/tests/unit/adapter*.test.ts",
+            "web/tests/unit/search*.test.ts",
+            "web/tests/unit/continue*.test.ts",
           ],
           restoreMocks: true,
         },
@@ -26,12 +25,11 @@ export default defineConfig({
         test: {
           name: "node",
           environment: "node",
-          include: ["extension/tests/**/*.test.ts"],
+          include: ["web/tests/**/*.test.ts"],
           exclude: [
-            "extension/tests/unit/adapter*.test.ts",
-            "extension/tests/unit/search*.test.ts",
-            "extension/tests/unit/probe*.test.ts",
-            "extension/tests/unit/popup*.test.ts",
+            "web/tests/unit/adapter*.test.ts",
+            "web/tests/unit/search*.test.ts",
+            "web/tests/unit/continue*.test.ts",
           ],
           restoreMocks: true,
         },

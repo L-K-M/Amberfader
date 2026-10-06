@@ -1,18 +1,21 @@
-"""Run the embedded prototype: python -m amberfader.embedded
+"""Amberfader's launcher: the `amberfader` command and python -m amberfader.
 
-From a checkout: npm run embedded:run (builds the page bundle first).
+From a checkout: npm start (builds the page bundle first).
 """
 from __future__ import annotations
 
 import argparse
 import contextlib
 import os
+import shutil
 import signal
 import sys
 import tempfile
 from pathlib import Path
 
-from .. import NATIVE_HOST_NAME
+from .. import APP_NAME
+from ..paths import migrate_legacy_files
+from ..settings import default_settings_path
 from ..transport.paths import runtime_socket_dir
 from .history import default_history_path
 
@@ -30,7 +33,7 @@ def default_socket_path() -> str:
     if sys.platform != "darwin" or os.environ.get("XDG_RUNTIME_DIR"):
         return os.path.join(runtime_socket_dir(), EMBEDDED_SOCKET_NAME)
 
-    directory = Path(tempfile.gettempdir()) / NATIVE_HOST_NAME
+    directory = Path(tempfile.gettempdir()) / APP_NAME
     with contextlib.suppress(FileExistsError):
         directory.mkdir(mode=0o700)
     # gettempdir() falls back to the shared /tmp when $TMPDIR is unset, so
@@ -55,8 +58,8 @@ def default_socket_path() -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="python -m amberfader.embedded",
-        description="Amberfader with YouTube Music in its own QtWebEngine window (prototype).",
+        prog="amberfader",
+        description="Amberfader: a compact classic-style player for YouTube Music.",
     )
     parser.add_argument("--scale", type=float, default=1.0, choices=(1.0, 1.5, 2.0))
     parser.add_argument(
@@ -72,29 +75,59 @@ def main(argv: list[str] | None = None) -> int:
         "--test-page", action="store_true",
         help="drive a scripted local page instead of YouTube Music (no network, no sign-in)",
     )
+    parser.add_argument(
+        "--self-test", action="store_true",
+        help="check that this installation works, on the scripted test page, then exit",
+    )
     args = parser.parse_args(argv)
+    if args.self_test:
+        # Never touches a running instance, the profile or saved settings.
+        args.test_page = args.background = True
 
     # QtWebEngineWidgets must be imported before the QApplication exists.
     try:
         from PySide6 import QtWebEngineWidgets  # noqa: F401
     except ImportError:
         print(
-            "amberfader: QtWebEngine is not installed. Run: uv sync --extra gui --extra embedded",
+            "amberfader: QtWebEngine is not installed. Run: uv sync",
             file=sys.stderr,
         )
         return 2
+
+    # The scripted test page keeps its recent searches (and the self-test its
+    # socket) in a scratch folder, never in your own files.
+    scratch = tempfile.mkdtemp(prefix="amberfader-test-page-") if args.test_page else None
+    try:
+        return _run(args, scratch)
+    finally:
+        if scratch:
+            shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _socket_path(args: argparse.Namespace, scratch: str | None) -> str:
+    # The self-test always uses its own socket, so it can never reach (and
+    # raise) a running instance instead of testing anything.
+    if args.self_test:
+        if not scratch:
+            raise RuntimeError("the self-test needs its scratch folder")
+        return os.path.join(scratch, "self-test.sock")
+    if args.socket:
+        return str(args.socket)
+    return default_socket_path()
+
+
+def _run(args: argparse.Namespace, scratch: str | None) -> int:
     from PySide6.QtCore import QTimer
     from PySide6.QtWidgets import QApplication
 
     from ..face_library import FaceError
     from ..transport.local import try_activate_existing
-    from .page import BundleMissingError, PageMode, load_bundle
+    from .page import BundleMissingError, PageMode, load_ad_filter, load_bundle
     from .runtime import EmbeddedRuntime, RuntimeOptions
 
     try:
-        bundle = load_bundle()
-        socket_path = args.socket or default_socket_path()
-    except (BundleMissingError, RuntimeError, OSError) as exc:
+        socket_path = _socket_path(args, scratch)
+    except (RuntimeError, OSError) as exc:
         print(f"amberfader: {exc}", file=sys.stderr)
         return 2
 
@@ -103,8 +136,21 @@ def main(argv: list[str] | None = None) -> int:
     app.setOrganizationDomain("ch.lkmc")
 
     # Single instance: two processes must never share one browser profile.
+    # Checked before anything else, so a second launch only raises the first.
     if try_activate_existing(socket_path):
         return 0
+
+    # Only now is this the one running instance, so files can move safely.
+    if not args.self_test:
+        for problem in migrate_legacy_files():
+            print(f"amberfader: {problem}", file=sys.stderr)
+
+    try:
+        bundle = load_bundle()
+        ad_filter = load_ad_filter()
+    except (BundleMissingError, OSError, UnicodeDecodeError) as exc:
+        print(f"amberfader: {exc}", file=sys.stderr)
+        return 2
 
     # Ctrl+C or SIGTERM quits through Qt, so Chromium can flush the sign-in
     # cookies instead of being killed mid-write. Installed before startup;
@@ -119,13 +165,16 @@ def main(argv: list[str] | None = None) -> int:
     for signum in (signal.SIGINT, signal.SIGTERM):
         signal.signal(signum, request_quit)
 
+    mode = PageMode.TEST_PAGE if args.test_page else PageMode.YOUTUBE_MUSIC
     options = RuntimeOptions(
-        mode=PageMode.TEST_PAGE if args.test_page else PageMode.YOUTUBE_MUSIC,
+        mode=mode,
         socket_path=socket_path,
-        history_path=default_history_path(),
+        history_path=Path(scratch) / "history.json" if scratch else default_history_path(),
         scale=args.scale,
+        # The scripted test page never changes your saved settings.
+        settings_path=None if mode is PageMode.TEST_PAGE else default_settings_path(),
     )
-    runtime = EmbeddedRuntime(options, bundle)
+    runtime = EmbeddedRuntime(options, bundle, ad_filter=ad_filter)
     try:
         try:
             started = runtime.start()
@@ -143,6 +192,11 @@ def main(argv: list[str] | None = None) -> int:
         runtime.amber.window.closed.connect(app.quit)
         if not args.background:
             runtime.host.set_visible(True)
+
+        if args.self_test:
+            from .selftest import SelfTest
+
+            return SelfTest(runtime).run()
 
         poll = QTimer()
         poll.timeout.connect(lambda: None)

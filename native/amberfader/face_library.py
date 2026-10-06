@@ -21,6 +21,8 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
+from .paths import app_dirs
+
 DEFAULT_FACE_ID = "amber-classic"
 BUNDLED_FACE_ERROR = "Bundled faces are unavailable. Reinstall Amberfader."
 FACE_FORMAT_VERSION = 2
@@ -418,21 +420,13 @@ def load_face(directory: Path) -> Face:
         raise FaceError(str(exc)) from exc
 
 
-def _xdg_path(variable: str, fallback: str) -> Path:
-    configured = os.environ.get(variable, "")
-    if configured and Path(configured).is_absolute():
-        return Path(configured) / "amberfader"
-    return Path.home() / fallback / "amberfader"
-
-
 class FaceLibrary:
     """Discover, install and remember faces independently of player state."""
 
     def __init__(self, directory: Path | None = None, preferences: Path | None = None) -> None:
-        self._directory = directory or _xdg_path("XDG_DATA_HOME", ".local/share") / "faces"
-        self._preferences = preferences or (
-            _xdg_path("XDG_CONFIG_HOME", ".config") / "appearance.json"
-        )
+        dirs = app_dirs()
+        self._directory = directory or dirs.data / "faces"
+        self._preferences = preferences or dirs.config / "appearance.json"
         self._catalog: dict[str, FaceInfo] = {}
         self._problems: list[str] = []
         self._preference_problem: str | None = None

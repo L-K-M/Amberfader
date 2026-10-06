@@ -1,11 +1,11 @@
-"""Qt-free socket path helpers — usable by the helper and tests without
-pulling Qt shared libraries."""
+"""Qt-free socket path helpers, usable by the launcher and tests without
+loading Qt's shared libraries."""
 from __future__ import annotations
 
 import os
 import socket
 
-from .. import NATIVE_HOST_NAME
+from .. import APP_NAME
 
 
 def runtime_socket_dir() -> str:
@@ -20,7 +20,7 @@ def runtime_socket_dir() -> str:
         raise RuntimeError(
             f"XDG_RUNTIME_DIR points at a non-existent directory: {runtime}"
         )
-    path = os.path.join(runtime, NATIVE_HOST_NAME)
+    path = os.path.join(runtime, APP_NAME)
     os.makedirs(path, mode=0o700, exist_ok=True)
     os.chmod(path, 0o700)
     return path
@@ -39,6 +39,3 @@ def path_has_live_owner(path: str, timeout: float = 1.0) -> bool:
     except OSError:
         return False
 
-
-def default_socket_path() -> str:
-    return os.path.join(runtime_socket_dir(), "control.sock")

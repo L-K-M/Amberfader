@@ -56,7 +56,7 @@ class SearchWindow(QDialog):
         self._status = QLabel("")
         self._status.setWordWrap(True)
 
-        # Recent queries/artists, reloaded from the helper on every open and
+        # Recent queries/artists, reloaded from the router on every open and
         # after each successful search.
         self._history_box = QWidget(self)
         hb = QVBoxLayout(self._history_box)

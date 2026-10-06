@@ -2,20 +2,21 @@
 # Builds every Amberfader target and stages results in dist/.
 #
 # Usage: scripts/build.sh [target...] [--clean] [--check]
-#   targets: ext wheel deb flatpak   (default: all this machine can build)
+#   targets: wheel deb flatpak macos   (default: all this machine can build)
 #   A missing toolchain skips a target on a default run, but fails when the
 #   target was named explicitly.
 #
-#   ext      unpacked extension + web-ext lint          -> dist/extension/
 #   wheel    python wheel + sdist (uv build)            -> dist/*.whl, dist/*.tar.gz
 #   deb      per-user .deb packaging                    -> dist/amberfader_<ver>_*.deb
 #   flatpak  repack the .deb into a .flatpak bundle     -> dist/amberfader_<ver>.flatpak
+#   macos    Amberfader.app in an ad-hoc signed .dmg    -> dist/Amberfader-<ver>-macos-arm64.dmg
 #
 #   --clean  remove dist/ first
 #   --check  print the plan and exit
 #
-# Requirements: Node 22+ (extension), Python 3.11+ + uv (wheel), dpkg-deb
-# (deb), flatpak-builder + org.kde.Platform//6.8 (flatpak, Linux only).
+# Requirements: Node 22+ (page scripts, every target), Python 3.11+ + uv
+# (wheel), dpkg-deb (deb), flatpak-builder + org.kde.Platform//6.8 (flatpak,
+# Linux only).
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
@@ -40,13 +41,12 @@ for arg in "$@"; do
 done
 
 if [[ ${#TARGETS[@]} -eq 0 ]]; then
-  TARGETS=(ext wheel deb flatpak)
+  TARGETS=(wheel deb flatpak macos)
 else
   EXPLICIT=1
 fi
 
-VERSION="$(node -p "require('./extension/manifest.json').version" 2>/dev/null \
-  || sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' extension/manifest.json | head -1)"
+VERSION="$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' native/amberfader/__init__.py)"
 
 declare -a OK=() SKIPPED=() FAILED=()
 
@@ -59,6 +59,21 @@ skip_or_fail() { # target reason
 }
 
 have() { command -v "$1" >/dev/null 2>&1; }
+
+# Every target ships the page scripts (npm run build); build them once.
+PAGE_SCRIPTS=""
+page_scripts() {
+  [[ -n $PAGE_SCRIPTS ]] && { [[ $PAGE_SCRIPTS == ok ]]; return; }
+  PAGE_SCRIPTS=failed
+  if ! have node || ! have npm; then
+    echo "!! page scripts: node/npm not found"; return 1
+  fi
+  if [[ ! -d node_modules ]]; then
+    npm ci --no-audit --no-fund || return 1
+  fi
+  npm run --silent build || return 1
+  PAGE_SCRIPTS=ok
+}
 
 if [[ $CHECK -eq 1 ]]; then
   echo "==> plan"
@@ -76,23 +91,10 @@ mkdir -p "$DIST"
 
 for target in "${TARGETS[@]}"; do
   case "$target" in
-    ext)
-      echo "==> extension"
-      if ! have node || ! have npm; then
-        skip_or_fail ext "node/npm not found"; continue
-      fi
-      if [[ ! -d node_modules ]]; then
-        npm install --no-audit --no-fund || { FAILED+=("ext"); continue; }
-      fi
-      if node scripts/build-extension.mjs && npx web-ext lint --source-dir "$DIST/extension" --self-hosted; then
-        OK+=("ext → $DIST/extension")
-      else
-        FAILED+=("ext")
-      fi
-      ;;
     wheel)
       echo "==> python wheel"
       if ! have uv; then skip_or_fail wheel "uv not found (https://docs.astral.sh/uv/)"; continue; fi
+      page_scripts || { FAILED+=("wheel"); continue; }
       if uv build --out-dir "$DIST"; then
         OK+=("wheel → $DIST/")
       else
@@ -102,6 +104,7 @@ for target in "${TARGETS[@]}"; do
     deb)
       echo "==> deb"
       if ! have dpkg-deb; then skip_or_fail deb "dpkg-deb not found"; continue; fi
+      page_scripts || { FAILED+=("deb"); continue; }
       if scripts/build-deb.sh "$VERSION" "$DIST"; then
         OK+=("deb → $DIST/")
       else
@@ -119,6 +122,7 @@ for target in "${TARGETS[@]}"; do
       deb="$(ls -t "$DIST"/amberfader_*_*.deb 2>/dev/null | head -1 || true)"
       if [[ -z "$deb" ]]; then
         if ! have dpkg-deb; then skip_or_fail flatpak "no .deb to repack and dpkg-deb missing"; continue; fi
+        page_scripts || { FAILED+=("flatpak"); continue; }
         scripts/build-deb.sh "$VERSION" "$DIST" || { FAILED+=("flatpak"); continue; }
         deb="$(ls -t "$DIST"/amberfader_*_*.deb 2>/dev/null | head -1 || true)"
       fi
@@ -126,6 +130,21 @@ for target in "${TARGETS[@]}"; do
         OK+=("flatpak → $DIST/")
       else
         FAILED+=("flatpak")
+      fi
+      ;;
+    macos)
+      echo "==> macOS app"
+      if [[ "$(uname -s)" != "Darwin" ]]; then
+        skip_or_fail macos "the macOS app builds on macOS"; continue
+      fi
+      if ! python3 -c "import PyInstaller" >/dev/null 2>&1; then
+        skip_or_fail macos "PyInstaller not installed (pip install pyinstaller and this project)"; continue
+      fi
+      page_scripts || { FAILED+=("macos"); continue; }
+      if scripts/build-macos.sh "$VERSION" "$DIST"; then
+        OK+=("macos → $DIST/")
+      else
+        FAILED+=("macos")
       fi
       ;;
     *)

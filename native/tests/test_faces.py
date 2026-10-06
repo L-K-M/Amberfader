@@ -1,6 +1,7 @@
 """Face pack boundaries, installation and preference recovery without Qt."""
 import json
 import struct
+import sys
 import zlib
 
 import pytest
@@ -304,6 +305,7 @@ def test_unknown_face_cannot_change_preferences(library, tmp_path):
 
 
 def test_xdg_locations_are_respected(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     library = FaceLibrary()

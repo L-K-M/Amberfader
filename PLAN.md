@@ -1,9 +1,9 @@
 # Classic Music Remote — Execution Plan
 
 > [!NOTE]
-> [`docs/standalone-plan.md`](docs/standalone-plan.md) plans the move to a
-> standalone app with an embedded browser on Linux and macOS. Once its Phase 0
-> gate is done, it replaces the Firefox-specific parts of this plan.
+> Historical. Amberfader no longer uses Firefox: the extension and native
+> helper were removed when the embedded browser passed its gate.
+> [`docs/standalone-plan.md`](docs/standalone-plan.md) is the current plan.
 
 Derived from `firefox-youtube-music-classic-player-implementation-plan.md` (uploaded
 2026-09-29, "the spec"). The spec remains the design authority; this document is the

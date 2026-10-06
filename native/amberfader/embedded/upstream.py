@@ -1,4 +1,4 @@
-"""In-process stand-in for the helper socket."""
+"""In-process connection between the page router and the player client."""
 from __future__ import annotations
 
 from typing import Any
@@ -8,9 +8,9 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 class EmbeddedUpstream(QObject):
     """AmberfaderApp sends protocol requests here and receives protocol
-    messages back, exactly as over the helper socket (same interface as
-    FramedSocket). Delivery to the client is queued, like socket reads, so a
-    response never re-enters the client while it is still issuing a request.
+    messages back through the same interface as FramedSocket. Delivery to the
+    client is queued, like socket reads, so a response never re-enters the
+    client while it is still issuing a request.
     """
 
     messageReceived = Signal(dict)

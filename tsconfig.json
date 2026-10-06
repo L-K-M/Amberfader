@@ -13,9 +13,8 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": ["firefox-webext-browser"],
     "outDir": "dist/types"
   },
-  "include": ["extension/src/**/*.ts", "extension/tests/**/*.ts", "vitest.config.ts"],
+  "include": ["web/src/**/*.ts", "web/tests/**/*.ts", "vitest.config.ts"],
   "exclude": ["node_modules", "dist", "build"]
 }

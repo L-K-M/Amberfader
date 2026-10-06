@@ -3,36 +3,30 @@
   "version": "0.1.9",
   "private": true,
   "type": "module",
-  "description": "Compact classic-style remote for YouTube Music running in Firefox",
+  "description": "Compact classic-style player for YouTube Music with its own embedded browser",
   "license": "Unlicense",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "build": "node scripts/build-extension.mjs",
-    "embedded:build": "node scripts/build-embedded.mjs",
-    "embedded:run": "npm run embedded:build && uv run --extra gui --extra embedded python -m amberfader.embedded",
+    "build": "node scripts/build-embedded.mjs",
+    "start": "npm run build && uv run python -m amberfader",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
     "check": "npm run typecheck && npm run lint && npm test",
-    "ext:run": "npm run build && web-ext run --source-dir dist/extension --firefox-profile build/firefox-dev-profile --keep-profile-changes --profile-create-if-missing",
-    "ext:lint": "npm run build && web-ext lint --source-dir dist/extension",
-    "ext:package": "npm run build && web-ext build --source-dir dist/extension --artifacts-dir dist/web-ext-artifacts --overwrite-dest",
     "version:check": "node scripts/sync-versions.mjs --check",
     "gen:validators": "node scripts/gen-validators.mjs",
     "gen:validators:check": "node scripts/gen-validators.mjs --check"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/firefox-webext-browser": "143.0.1",
     "ajv": "^8.17.1",
     "esbuild": "^0.28.2",
     "eslint": "^10.12.0",
     "jsdom": "^30.1.2",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.56.0",
-    "vitest": "^5.0.3",
-    "web-ext": "^10.7.0"
+    "vitest": "^5.0.3"
   }
 }

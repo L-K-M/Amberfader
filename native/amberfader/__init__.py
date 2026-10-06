@@ -1,7 +1,6 @@
-"""Amberfader — classic-style remote for YouTube Music in Firefox."""
+"""Amberfader: a compact classic-style player for YouTube Music."""
 
 __version__ = "0.1.9"
 
-NATIVE_HOST_NAME = "amberfader"
-ADDON_ID = "amberfader@ch.lkmc"
+APP_NAME = "amberfader"
 PROTOCOL_VERSION = 1

@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted (deferred)
+Superseded by [embedded-browser.md](embedded-browser.md). Amberfader no
+longer runs in Firefox. In Qt WebEngine, page-world access means injecting a
+script into the main world, which the host controls per script.
 
 ## Context
 

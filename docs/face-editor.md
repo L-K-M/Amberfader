@@ -2,7 +2,7 @@
 
 The face editor runs as a standalone PySide6 application on macOS and Linux.
 It previews and edits the same portable face folders that the player loads.
-You can design a face without Firefox, the native helper, or a playing track.
+You can design a face without YouTube Music or a playing track.
 The standalone editor does not provide a macOS playback bridge.
 
 The editor and rotation support are available in builds from this source tree;

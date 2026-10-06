@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   typescript:
-    name: Extension lint, typecheck, unit tests, build
+    name: Page bundle lint, typecheck, unit tests, build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -37,19 +37,8 @@ jobs:
       - name: Lint, typecheck, unit tests
         run: npm run check
 
-      - name: Build extension and run web-ext lint
-        run: npm run ext:lint
-
-      - name: Package the extension zip
-        run: npm run ext:package
-
-      - name: Upload extension zip
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: firefox-extension
-          path: dist/web-ext-artifacts/
-          if-no-files-found: error
-          retention-days: 7
+      - name: Build the page bundle
+        run: npm run build
 
       - name: Validate shell entry points
         run: bash -n scripts/*.sh
@@ -58,7 +47,7 @@ jobs:
         run: npm run version:check
 
   python:
-    name: Native helper/GUI lint and unit tests
+    name: Python app lint and unit tests
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -68,17 +57,19 @@ jobs:
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
-      - name: Qt runtime libraries and global-menu test session
+      - name: Qt and Qt WebEngine runtime libraries, global-menu test session
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libegl1 libgl1 libglib2.0-0t64 libxkbcommon0 \
             libfontconfig1 libdbus-1-3 libxkbcommon-x11-0 \
             libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 \
+            libnss3 libasound2t64 libxkbfile1 libxcomposite1 libxdamage1 \
+            libxrandr2 libxtst6 libgbm1 libxcb-dri3-0 libgssapi-krb5-2 \
             xvfb xauth dbus python3-dbus python3-gi
 
       - name: Sync project environment
-        run: uv sync --extra gui
+        run: uv sync
 
       - name: Ruff
         run: uv run ruff check native/
@@ -100,8 +91,23 @@ jobs:
       - name: Schema sync
         run: cmp protocol/schemas/envelope.schema.json native/amberfader/schema/envelope.schema.json
 
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Build the page scripts
+        run: npm ci && npm run build
+
       - name: Build wheel and sdist
         run: uv build --out-dir dist
+
+      - name: Wheel and sdist ship the page scripts
+        run: |
+          unzip -l dist/*.whl | grep -q "amberfader/embedded/web/adapter.js"
+          unzip -l dist/*.whl | grep -q "amberfader/embedded/web/ad-filter.js"
+          tar -tzf dist/*.tar.gz | grep -q "amberfader/embedded/web/adapter.js"
+          tar -tzf dist/*.tar.gz | grep -q "amberfader/embedded/web/ad-filter.js"
 
       - name: Upload Python distributions
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -125,7 +131,7 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
       - name: Sync editor environment
-        run: uv sync --extra gui
+        run: uv sync
 
       - name: Editor, persistence and transformed input tests
         env:
@@ -140,8 +146,49 @@ jobs:
           native/tests/test_audion_import_ui.py native/tests/test_audion_face_rendering.py
           native/tests/test_audion_popup_keyboard.py
 
+  macos:
+    name: macOS app build and self-test
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Build the page scripts
+        run: npm ci && npm run build
+
+      # A python.org-style build with a shared libpython, as PyInstaller needs.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install Amberfader and PyInstaller
+        run: python -m pip install . "pyinstaller==6.22.3"
+
+      - name: Build Amberfader.app and the .dmg
+        run: scripts/build-macos.sh "$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' native/amberfader/__init__.py)" dist
+
+      - name: Self-test the frozen app
+        run: dist/macos/dist/Amberfader.app/Contents/MacOS/Amberfader --self-test
+
+      - name: Upload .dmg
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos-dmg
+          path: |
+            dist/*.dmg
+            dist/*.dmg.sha256
+          if-no-files-found: error
+          retention-days: 7
+
   embedded:
-    name: Embedded QtWebEngine prototype end to end
+    name: Page bridge end to end in Qt WebEngine
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -157,8 +204,8 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
-      - name: Build the embedded page bundle
-        run: npm run embedded:build
+      - name: Build the page bundle
+        run: npm run build
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
@@ -172,7 +219,7 @@ jobs:
             libgssapi-krb5-2
 
       - name: Sync project environment
-        run: uv sync --extra gui --extra embedded
+        run: uv sync
 
       - name: Bridge end to end against the scripted test page (Qt offscreen)
         env:
@@ -191,13 +238,21 @@ jobs:
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Build the page scripts
+        run: npm ci && npm run build
+
       - name: Build the .deb
-        run: scripts/build-deb.sh "$(node -p "JSON.parse(require('node:fs').readFileSync('extension/manifest.json','utf8')).version")" dist
+        run: scripts/build-deb.sh "$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' native/amberfader/__init__.py)" dist
 
       - name: Inspect package contents
         run: |
           dpkg-deb --info dist/amberfader_*_*.deb
-          dpkg-deb --contents dist/amberfader_*_*.deb | grep -E "native-messaging-hosts|applications|amberfader-helper|icon"
+          dpkg-deb --contents dist/amberfader_*_*.deb | grep -E "applications|bin/amberfader|icon"
 
       - name: Upload .deb
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

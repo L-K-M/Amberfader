@@ -1,6 +1,7 @@
 """All faces retain command guards, art, search sessions and scaling."""
 import base64
 import json
+import os
 import subprocess
 import sys
 
@@ -284,18 +285,30 @@ def test_broken_default_face_has_reinstall_diagnostic(qapp, tmp_path, monkeypatc
 
 
 def test_cli_reports_broken_face_install_and_cleans_socket(tmp_path):
+    pytest.importorskip(
+        "PySide6.QtWebEngineWidgets", reason="Qt WebEngine unavailable", exc_type=ImportError,
+    )
     socket = tmp_path / "control.sock"
+    env = {
+        **os.environ, "QT_QPA_PLATFORM": "offscreen",
+        # The offline test page never loads here; no sandbox is exercised.
+        "QTWEBENGINE_DISABLE_SANDBOX": "1",
+        "XDG_DATA_HOME": str(tmp_path / "data"), "XDG_CONFIG_HOME": str(tmp_path / "config"),
+        "XDG_CACHE_HOME": str(tmp_path / "cache"), "XDG_STATE_HOME": str(tmp_path / "state"),
+    }
     process = subprocess.run([
         sys.executable, "-c", """
 import sys
 from pathlib import Path
+import amberfader.embedded.page as page
 import amberfader.face_library as faces
-from amberfader.app import main
+from amberfader.embedded.__main__ import main
 faces.BUILTIN_DIRECTORY = Path(sys.argv[1])
-sys.argv = ["amberfader", "--socket", sys.argv[2]]
-raise SystemExit(main())
+page.load_bundle = lambda: ""
+page.load_ad_filter = lambda: ""
+raise SystemExit(main(["--test-page", "--background", "--socket", sys.argv[2]]))
 """, str(tmp_path / "missing-faces"), str(socket),
-    ], capture_output=True, text=True, timeout=15)
+    ], capture_output=True, text=True, timeout=30, env=env)
     assert process.returncode == 2
     assert "Reinstall Amberfader" in process.stderr
     assert "Traceback" not in process.stderr

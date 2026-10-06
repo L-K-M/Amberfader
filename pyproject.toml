@@ -1,29 +1,19 @@
 [project]
 name = "amberfader"
 version = "0.1.9"
-description = "Classic-style remote for YouTube Music in Firefox: native-messaging helper + PySide6 desktop app"
+description = "Compact classic-style player for YouTube Music with its own embedded browser"
 readme = "README.md"
 license = { text = "Unlicense" }
 requires-python = ">=3.11"
-# Keep the helper lightweight: core deps only. The GUI lives behind the
-# `gui` extra so a helper-only install never pulls Qt.
+# PySide6-Addons carries Qt WebEngine (Chromium), which hosts YouTube Music.
 dependencies = [
     "jsonschema>=4.23,<5",
-]
-
-[project.optional-dependencies]
-gui = [
     "PySide6-Essentials>=6.8,<7",
-]
-# Embedded QtWebEngine prototype (python -m amberfader.embedded). Adds
-# Chromium through Qt WebEngine; the Firefox-mode packages do not use it.
-embedded = [
     "PySide6-Addons>=6.8,<7",
 ]
 
 [project.scripts]
-amberfader = "amberfader.app:main"
-amberfader-helper = "amberfader.helper:main"
+amberfader = "amberfader.embedded.__main__:main"
 amberfader-face-editor = "amberfader.editor_app:main"
 
 [dependency-groups]
@@ -36,8 +26,15 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+# Built by `npm run build` and ignored by git; ship them anyway.
+artifacts = ["native/amberfader/embedded/web/*.js"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["native/amberfader"]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+path = "hatch_build.py"
 
 [tool.pytest.ini_options]
 testpaths = ["native/tests"]

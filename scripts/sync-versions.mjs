@@ -1,6 +1,6 @@
-// Keeps every version field in the repo in lockstep with
-// extension/manifest.json (the release engine's version source). Run by
-// RELEASE_POST_BUMP after the engine bumps the manifest + package.json.
+// Keeps every version field in the repo in lockstep with __version__ in
+// native/amberfader/__init__.py (the release engine's version source). Run by
+// RELEASE_POST_BUMP after the engine bumps __version__.
 //   --check: verify all versions match; nonzero exit on drift.
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -9,10 +9,14 @@ import { fileURLToPath } from "node:url";
 const root = join(fileURLToPath(import.meta.url), "../..");
 const check = process.argv.includes("--check");
 
-const manifest = JSON.parse(
-  readFileSync(join(root, "extension/manifest.json"), "utf8"),
-);
-const version = manifest.version;
+const SOURCE = "native/amberfader/__init__.py";
+const version = readFileSync(join(root, SOURCE), "utf8").match(
+  /^__version__ = "([^"]+)"/m,
+)?.[1];
+if (!version) {
+  console.error(`no __version__ in ${SOURCE}`);
+  process.exit(1);
+}
 
 const results = [];
 
@@ -40,11 +44,6 @@ sync(
   /\[\[package\]\]\nname = "amberfader"\nversion = "([^"]+)"/,
   (v) => `[[package]]\nname = "amberfader"\nversion = "${v}"`,
 );
-sync(
-  "native/amberfader/__init__.py",
-  /^__version__ = "([^"]+)"/m,
-  (v) => `__version__ = "${v}"`,
-);
 
 let bad = false;
 for (const [path, found, ok] of results) {
@@ -52,6 +51,6 @@ for (const [path, found, ok] of results) {
   console.log(`${ok ? "  ok" : "DRIFT"}  ${path}: ${found}`);
 }
 if (check) {
-  console.log(`version source: ${version} (extension/manifest.json)`);
+  console.log(`version source: ${version} (${SOURCE})`);
   if (bad) process.exit(1);
 }

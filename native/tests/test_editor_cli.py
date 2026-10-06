@@ -18,7 +18,7 @@ import sys
 class BlockPlayer(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
         if fullname.startswith('PySide6') or fullname in (
-            'amberfader.app', 'amberfader.helper', 'amberfader.qt_transport'
+            'amberfader.app', 'amberfader.embedded', 'amberfader.qt_transport'
         ):
             raise ImportError(f'Forbidden import: {fullname}')
 

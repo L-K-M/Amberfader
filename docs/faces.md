@@ -67,17 +67,19 @@ Only files declared by the manifest are copied. Existing face IDs and folders
 are never replaced. You can also place packs in the folder opened by **Open
 faces folder**, then reopen **Faces** to rescan it.
 
-Native packages use `$XDG_DATA_HOME/amberfader/faces`, normally
+On Linux, native packages use `$XDG_DATA_HOME/amberfader/faces`, normally
 `~/.local/share/amberfader/faces`. Flatpak uses its own app-local data directory,
-normally `~/.var/app/ch.lkmc.amberfader/data/amberfader/faces`. Remove a pack's
+normally `~/.var/app/ch.lkmc.amberfader/data/amberfader/faces`. On macOS, faces
+live in `~/Library/Application Support/Amberfader/faces`. Remove a pack's
 folder to uninstall it. Bundled faces remain available.
 
-Preferences live at `$XDG_CONFIG_HOME/amberfader/appearance.json`, normally
-`~/.config/amberfader/appearance.json`. If a saved face disappears or becomes
-invalid, the app reports the problem and returns to Amber Classic.
+Preferences live at `$XDG_CONFIG_HOME/amberfader/appearance.json` on Linux,
+normally `~/.config/amberfader/appearance.json`, and in
+`~/Library/Application Support/Amberfader/appearance.json` on macOS. If a saved
+face disappears or becomes invalid, the app reports the problem and returns to
+Amber Classic.
 
-The per-user uninstall script removes its installation prefix, including packs
-stored there. Damaged bundled faces report a reinstall error at startup.
+Damaged bundled faces report a reinstall error at startup.
 
 ## Create a plugin
 
@@ -288,8 +290,8 @@ QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
 
 The preview script renders the actual player widgets with synthetic metadata,
 and saves individual renders plus long-metadata, offline/unknown, and pending
-contact sheets in `build/face-previews/`. It does not connect to Firefox or send
-playback commands. Repeat `--face ID` to select a subset; this requires a separate
+contact sheets in `build/face-previews/`. It does not connect to YouTube Music or
+send playback commands. Repeat `--face ID` to select a subset; this requires a separate
 `--output PATH` for its sample poster. Subset state sheets include the selected
 face IDs in their filenames. The face chooser also honors the selected
 fonts and fits the complete time readout.

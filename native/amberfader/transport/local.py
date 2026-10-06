@@ -1,6 +1,6 @@
 """Qt transport glue: a framed-JSON connection over QLocalSocket, and the
-per-user local socket server that accepts helper and second-instance
-connections."""
+per-user local socket server that lets a second launch raise the running
+instance."""
 from __future__ import annotations
 
 import contextlib
@@ -13,20 +13,19 @@ from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 from .. import PROTOCOL_VERSION
 from ..protocol import FrameError, FrameFeed, encode_frame
-from .paths import default_socket_path, path_has_live_owner, runtime_socket_dir
+from .paths import path_has_live_owner, runtime_socket_dir
 
 __all__ = [
     "ACTIVATE_REQUEST",
     "ACTIVATE_RESPONSE",
     "FramedSocket",
     "LocalServer",
-    "default_socket_path",
     "path_has_live_owner",
     "runtime_socket_dir",
     "try_activate_existing",
 ]
 
-# Socket-internal activation handshake (not part of the browser protocol —
+# Socket-internal activation handshake (not part of the page protocol;
 # discriminated before schema validation).
 ACTIVATE_REQUEST = "activate-request"
 ACTIVATE_RESPONSE = "activate-response"
@@ -66,11 +65,10 @@ class FramedSocket(QObject):
 
 
 class LocalServer(QObject):
-    """The GUI-owned socket server. First frame on each connection declares
-    the peer: a protocol 'hello' from a helper, or 'activate-request' from a
-    second GUI instance."""
+    """The app's single-instance socket server. The first frame on each
+    connection must come from a second launch: a 'gui-instance' hello or an
+    'activate-request'. Anything else is an invalid peer."""
 
-    helperConnected = Signal(object)      # FramedSocket
     activationRequested = Signal(object)  # FramedSocket
     invalidPeer = Signal(object)          # FramedSocket (closed by caller)
 
@@ -113,15 +111,8 @@ class LocalServer(QObject):
 
     def _first_frame(self, framed: FramedSocket, msg: dict) -> None:
         kind = msg.get("kind")
-        if kind == "hello" and msg.get("component") in ("helper", "gui-instance"):
-            if msg.get("component") == "gui-instance":
-                self._release(framed)
-                self.activationRequested.emit(framed)
-            else:
-                self._release(framed)
-                self.helperConnected.emit(framed)
-            return
-        if kind == ACTIVATE_REQUEST:
+        second_launch = kind == "hello" and msg.get("component") == "gui-instance"
+        if second_launch or kind == ACTIVATE_REQUEST:
             self._release(framed)
             self.activationRequested.emit(framed)
             return

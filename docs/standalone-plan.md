@@ -1,11 +1,11 @@
 # Plan: Amberfader as a standalone app on Linux and macOS
 
-Status: proposed, 2026-10-05. This plan takes Amberfader from "Firefox
+Status: decided 2026-10-05 (see [Decisions](#3-decisions)), in progress.
+This plan takes Amberfader from "Firefox
 extension plus native helper" to one desktop app that hosts YouTube Music in
 QtWebEngine, and adds macOS build targets next to the Linux ones. It builds on
-the prototype in [`embedded-prototype.md`](embedded-prototype.md) and
-supersedes the Firefox-specific parts of [`PLAN.md`](../PLAN.md) once
-[Phase 0](#phase-0-close-the-gate) is done.
+the prototype in [`embedded-browser.md`](embedded-browser.md) and
+supersedes the Firefox-era [`PLAN.md`](../PLAN.md).
 
 ## 1. End state
 
@@ -34,8 +34,7 @@ Build targets at the end:
 | `wheel` | Linux, macOS | `dist/amberfader-<ver>-py3-none-any.whl`, sdist | Includes the page bundle. For developers and `pipx` users. |
 | `deb` | Linux (Ubuntu 24.04 in CI) | `dist/amberfader_<ver>_amd64.deb` | QtWebEngine inside, Chromium sandbox on, AppArmor profile for Ubuntu 23.10 and later. |
 | `flatpak` | Linux | `dist/amberfader_<ver>.flatpak` | Network and audio permissions; sandbox approach decided in Phase 2. |
-| `macos` | macOS (Apple silicon) | `dist/Amberfader-<ver>-macos-arm64.dmg` | `.app` frozen with PyInstaller, signed and notarized if you choose a Developer ID (D2). |
-| `ext` | removed in Phase 6 | | Kept until the Firefox mode is retired. |
+| `macos` | macOS (Apple silicon) | `dist/Amberfader-<ver>-macos-arm64.dmg` | `.app` frozen with PyInstaller, ad-hoc signed, not notarized (D2). |
 
 ## 2. Where things stand (2026-10-05)
 
@@ -59,22 +58,23 @@ Open:
   your recheck in a signed-in session.
 - Linux hidden playback and memory, and a macOS memory figure with the
   corrected command.
-- Chrome extensions: blocked by a Qt crash (see
-  [Extensions](embedded-prototype.md#extensions)). Depends on D5.
+- Chrome extensions: Qt cannot enable them (see
+  [Extensions](embedded-browser.md#extensions)), so D5 builds ad blocking and
+  "continue playing" in.
 
-## 3. Decisions for you
+## 3. Decisions
 
-Each has a recommendation. The phases below assume the recommendation until
-you decide otherwise.
+Decided by the owner on 2026-10-05. Where a decision differs from the
+original recommendation, the phases below follow the decision.
 
-| # | Decision | Recommendation | Why |
-| --- | --- | --- | --- |
-| D1 | How long the Firefox mode stays | Ship one release with both modes, then remove the extension, helper and native messaging in the next | One release gives you a fallback while the packages settle. Keeping both long term doubles testing for every change. |
-| D2 | macOS signing | Apple Developer ID, hardened runtime, notarization ($99 per year Apple Developer Program, plus GitHub secrets) | Without it, every user must allow the app in System Settings > Privacy & Security on first launch, and each update repeats that. |
-| D3 | macOS architectures | Apple silicon only, Intel later if someone asks | Apple has said macOS 26 is the last release for Intel Macs. Universal builds roughly double the Qt payload. |
-| D4 | What closing the player does | Hide the player and keep playing; Quit (menu, tray, Dock, Cmd+Q / Ctrl+Q) stops | Matches today's Firefox mode, where closing the player never stopped music, and macOS conventions. |
-| D5 | Extensions | Tell me which extensions you need. If it is ad or tracker blocking, block requests natively (Phase 5) | Qt's extension API crashes today and covers only part of Chrome's APIs. |
-| D6 | Distribution | GitHub Releases only for the first release; Flathub and a Homebrew cask later | Store listings add review cycles; they are easier once the packages are stable. |
+| # | Decision | Decided |
+| --- | --- | --- |
+| D1 | How long the Firefox mode stays | Remove it now, with no overlap release |
+| D2 | macOS signing | Release the Mac app unsigned (ad-hoc signature); no Developer ID or notarization |
+| D3 | macOS architectures | Apple silicon only |
+| D4 | What closing the player does | Quit the app and stop the music |
+| D5 | Extensions | Ad blocking and "continue playing" are needed; both are built in, because Qt's extension API cannot enable extensions |
+| D6 | Distribution | GitHub Releases only |
 
 ## 4. Rules that carry over, change, or go away
 
@@ -124,7 +124,7 @@ or Tauri, Gecko), measured memory and size, and the consequences (Chromium
 security updates arrive through PySide6 releases; a second browser next to
 Firefox).
 
-**Exit:** all gate items recorded in `embedded-prototype.md`, decision record
+**Exit:** all gate items recorded in `embedded-browser.md`, decision record
 merged.
 
 ### Phase 1: make the prototype the app
@@ -139,27 +139,23 @@ Everything here is platform-neutral code plus the hooks that packaging needs.
    created under `~/.local/share/amberfader` are moved once, so faces and the
    Google sign-in carry over. Tests cover the move, a partial earlier move,
    and a destination that already exists (no overwrite).
-2. **Lifecycle (D4).** Closing the player hides it while music continues.
-   Quit is in the player menu, the tray menu (Linux), the Dock menu (macOS)
-   and on Cmd+Q / Ctrl+Q. On Linux the tray icon uses `QSystemTrayIcon`. When
-   no tray is available (GNOME without the AppIndicator extension),
-   launching Amberfader again shows the running player through the
-   single-instance socket. On macOS, clicking the Dock icon shows the player.
-   SIGTERM and logout still quit through Qt, so the sign-in cookies are
-   flushed.
-3. **Pop-up windows.** Sign-in and YouTube Music pop-ups open in a separate
+2. **Lifecycle (D4).** Closing the player quits Amberfader and stops the
+   music, as the prototype already does; there is no tray. Quit is also in
+   the player menu and on Cmd+Q / Ctrl+Q. Launching Amberfader again while
+   it runs raises the player instead of starting a second instance. SIGTERM
+   and logout quit through Qt, so the sign-in cookies are flushed.
+3. **Pop-up windows** (after 0.2.0, see section 10). Sign-in and YouTube Music pop-ups open in a separate
    short-lived window under the same navigation policy, instead of replacing
    the music page. Tested with `window.open` on the test page.
-4. **Settings and diagnostics** (replaces the extension options page):
+4. **Settings and diagnostics** (after 0.2.0, see section 10; replaces the
+   extension options page):
    - Versions of Amberfader, Qt and Chromium, and the profile folder.
    - Whether the page is attached.
    - **Sign out and clear site data:** cookies, storage and HTTP cache.
    - **Copy diagnostics:** versions, states and error codes, never track
      names or queries.
-5. **Entry points.** `amberfader` starts the standalone app. During the
-   overlap release (D1) the Firefox-mode desktop app is still available as
-   `amberfader-firefox`. The user-facing copy drops "prototype", and the close
-   tooltip says the music keeps playing.
+5. **Entry points.** `amberfader` starts the standalone app, and the
+   user-facing copy drops "prototype".
 6. **Page bundle in the wheel.** `adapter.js` is a build output and is
    ignored by git, so hatch leaves it out today. Declare it as a hatch
    artifact. `scripts/build.sh wheel` builds the bundle first. CI fails if
@@ -284,21 +280,13 @@ Linux desktop.
   transparency, so macOS shows it as a full square; a masked version with
   Apple's rounded-square margins would look native in the Dock.
 
-**Sign and notarize (D2)**
+**Signing (D2: unsigned)**
 
-- Sign from the inside out with `codesign --options runtime --timestamp`:
-  every `.so` and `.dylib`, the Qt frameworks, `QtWebEngineProcess.app`,
-  then the app.
-- Entitlements are the minimum that launches. Expect `allow-jit` for
-  `QtWebEngineProcess`, where V8 runs. Add any other entitlement only after a
-  hardened-runtime launch fails without it, and record why in the spec.
-- Notarize with `xcrun notarytool submit --wait`, staple the app and the
-  `.dmg`, and check with `spctl --assess` and `codesign --verify --deep --strict`.
-- Secrets (App Store Connect API key, Developer ID certificate) live in a
-  GitHub `release` environment with required reviewers. Local builds read a
-  keychain profile.
-- Without a Developer ID: ad-hoc signature, and the README explains the
-  one-time approval in System Settings > Privacy & Security.
+- Ad-hoc signature only (`codesign --sign -`), which Apple silicon needs to
+  run any code. Check with `codesign --verify --deep --strict`.
+- No Developer ID, hardened runtime or notarization. The README explains the
+  one-time approval in System Settings > Privacy & Security, which each
+  update repeats.
 
 **Package**
 
@@ -327,12 +315,12 @@ Linux desktop.
   run unsigned code). `codesign --verify` must pass before the self-test.
 - It runs `Amberfader.app/Contents/MacOS/Amberfader --self-test` and uploads
   the `.dmg`.
-- The release workflow builds, signs and notarizes in the `release`
-  environment and attaches the `.dmg` to the GitHub Release.
+- The release workflow builds the ad-hoc signed `.dmg` and attaches it to the
+  GitHub Release.
 
 **Exit:** the CI artifact self-tests green. You install the `.dmg` on your Mac,
-sign in and pass the acceptance matrix. With D2, Gatekeeper accepts it with
-no warning.
+approve it once in System Settings > Privacy & Security, sign in and pass
+the acceptance matrix.
 
 ### Phase 4: media keys and system controls
 
@@ -361,60 +349,44 @@ no warning.
 control playback on both platforms, and failures show in the player as they
 do for buttons.
 
-### Phase 5: content blocking or extensions (depends on D5)
+### Phase 5: built-in ad blocking and "continue playing" (D5)
 
-- **Ad or tracker blocking:** a `QWebEngineUrlRequestInterceptor` on the
-  profile with a network filter list, plus a switch in Settings. This blocks
-  trackers and third-party ads. It does not reliably remove YouTube's own
-  in-stream ads, which come from the same hosts as the music. YouTube Music
-  Premium is the dependable way to remove those.
-- **Other extensions:**
-  - File the Qt bug with the reproduction from the runbook, and watch PySide6
-    releases.
-  - When `setExtensionEnabled` stops crashing, add "Install extension from
-    folder or zip" to Settings, listing the API limits there.
-  - A tiny extension that only changes the page could instead be injected
-    as another application-world script.
+Real extensions cannot be used: Qt WebEngine's extension API crashes when
+enabling one, and an extension loaded unpacked stays disabled. Both features
+are therefore built into Amberfader, each with a switch in the player menu.
 
-### Phase 6: release and retire the Firefox mode
+- **Ad blocking**, two layers:
+  - A `QWebEngineUrlRequestInterceptor` blocks ad and tracking requests,
+    using EasyList's YouTube rules (such as `youtube.com/pagead/`,
+    `/api/stats/ads`, `/youtubei/v1/player/ad_break`) and the ad hosts
+    (doubleclick.net, googlesyndication.com, googleadservices.com,
+    imasdk.googleapis.com).
+  - A main-world script removes `adPlacements`, `playerAds` and `adSlots`
+    from the player data, the technique uBlock Origin's filters use on
+    music.youtube.com. It runs before the page's scripts and keeps no bridge
+    to the app.
+  - YouTube changes its ad delivery often, so this can stop working. The
+    switch lets you turn it off if it breaks the page.
+- **Continue playing:** when YouTube Music shows its "Video paused. Continue
+  watching?" prompt (`ytmusic-you-there-renderer`), the adapter closes it and
+  resumes playback, as the YouTube NonStop extension does. The selectors come
+  from that extension's source and stay UNVERIFIED until the prompt is seen
+  live.
 
-1. **Overlap release 0.2.0 (D1):**
-   - The standalone app is the default on Linux, and new on macOS.
-   - The extension, helper and `amberfader-firefox` still ship, and the
-     release notes announce their removal in 0.3.0.
-   - Release notes cover migration:
-     - Sign in again inside Amberfader.
-     - Faces and appearance carry over.
-     - Firefox-mode recent searches do not.
-     - How to remove the extension from Firefox.
-     - `scripts/uninstall-user` removes per-user native-messaging
-       registrations; upgrading the deb removes the system one.
-2. **Removal release 0.3.0:**
-   - Delete the extension shell: background, controller, popup, options,
-     probe, the content entry point, the manifest, locales and web-ext
-     tooling.
-   - Delete `helper.py`, the Firefox host copy and `PlaybackHost`,
-     `install-user`, `uninstall-user` and `doctor` (diagnostics now live in
-     Settings).
-   - Delete the deb's native-messaging manifest. Remove the Flatpak
-     `xdg-run/amberfader` share only if the single-instance socket moved
-     to the per-app runtime folder (Phase 2).
-   - Move the remaining TypeScript (adapter, executor, embedded bridge,
-     protocol, shared) to `web/` with its tests.
-   - Fold the `gui` and `embedded` extras into the base dependencies, since
-     no Qt-free component remains.
-   - Remove protocol messages only the helper used. Keep schema validation
-     between page and router: it is still the boundary to code that runs in
-     the page.
-3. **Version source:** `extension/manifest.json` is the version source
-   today. Move it to `pyproject.toml` and update `sync-versions.mjs` and the
-   `release.yml` tag check. `scripts/release.sh` delegates to
-   `L-K-M/release-tool` with `RELEASE_KIND=webext`; check that it supports a
-   Python kind, or add one there (that is a separate repository).
-4. **Docs:** AGENTS.md (rules, identities, commands), README, PLAN.md
-   (archived as the Firefox-era plan), `compatibility.md`.
+### Phase 6: release (D1)
 
-**Exit:** a release with only the standalone app, CI green on all targets,
+There is no overlap release. The first PR after the decisions removes the
+Firefox extension, the native helper and their tooling, moves the page code
+to `web/`, makes `amberfader` start the standalone app, and moves the
+version source to `native/amberfader/__init__.py` (the release tool's
+`python` kind).
+
+Release 0.2.0 ships the deb, the Flatpak and the macOS `.dmg`. Its release
+notes cover migration: sign in again inside Amberfader; faces and appearance
+carry over; recent searches from the extension do not; remove the extension
+from Firefox yourself.
+
+**Exit:** the release is published, CI is green on all targets, and the
 acceptance matrix passed on Linux and macOS.
 
 ## 6. CI and release, end state
@@ -428,7 +400,7 @@ acceptance matrix passed on Linux and macOS.
 | `flatpak` | ubuntu-24.04 | Flatpak repacks the deb, installs and self-tests |
 | `macos` | macos-15 | Unit and e2e tests, frozen `.app` self-tests, `.dmg` uploaded |
 | `face-editor-macos` | macos-14 | Kept as is, or folded into `macos` |
-| Release | same jobs | Adds signing and notarization in the `release` environment, publishes `.deb`, `.flatpak`, `.dmg`, wheel and checksums |
+| Release | same jobs | Publishes `.deb`, `.flatpak`, `.dmg`, wheel and checksums |
 
 Dependency updates: Dependabot (or Renovate) watches `uv.lock` for PySide6.
 Chromium security fixes reach Amberfader only through PySide6 releases, so a
@@ -472,28 +444,22 @@ them).
 
 ## 10. Pull request sequence
 
-Each entry is one PR through the usual review loop; `|` separates PRs that
-can run in parallel.
+Each entry is one PR through the usual review loop.
 
-1. This plan.
-2. Phase 0 results and the decision record (after your gate runs).
+1. This plan (merged).
+2. Remove the Firefox mode: `amberfader` starts the app, page code in
+   `web/`, version source, docs, decision record.
 3. Platform folders and macOS migration.
-4. Lifecycle: close hides, Quit, tray, Dock | pop-up windows.
-5. Settings and diagnostics | entry point switch, bundle in the wheel,
-   `--self-test`.
-6. deb with QtWebEngine, AppArmor and smoke test | macOS freeze, `build.sh
-   macos`, ad-hoc signed CI build.
-7. Flatpak (after the Flatpak sandbox spike) | macOS signing, notarization
-   and release job (after D2).
-8. MPRIS | Now Playing (both after the Phase 4 spike).
-9. Content blocking or extensions (after D5).
-10. Release 0.2.0 with both modes, announcing the Firefox mode's removal.
-11. Remove the Firefox mode, move TypeScript to `web/`, version source,
-    AGENTS.md and README; release 0.3.0.
+4. Built-in ad blocking and "continue playing".
+5. `--self-test` and the page bundle in the wheel.
+6. Linux packages: deb with Qt WebEngine and AppArmor, Flatpak.
+7. macOS target: PyInstaller `.app`, unsigned `.dmg`, CI and release job.
+8. Release 0.2.0.
+
+Later: pop-up windows, settings and diagnostics, MPRIS and Now Playing.
 
 Your parts:
 
-- The Phase 0 gate runs.
-- D1 to D6.
-- An Apple Developer account and the release secrets (if D2).
-- The live acceptance run before each release.
+- The remaining gate checks: Start mix, Linux hidden playback and memory.
+- The live acceptance run before each release, including ad blocking and
+  "continue playing".

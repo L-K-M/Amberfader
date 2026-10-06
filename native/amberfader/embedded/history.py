@@ -14,6 +14,8 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..paths import app_dirs
+
 RECENT_ITEMS_CAP = 20
 MAX_ITEM_LENGTH = 500
 MAX_FILE_BYTES = 256 * 1024
@@ -108,6 +110,4 @@ class SearchHistoryStore:
 
 
 def default_history_path() -> Path:
-    state = os.environ.get("XDG_STATE_HOME", "")
-    base = Path(state) if state and Path(state).is_absolute() else Path.home() / ".local/state"
-    return base / "amberfader" / "embedded-search-history.json"
+    return app_dirs().state / "embedded-search-history.json"
