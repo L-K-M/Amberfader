@@ -25,9 +25,9 @@ for the full policy.
 
 The README lists the exact folders on Linux and macOS.
 
-Delete the profile folder to sign out completely, and the HTTP cache folder
-to remove the pages, scripts and images the browser cached. Quit Amberfader
-first. **Clear recents** in the search window removes both recent lists; the
+Quit Amberfader first. Delete the profile folder to sign out completely, and
+the HTTP cache folder to remove the pages, scripts and images the browser
+cached. **Clear recents** in the search window removes both recent lists; the
 current track is not immediately re-added.
 
 ## Data paths inside the app
