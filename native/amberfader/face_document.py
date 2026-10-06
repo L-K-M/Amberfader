@@ -420,6 +420,7 @@ class FaceDocument:
         self._path = target
         self._saved = self._current
         self._disk_snapshot = self._current
+        self._template = None  # A saved face is no longer a disposable copy.
         return target
 
     def export(self, path: Path) -> Path:

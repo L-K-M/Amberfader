@@ -56,6 +56,15 @@ def test_unedited_template_copy_has_no_work_to_lose(tmp_path):
     assert reopened.needs_save
 
 
+def test_saved_copy_asks_even_when_undone_to_the_template(tmp_path):
+    document = FaceDocument.from_template(TEMPLATE)
+    document.set_rotation("play", 10)
+    document.save(tmp_path / "saved")
+    document.undo()
+    # The folder holds the rotation; closing now would silently keep it.
+    assert document.needs_save
+
+
 def test_returned_manifest_and_assets_cannot_mutate_document():
     document = FaceDocument.from_template(TEMPLATE)
     returned = document.manifest
