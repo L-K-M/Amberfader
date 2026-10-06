@@ -212,6 +212,7 @@ class FacesWindow(QDialog):
         try:
             prepare_face(load_face(Path(path)))
             info = self._library.install(Path(path))
+            self._filter.clear()  # Show the installed face even if the filter would hide it.
             self.refresh(info.id)
             self._status.setText(f"Installed {info.name}. Select Use face to apply it.")
         except FaceError as exc:

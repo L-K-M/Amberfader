@@ -182,6 +182,18 @@ def test_face_picker_filter_narrows_faces_and_selection(themed, qapp):
     assert not sent
 
 
+def test_installing_under_a_filter_shows_the_installed_face(themed, pack, monkeypatch):
+    window, _, _ = themed
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *_: str(pack[0]))
+    window.open_faces()
+    dialog = window._faces_window
+    dialog._filter.setText("vir")
+    dialog._install()
+    assert dialog._filter.text() == ""
+    assert "My Face" in _shown(dialog)
+    assert dialog._list.currentItem().text() == "My Face"
+
+
 def test_gui_installs_a_face_folder(themed, pack, monkeypatch):
     window, library, _ = themed
     monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *_: str(pack[0]))
