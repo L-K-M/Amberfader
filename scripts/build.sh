@@ -152,11 +152,26 @@ for target in "${TARGETS[@]}"; do
       if [[ "$(uname -s)" != "Darwin" ]]; then
         skip_or_fail macos "the macOS app builds on macOS"; continue
       fi
-      if ! python3 -c "import PyInstaller" >/dev/null 2>&1; then
-        skip_or_fail macos "PyInstaller not installed (pip install pyinstaller and this project)"; continue
+      # The freeze needs PyInstaller and the project importable from one
+      # interpreter. Prefer a python3 that already has PyInstaller; else
+      # bootstrap a venv with uv (same pin as CI); else explain what's missing.
+      PYTHON_BIN=""
+      if python3 -c "import PyInstaller" >/dev/null 2>&1; then
+        PYTHON_BIN="python3"
+      elif have uv; then
+        VENV="$DIST/.macos-venv"
+        echo "-- freeze env via uv (pyinstaller==6.22.3)"
+        if uv venv --quiet --python '>=3.11' "$VENV" &&
+           uv pip install --quiet --python "$VENV/bin/python" . 'pyinstaller==6.22.3'; then
+          PYTHON_BIN="$PWD/$VENV/bin/python"
+        else
+          skip_or_fail macos "could not create the PyInstaller env via uv"; continue
+        fi
+      else
+        skip_or_fail macos "no python3 with PyInstaller and no uv to make one"; continue
       fi
       page_scripts || { FAILED+=("macos"); continue; }
-      if scripts/build-macos.sh "$VERSION" "$DIST"; then
+      if PYTHON="$PYTHON_BIN" scripts/build-macos.sh "$VERSION" "$DIST"; then
         OK+=("macos → $DIST/")
         APPS=("$DIST/macos/dist/Amberfader.app" "$DIST/macos/dist/Amberfader Face Editor.app")
         if [[ $INSTALL -eq 1 ]]; then
