@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (standalone app)
 
+- The `.deb` declares the system libraries Qt WebEngine needs and ships an
+  AppArmor profile, so Chromium's sandbox can start on Ubuntu 23.10 and
+  later, which restrict unprivileged user namespaces.
 - Built-in ad blocking: blocks Google's ad hosts and YouTube's ad and
   ad-tracking endpoints (EasyList rules) and removes ad data from player
   responses, the technique uBlock Origin's filters use on music.youtube.com.

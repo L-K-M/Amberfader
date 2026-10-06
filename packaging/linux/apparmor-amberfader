@@ -1,0 +1,21 @@
+# AppArmor profiles for Amberfader, installed as /etc/apparmor.d/amberfader.
+#
+# Ubuntu 23.10 and later let unprivileged processes use user namespaces only
+# under a profile that allows it, and Chromium's sandbox inside Qt WebEngine
+# needs them: the browser process (the Python launcher) starts the zygote in
+# a new user namespace. Like Ubuntu's own profiles for Chrome, qutebrowser
+# and QtWebEngineProcess, these grant `userns` and confine nothing else.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile amberfader /usr/bin/amberfader flags=(unconfined) {
+  userns,
+
+  include if exists <local/amberfader>
+}
+
+profile amberfader-qtwebengine /opt/amberfader/lib/PySide6/Qt/libexec/QtWebEngineProcess flags=(unconfined) {
+  userns,
+
+  include if exists <local/amberfader-qtwebengine>
+}

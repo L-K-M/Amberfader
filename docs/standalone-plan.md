@@ -165,8 +165,8 @@ Everything here is platform-neutral code plus the hooks that packaging needs.
    pause, search and play result, prints a marker and exits 0. It also
    checks from the app's side that the renderer sandbox is active and fails
    when it is not, so a silent fallback to no sandbox cannot pass. On Linux,
-   every `QtWebEngineProcess` renderer must show `Seccomp: 2` in
-   `/proc/<pid>/status`; the macOS check is part of the Phase 3 work. Any
+   every `QtWebEngineProcess` renderer must show `Seccomp: 2` and a nested
+   PID namespace (`NSpid`) in `/proc/<pid>/status`; the macOS check is part of the Phase 3 work. Any
    failure or a 60 s timeout exits non-zero. Every package smoke test in Phases 2 and 3
    runs it, so CI proves the packaged app can start Chromium, inject the
    bundle and talk to it.

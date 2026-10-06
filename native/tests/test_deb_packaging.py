@@ -20,6 +20,9 @@ def build_environment(tmp_path):
     icons = root / "packaging/icons"
     icons.mkdir(parents=True)
     shutil.copyfile(ROOT / "packaging/icons/amberfader-96.png", icons / "amberfader-96.png")
+    linux = root / "packaging/linux"
+    linux.mkdir(parents=True)
+    shutil.copyfile(ROOT / "packaging/linux/apparmor-amberfader", linux / "apparmor-amberfader")
 
     # Bash functions isolate external tooling, including the absolute launcher
     # interpreter. File staging still runs through the unmodified build script.
@@ -33,7 +36,13 @@ function /usr/bin/python3 {
   fi
 }
 python3() { printf '%s\\n' ambient-python "$@" > "$AF_TEST_INSTALL_LOG"; }
-uv() { printf '%s\\n' uv "$@" > "$AF_TEST_INSTALL_LOG"; }
+uv() {
+  printf '%s\\n' uv "$@" > "$AF_TEST_INSTALL_LOG"
+  # Installer caches can hand out owner-only files, as uv's did in a dev box.
+  local target
+  while [[ $# -gt 0 ]]; do [[ "$1" == --target ]] && target="$2"; shift; done
+  mkdir -p "$target/PySide6" && install -m 640 /dev/null "$target/PySide6/__init__.py"
+}
 command() {
   if [[ "$1" == -v && "$2" == uv ]]; then
     [[ "$AF_TEST_BACKEND" == uv ]]
@@ -72,7 +81,7 @@ def test_deb_installs_for_launcher_interpreter_and_declares_its_abi(
     stage = root / "dist/deb/stage"
     control = (stage / "DEBIAN/control").read_text()
     assert (
-        f"Depends: python3 (>= 3.{minor}), python3 (<< 3.{minor + 1}~), libdbus-1-3\n"
+        f"Depends: python3 (>= 3.{minor}), python3 (<< 3.{minor + 1}~), libdbus-1-3, "
         in control
     )
 
@@ -86,10 +95,15 @@ def test_deb_installs_for_launcher_interpreter_and_declares_its_abi(
     assert invocation[invocation.index("--target") + 1] == "dist/deb/stage/opt/amberfader/lib"
 
     for name in ("amberfader", "amberfader-face-editor"):
-        assert "/usr/bin/python3 -m amberfader" in (stage / "usr/bin" / name).read_text()
         assert (stage / "usr/bin" / name).stat().st_mode & 0o111
-    assert "-m amberfader \"$@\"" in (stage / "usr/bin/amberfader").read_text()
-    assert "amberfader.editor_app" in (stage / "usr/bin/amberfader-face-editor").read_text()
+    # AppArmor attaches to the launcher's path, so it must be the script the
+    # interpreter runs, not a shell wrapper that execs it.
+    launcher = (stage / "usr/bin/amberfader").read_text()
+    assert launcher.startswith("#!/usr/bin/python3\n")
+    assert 'sys.path.insert(0, "/opt/amberfader/lib")' in launcher
+    assert 'runpy.run_module("amberfader", run_name="__main__"' in launcher
+    editor = (stage / "usr/bin/amberfader-face-editor").read_text()
+    assert "/usr/bin/python3 -m amberfader.editor_app" in editor
     assert sorted(path.name for path in (stage / "usr/bin").iterdir()) == [
         "amberfader", "amberfader-face-editor",
     ]
@@ -115,6 +129,33 @@ def test_deb_declares_global_menu_dbus_runtime(build_environment):
     control = (root / "dist/deb/stage/DEBIAN/control").read_text()
     depends = next(line for line in control.splitlines() if line.startswith("Depends: "))
     assert "libdbus-1-3" in depends.removeprefix("Depends: ").split(", ")
+
+
+def test_deb_declares_qt_webengine_libraries_and_apparmor_profile(build_environment):
+    root, env = build_environment
+    env.update(AF_TEST_BACKEND="uv", AF_TEST_SYSTEM_VERSION="3.12")
+    result = run_builder(root, env)
+    assert result.returncode == 0, result.stderr
+
+    stage = root / "dist/deb/stage"
+    control = (stage / "DEBIAN/control").read_text()
+    depends = next(line for line in control.splitlines() if line.startswith("Depends: "))
+    packages = depends.removeprefix("Depends: ").split(", ")
+    for package in ("libnss3", "libgbm1", "libxkbfile1", "libasound2t64 | libasound2"):
+        assert package in packages
+    assert "\\" not in depends
+
+    profile = (stage / "etc/apparmor.d/amberfader").read_text()
+    assert "profile amberfader /usr/bin/amberfader flags=(unconfined)" in profile
+    assert "/opt/amberfader/lib/PySide6/Qt/libexec/QtWebEngineProcess" in profile
+    assert profile.count("userns,") == 2
+    assert (stage / "DEBIAN/conffiles").read_text() == "/etc/apparmor.d/amberfader\n"
+    for script in ("postinst", "postrm"):
+        assert (stage / "DEBIAN" / script).stat().st_mode & 0o111
+    # Installed files must be readable by the user who runs the app.
+    module = stage / "opt/amberfader/lib/PySide6/__init__.py"
+    assert module.stat().st_mode & 0o777 == 0o644
+    assert "apparmor_parser -r" in (stage / "DEBIAN/postinst").read_text()
 
 
 def test_flatpak_allows_only_the_global_menu_registrar_bus_name():
@@ -158,7 +199,7 @@ def test_deb_python_bounds_reject_next_minor_prereleases(build_environment, vers
     assert result.returncode == 0, result.stderr
     control = (root / "dist/deb/stage/DEBIAN/control").read_text()
     bounds = re.search(
-        r"^Depends: python3 \(>= ([^)]+)\), python3 \(<< ([^)]+)\), libdbus-1-3$",
+        r"^Depends: python3 \(>= ([^)]+)\), python3 \(<< ([^)]+)\), libdbus-1-3, ",
         control, re.MULTILINE,
     )
     assert bounds is not None
