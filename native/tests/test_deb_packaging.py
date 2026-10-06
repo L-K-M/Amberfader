@@ -17,9 +17,7 @@ def build_environment(tmp_path):
     scripts = root / "scripts"
     scripts.mkdir(parents=True)
     shutil.copyfile(ROOT / "scripts/build-deb.sh", scripts / "build-deb.sh")
-    icons = root / "packaging/icons"
-    icons.mkdir(parents=True)
-    shutil.copyfile(ROOT / "packaging/icons/amberfader-96.png", icons / "amberfader-96.png")
+    shutil.copytree(ROOT / "packaging/icons", root / "packaging/icons")
     linux = root / "packaging/linux"
     linux.mkdir(parents=True)
     shutil.copyfile(ROOT / "packaging/linux/apparmor-amberfader", linux / "apparmor-amberfader")
@@ -156,6 +154,24 @@ def test_deb_declares_qt_webengine_libraries_and_apparmor_profile(build_environm
     module = stage / "opt/amberfader/lib/PySide6/__init__.py"
     assert module.stat().st_mode & 0o777 == 0o644
     assert "apparmor_parser -r" in (stage / "DEBIAN/postinst").read_text()
+
+
+def test_deb_installs_the_desktop_entrys_icon_at_every_size(build_environment):
+    root, env = build_environment
+    env.update(AF_TEST_BACKEND="uv", AF_TEST_SYSTEM_VERSION="3.12")
+    result = run_builder(root, env)
+    assert result.returncode == 0, result.stderr
+
+    stage = root / "dist/deb/stage"
+    entry = (stage / "usr/share/applications/ch.lkmc.amberfader.desktop").read_text()
+    assert "Icon=ch.lkmc.amberfader\n" in entry
+    icons = sorted(
+        path.relative_to(stage / "usr/share/icons/hicolor").as_posix()
+        for path in (stage / "usr/share/icons").rglob("*.png")
+    )
+    assert icons == [
+        f"{size}x{size}/apps/ch.lkmc.amberfader.png" for size in (128, 256, 512)
+    ]
 
 
 def test_flatpak_allows_only_the_global_menu_registrar_bus_name():

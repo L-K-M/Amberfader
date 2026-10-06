@@ -134,6 +134,8 @@ def _run(args: argparse.Namespace, scratch: str | None) -> int:
     app = QApplication(sys.argv[:1])
     app.setApplicationName("amberfader")
     app.setOrganizationDomain("ch.lkmc")
+    # Wayland compositors find the window's icon through its desktop entry.
+    app.setDesktopFileName("ch.lkmc.amberfader")
 
     # Single instance: two processes must never share one browser profile.
     # Checked before anything else, so a second launch only raises the first.
