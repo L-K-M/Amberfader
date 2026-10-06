@@ -35,7 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `amberfader --self-test` checks an installation on the scripted test
   page: attach, playback, search, the ad filter and, on Linux, Chromium's
-  renderer sandbox.
+  renderer sandbox. A seccomp filter that a container or Flatpak gives
+  every process does not count as the sandbox.
 - Wheels and sdists now include the page scripts; building a wheel without
   them fails with a reminder to run `npm run build`.
 

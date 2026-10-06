@@ -4,8 +4,10 @@ a Google account. Package smoke tests run it.
 
 It loads the scripted test page, then checks attach, play, pause, search,
 play result and the ad filter. On Linux it also requires Chromium's renderer
-sandbox: every renderer process must run under a seccomp filter, so a silent
-fallback to no sandbox fails the test. macOS has no such check yet.
+sandbox: every renderer process must run in a PID namespace of its own and
+under a seccomp filter of its own, so a silent fallback to no sandbox fails
+the test, also inside a container or Flatpak whose filter every process
+inherits. macOS has no such check yet.
 
 Prints one line per check and a final verdict; exit status 0 means passed.
 """
@@ -40,14 +42,40 @@ def _parent_pid(proc: Path, pid: int) -> int | None:
     return None
 
 
-def _seccomp_mode(proc: Path, pid: int) -> str | None:
+def _status(proc: Path, pid: int) -> dict[str, str]:
+    """/proc/<pid>/status as fields, e.g. {"PPid": "1", "Seccomp": "2"};
+    empty when the process is gone."""
     try:
-        for line in (proc / str(pid) / "status").read_text().splitlines():
-            if line.startswith("Seccomp:"):
-                return line.split()[1]
-    except (OSError, IndexError):
-        return None
-    return None
+        lines = (proc / str(pid) / "status").read_text().splitlines()
+    except OSError:
+        return {}
+    return {
+        key: value.strip()
+        for key, sep, value in (line.partition(":") for line in lines) if sep
+    }
+
+
+def _pid_namespace_depth(status: dict[str, str]) -> int:
+    # NSpid lists the PID in each namespace from /proc's down to the process's.
+    return len(status.get("NSpid", "").split())
+
+
+def _sandboxed(renderer: dict[str, str], argv: list[bytes], browser: dict[str, str]) -> str:
+    """'on', 'off' or 'unknown' for one renderer. Both of Chromium's layers
+    must show, measured against the browser process, because a container or
+    Flatpak gives every process a seccomp filter and a PID namespace:
+      layer 1, a PID namespace below the browser's (namespace sandbox);
+      layer 2, a seccomp filter on top of the browser's (seccomp-bpf).
+    Kernels before 5.9 do not count filters; a browser without a filter of
+    its own still proves layer 2, a filtered one leaves it unknown."""
+    if b"--no-sandbox" in argv or renderer.get("Seccomp") != "2":
+        return "off"
+    if _pid_namespace_depth(renderer) <= _pid_namespace_depth(browser):
+        return "off"
+    own, inherited = renderer.get("Seccomp_filters"), browser.get("Seccomp_filters")
+    if own is not None and inherited is not None:
+        return "on" if int(own) > int(inherited) else "off"
+    return "on" if browser.get("Seccomp") == "0" else "unknown"
 
 
 def _descends_from(proc: Path, pid: int, ancestor: int) -> bool:
@@ -73,9 +101,9 @@ def _is_webengine(argv: list[bytes]) -> bool:
 
 
 def renderer_sandbox(proc: Path = Path("/proc"), root_pid: int | None = None) -> str:
-    """'on' when every Qt WebEngine renderer below `root_pid` runs under a
-    seccomp filter (Seccomp: 2), 'off' when one does not, 'absent' when no
-    renderer was found.
+    """'on' when every Qt WebEngine renderer below `root_pid` is sandboxed
+    (see _sandboxed), 'off' when one is not, 'unknown' when the kernel cannot
+    tell, 'absent' when no renderer was found.
 
     Chromium forks renderers from its sandboxed zygote, and they keep the
     zygote's command line (`--type=zygote`). With the namespace sandbox the
@@ -106,7 +134,12 @@ def renderer_sandbox(proc: Path = Path("/proc"), root_pid: int | None = None) ->
     ]
     if not renderers:
         return "absent"
-    return "on" if all(_seccomp_mode(proc, pid) == "2" for pid in renderers) else "off"
+    browser = _status(proc, root_pid)
+    states = {_sandboxed(_status(proc, pid), argvs[pid], browser) for pid in renderers}
+    for state in ("off", "unknown"):
+        if state in states:
+            return state
+    return "on"
 
 
 class SelfTest:

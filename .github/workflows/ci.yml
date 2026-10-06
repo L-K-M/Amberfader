@@ -227,6 +227,16 @@ jobs:
           AMBERFADER_REQUIRE_EMBEDDED: "1"
         run: uv run pytest native/tests/test_embedded_e2e.py -q -rs
 
+      # The sandbox check must recognise real sandboxed renderers, not just
+      # reject unsandboxed ones. uv's Python has no AppArmor profile, so let
+      # unprivileged user namespaces through; the deb job tests the restriction.
+      - name: Self-test with Chromium's sandbox on
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+          uv run amberfader --self-test
+
   deb:
     name: Debian package builds
     runs-on: ubuntu-24.04
