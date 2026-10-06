@@ -59,6 +59,21 @@ def test_renderers_without_the_namespace_layer_are_seccomp_only(tmp_path):
     assert renderer_sandbox(make_proc(tmp_path, tree), BROWSER) == "seccomp only"
 
 
+def test_outer_pid_namespace_alone_is_seccomp_only(tmp_path):
+    # Inside Flatpak or a container every process has an outer PID namespace;
+    # only a renderer nested below the browser's has Chromium's layer.
+    tree = {
+        BROWSER: (1, ["python3"], 0, (2,)),
+        101: (BROWSER, UNSANDBOXED_ZYGOTE, 0, (3,)),
+        104: (BROWSER, ZYGOTE, 0, (4,)),
+        110: (104, ZYGOTE, 2, (5,)),
+    }
+    assert renderer_sandbox(make_proc(tmp_path, tree), BROWSER) == "seccomp only"
+    tree[110] = (104, ZYGOTE, 2, (5, 1))
+    (tmp_path / "nested").mkdir()
+    assert renderer_sandbox(make_proc(tmp_path / "nested", tree), BROWSER) == "on"
+
+
 def test_one_unfiltered_renderer_is_off(tmp_path):
     assert renderer_sandbox(make_proc(tmp_path, sandboxed((2, 0))), BROWSER) == "off"
 

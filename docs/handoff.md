@@ -107,8 +107,10 @@ not a test failure; a re-run (or the owner) got them through.
   keep the zygote's `--type=zygote` command line; with the namespace
   sandbox there is an init process between the browser and the zygote.
   A renderer is a sandboxed-zygote process forked by another one with no
-  such child; sandbox on means `Seccomp: 2` and a nested PID namespace
-  (more than one id in `NSpid`) for all of them. Seccomp alone is reported
+  such child; sandbox on means `Seccomp: 2` and a PID namespace nested
+  below the browser's (more ids in `NSpid` than the browser process) for
+  all of them. Comparing with the browser matters inside Flatpak and
+  containers, where every process has an outer PID namespace. Seccomp alone is reported
   as "seccomp only": Chromium keeps running with just the filter when the
   namespace layer is missing (`--disable-namespace-sandbox`, or Ubuntu's
   userns restriction without a profile).

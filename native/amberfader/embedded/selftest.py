@@ -91,10 +91,13 @@ def renderer_sandbox(proc: Path = Path("/proc"), root_pid: int | None = None) ->
     Chromium's sandbox has two layers: a seccomp filter (Seccomp: 2) and its
     own user and PID namespaces. The namespace layer is the one Ubuntu's
     AppArmor userns restriction takes away, and without it Chromium still
-    runs with the filter alone, so both are checked. A renderer inside the
-    namespaces has more than one id in NSpid (observed with Qt WebEngine
-    6.11: `NSpid: 4432 4 1` with it, `NSpid: 4478` with
-    --disable-namespace-sandbox).
+    runs with the filter alone, so both are checked. NSpid lists a process's
+    id in each PID namespace it belongs to, and Chromium nests its own below
+    the app's, so a renderer inside the namespaces has more ids than the
+    browser process (observed with Qt WebEngine 6.11: `NSpid: 4432 4 1` with
+    it, `NSpid: 4478` with --disable-namespace-sandbox). Comparing against
+    the browser keeps this right inside Flatpak or a container, where every
+    process already has an outer PID namespace.
 
     Chromium forks renderers from its sandboxed zygote, and they keep the
     zygote's command line (`--type=zygote`). With the namespace sandbox the
@@ -127,7 +130,8 @@ def renderer_sandbox(proc: Path = Path("/proc"), root_pid: int | None = None) ->
         return "absent"
     if not all(_seccomp_mode(proc, pid) == "2" for pid in renderers):
         return "off"
-    if not all(_pid_namespace_depth(proc, pid) > 1 for pid in renderers):
+    browser_depth = _pid_namespace_depth(proc, root_pid)
+    if not all(_pid_namespace_depth(proc, pid) > browser_depth for pid in renderers):
         return "seccomp only"
     return "on"
 
