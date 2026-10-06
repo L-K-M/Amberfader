@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **File → Import all Audion faces from ZIP…** in the face editor converts
   and installs every face in an Audion collection ZIP, with progress and a
   Stop button. Importing the same ZIP again skips installed faces.
+- The player's **Faces** window has a filter box to find a face by name.
 
 ### Changed
 

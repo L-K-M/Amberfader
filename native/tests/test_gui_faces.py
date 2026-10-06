@@ -152,6 +152,36 @@ def test_face_picker_previews_and_applies_without_player_commands(themed, qapp):
     assert not sent
 
 
+def _shown(dialog):
+    items = [dialog._list.item(index) for index in range(dialog._list.count())]
+    return [item.text() for item in items if not item.isHidden()]
+
+
+def test_face_picker_filter_narrows_faces_and_selection(themed, qapp):
+    window, _, sent = themed
+    window.open_faces()
+    dialog = window._faces_window
+    everything = _shown(dialog)
+    dialog._filter.setText("VIR")
+    assert _shown(dialog) == ["Viridian"]
+    assert dialog._list.currentItem().text() == "Viridian"
+    assert dialog._apply.isEnabled()
+
+    dialog._filter.setText("no such face")
+    assert _shown(dialog) == []
+    assert dialog._list.currentItem() is None
+    assert not dialog._apply.isEnabled()
+    assert "No faces match" in dialog._description.text()
+
+    dialog._filter.setText("vir")
+    window.open_faces()
+    assert _shown(dialog) == ["Viridian"]
+    dialog._filter.clear()
+    assert _shown(dialog) == everything
+    assert window._face_id == DEFAULT_FACE_ID
+    assert not sent
+
+
 def test_gui_installs_a_face_folder(themed, pack, monkeypatch):
     window, library, _ = themed
     monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *_: str(pack[0]))

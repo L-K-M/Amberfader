@@ -1,7 +1,8 @@
 # Linux Faces
 
 Open **☰ → Faces…**, or press **Ctrl+,**. Select a face, inspect its preview,
-then click **Use face**. Your choice survives app restarts.
+then click **Use face**. Your choice survives app restarts. Type in the filter
+box above the list to find a face by name.
 
 Faces change the native player's silhouette, layout, textures, fonts, buttons
 and palette. The same controls and state remain in place: switching faces
