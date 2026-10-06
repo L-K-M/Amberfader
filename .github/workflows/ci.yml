@@ -254,6 +254,32 @@ jobs:
           dpkg-deb --info dist/amberfader_*_*.deb
           dpkg-deb --contents dist/amberfader_*_*.deb | grep -E "applications|bin/amberfader|icon"
 
+      # Depends must be complete: a clean container has only what they pull
+      # in. Root in a container cannot start Chromium's sandbox, so every
+      # check but that one must pass here; the next step covers the sandbox.
+      - name: Self-test the .deb in a clean Ubuntu 24.04
+        run: |
+          docker run --rm -v "$PWD/dist:/dist:ro" ubuntu:24.04 sh -c '
+            apt-get update -qq &&
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+              /dist/amberfader_*_*.deb >/dev/null &&
+            QT_QPA_PLATFORM=offscreen QTWEBENGINE_DISABLE_SANDBOX=1 amberfader --self-test
+          ' | tee self-test.log || true
+          grep -q "^self-test: attach: ok" self-test.log
+          if grep "^self-test: .*: FAILED" self-test.log | grep -v "renderer sandbox"; then
+            exit 1
+          fi
+
+      # Ubuntu 23.10+ restricts unprivileged user namespaces through
+      # AppArmor; the deb's profile must let Chromium's sandbox start anyway.
+      - name: Install the .deb and self-test it with the sandbox restricted
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=1
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ./dist/amberfader_*_*.deb
+          sudo aa-status | grep amberfader
+          QT_QPA_PLATFORM=offscreen amberfader --self-test
+
       - name: Upload .deb
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

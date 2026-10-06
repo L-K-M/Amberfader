@@ -25,13 +25,16 @@ dpkg-deb -x "$DEB" "$STAGE"
 
 # Any payload outside usr/, opt/amberfader/, DEBIAN would be silently dropped
 # by the remap below — fail loudly instead of shipping a gutted bundle.
-unexpected="$(find "$STAGE" -mindepth 1 -maxdepth 1 -printf '%f\n' | grep -vxE 'usr|opt|DEBIAN' || true)"
+unexpected="$(find "$STAGE" -mindepth 1 -maxdepth 1 -printf '%f\n' | grep -vxE 'usr|opt|etc|DEBIAN' || true)"
 unexpected_opt="$(find "$STAGE/opt" -mindepth 1 -maxdepth 1 -printf '%f\n' 2>/dev/null | grep -vx 'amberfader' || true)"
 if [[ -n $unexpected$unexpected_opt ]]; then
   printf '!! deb ships payload outside usr/ + opt/amberfader/:\n%s\n%s\n' \
     "$unexpected" "$unexpected_opt" >&2
   exit 1
 fi
+
+# The host AppArmor profile (etc/apparmor.d) has no meaning inside Flatpak.
+rm -rf "$STAGE/etc"
 
 echo "-- remapping /usr and /opt/amberfader to /app"
 mkdir -p "$STAGE/app"
