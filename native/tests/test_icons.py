@@ -45,9 +45,11 @@ def test_committed_icon_matches_the_source(size):
     assert worst <= MAX_CHANNEL_DIFFERENCE, "icons are stale: run scripts/render_icons.py"
 
 
-def test_only_rendered_sizes_are_committed():
+def test_only_rendered_icons_are_committed():
     renderer = load_renderer()
-    committed = sorted(path.relative_to(ROOT) for path in renderer.HICOLOR.rglob("*.png"))
+    committed = sorted(
+        path.relative_to(ROOT) for path in (ROOT / "packaging" / "icons").rglob("*.png")
+    )
     assert committed == sorted(
         renderer.icon_path(size).relative_to(ROOT) for size in renderer.SIZES
     )
