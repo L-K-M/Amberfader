@@ -295,18 +295,25 @@ def _check_background_size(
         raise FaceError(f"{name} must match the face size at 1x or 2x")
 
 
-def _probe_face(directory: Path) -> tuple[FaceInfo, list[str]]:
-    """List validated metadata and image names without buffering discarded
-    PNG payloads."""
+def _probe_face(directory: Path) -> tuple[FaceInfo, list[list[Any]]]:
+    """List validated metadata without buffering discarded PNG payloads.
+
+    Also returns the signature of the files as they were before being read
+    (see _signature): if a file changes during the probe, the signature no
+    longer matches it afterwards.
+    """
     try:
         directory = directory.resolve()
+        seen = [_identity("face.json", os.lstat(directory / "face.json"))]
         data, names = _pack_manifest(directory)
         total_bytes = 0
         decoded_pixels = 0
         dimensions = {}
         for name in names:
             with _image_path(directory, name).open("rb") as stream:
-                size = os.fstat(stream.fileno()).st_size
+                status = os.fstat(stream.fileno())
+                seen.append(_identity(name, status))
+                size = status.st_size
                 if size > MAX_IMAGE_BYTES:
                     raise FaceError(f"{name} exceeds its {MAX_IMAGE_BYTES // 1024} KiB limit")
                 total_bytes += size
@@ -320,9 +327,16 @@ def _probe_face(directory: Path) -> tuple[FaceInfo, list[str]]:
         if "alphaMask" in data:
             _check_background_size(data["size"], dimensions[data["alphaMask"]], name="Alpha mask")
         info = FaceInfo(data["id"], data["name"], data["author"], data["description"], directory)
-        return info, names
+        return info, seen
     except (OSError, ValueError, RecursionError, struct.error) as exc:
         raise FaceError(str(exc)) from exc
+
+
+def _identity(name: str, status: os.stat_result) -> list[Any]:
+    return [
+        name, status.st_dev, status.st_ino, status.st_size,
+        status.st_mtime_ns, status.st_ctime_ns,
+    ]
 
 
 def _signature(directory: Path, names: Iterable[str]) -> list[list[Any]] | None:
@@ -338,20 +352,19 @@ def _signature(directory: Path, names: Iterable[str]) -> list[list[Any]] | None:
         status = os.lstat(os.path.join(folder, name))
         if not stat.S_ISREG(status.st_mode):
             return None
-        signature.append([
-            name, status.st_dev, status.st_ino, status.st_size,
-            status.st_mtime_ns, status.st_ctime_ns,
-        ])
+        signature.append(_identity(name, status))
     return signature
 
 
-def _catalog_entry(info: FaceInfo, names: Iterable[str]) -> dict[str, Any] | None:
+def _unchanged(directory: Path, signature: list[list[Any]]) -> bool:
+    """Whether a face's files still match a signature."""
     try:
-        signature = _signature(info.source, names)
+        return _signature(directory, [file[0] for file in signature[1:]]) == signature
     except OSError:
-        return None
-    if signature is None:
-        return None
+        return False
+
+
+def _catalog_entry(info: FaceInfo, signature: list[list[Any]]) -> dict[str, Any]:
     return {
         "signature": signature,
         "info": [info.id, info.name, info.author, info.description],
@@ -366,7 +379,7 @@ def _cached_info(directory: Path, entry: Any) -> FaceInfo | None:
     try:
         signature, fields = entry["signature"], entry["info"]
         source = directory.resolve()
-        if _signature(source, [file[0] for file in signature[1:]]) != signature:
+        if not _unchanged(source, signature):
             return None
         if len(fields) != len(INFO_FIELDS) or not all(isinstance(f, str) for f in fields):
             return None
@@ -548,11 +561,12 @@ class FaceLibrary:
         entry = cached
         if info is None:
             try:
-                info, names = _probe_face(directory)
+                info, seen = _probe_face(directory)
             except FaceError as exc:
                 self._problems.append(f"{directory.name}: {exc}")
                 return None
-            entry = _catalog_entry(info, names)
+            # Files that changed while being probed are probed again next time.
+            entry = _catalog_entry(info, seen) if _unchanged(info.source, seen) else None
         if info.id in self._catalog:
             self._problems.append(f"{directory.name}: Duplicate face ID: {info.id}")
         else:
@@ -668,9 +682,12 @@ class FaceLibrary:
         # _install validated the staged files that now form the target.
         info = replace(face.info, source=self._install(face.info.id, write).resolve())
         self._catalog[info.id] = info
-        entry = _catalog_entry(info, declared_image_names(data))
-        if entry is not None:
-            self._installed_entries[info.source.name] = entry
+        try:
+            signature = _signature(info.source, declared_image_names(data))
+        except OSError:
+            signature = None
+        if signature is not None:
+            self._installed_entries[info.source.name] = _catalog_entry(info, signature)
         return info
 
     def _install(self, face_id: str, write: Callable[[Path], None]) -> Path:

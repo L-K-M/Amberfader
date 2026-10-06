@@ -535,3 +535,23 @@ def test_faces_with_symbolic_links_are_probed_every_time(pack, library, monkeypa
     probed = _count_probes(monkeypatch)
     library.refresh()
     assert "my-face" in probed
+
+
+def test_a_face_changed_while_probed_is_probed_again(pack, library, monkeypatch):
+    library.install(pack[0])
+    (library.ensure_directory() / face_module.CATALOG_CACHE).unlink()
+    original = face_module._probe_face
+
+    def racing(directory):
+        result = original(directory)
+        if directory.name == "my-face":
+            # Another program saves over the face right after it was probed.
+            (directory / "background.png").write_bytes(png(1, 1))
+        return result
+
+    monkeypatch.setattr(face_module, "_probe_face", racing)
+    library.refresh()
+    monkeypatch.setattr(face_module, "_probe_face", original)
+    library.refresh()
+    assert "my-face" not in {face.id for face in library.faces}
+    assert any("Background must match" in problem for problem in library.problems)
