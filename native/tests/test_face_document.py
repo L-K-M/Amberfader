@@ -41,6 +41,21 @@ def test_save_reopen_and_assets_match_in_memory_snapshot(tmp_path):
     assert load_face(target).info.id == "studio"
 
 
+def test_unedited_template_copy_has_no_work_to_lose(tmp_path):
+    document = FaceDocument.from_template(TEMPLATE)
+    assert document.dirty and not document.needs_save
+    document.set_rotation("play", 10)
+    assert document.needs_save
+    document.undo()
+    assert not document.needs_save
+    # An import exists only in memory, so it always has work to lose.
+    assert FaceDocument.from_snapshot(document.manifest, document.assets).needs_save
+    reopened = FaceDocument.open(document.save(tmp_path / "saved"))
+    assert not reopened.needs_save
+    reopened.set_rotation("play", 5)
+    assert reopened.needs_save
+
+
 def test_returned_manifest_and_assets_cannot_mutate_document():
     document = FaceDocument.from_template(TEMPLATE)
     returned = document.manifest

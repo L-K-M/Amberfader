@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The face editor no longer asks to save an unchanged copy of a template,
+  such as the Amber Classic copy it starts with, when you open another face
+  or close the editor.
 - Up to 1024 installed faces load, up from 64, so all three of Panic's
   Audion collection ZIPs (883 faces together) fit. A catalog cache (`.catalog.json` in the faces
   folder) keeps listing them fast: about 0.4 s for 900 faces instead of 4.6 s.

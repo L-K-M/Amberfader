@@ -26,7 +26,7 @@ def installed(library, tmp_path):
 
 @pytest.fixture(autouse=True)
 def discard_unsaved_copies(monkeypatch):
-    """The editor starts with an unsaved template copy; switching asks first."""
+    """Switching away from edited work asks first; these tests discard it."""
     pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
     from PySide6.QtWidgets import QMessageBox
 

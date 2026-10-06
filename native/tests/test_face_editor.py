@@ -181,12 +181,25 @@ def test_save_as_writes_portable_pack_and_open_preserves_it(editor, tmp_path):
     assert dict(reopened.assets) == dict(editor.document.assets)
 
 
+def test_unedited_copy_switches_and_closes_without_asking(editor, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: pytest.fail("nothing to save"))
+    assert not editor.isWindowModified()
+    incoming = tmp_path / "incoming"
+    FaceDocument.from_template(BUILTIN_DIRECTORY / "viridian").save(incoming)
+    assert editor.open_face(incoming)
+    assert editor.new_from_template(BUILTIN_DIRECTORY / "viridian")
+    assert editor.close()
+
+
 def test_open_cancel_keeps_dirty_current_document(editor, tmp_path, monkeypatch):
     from PySide6.QtWidgets import QMessageBox
 
     incoming = tmp_path / "incoming"
     FaceDocument.from_template(BUILTIN_DIRECTORY / "viridian").save(incoming)
     original = editor.document
+    original.set_rotation("play", 10)
     monkeypatch.setattr(QMessageBox, "warning", lambda *args: QMessageBox.StandardButton.Cancel)
     assert not editor.open_face(incoming)
     assert editor.document is original
@@ -330,6 +343,7 @@ def test_cancel_new_template_keeps_existing_edits(editor, monkeypatch):
     from PySide6.QtWidgets import QMessageBox
 
     original = editor.document
+    original.set_rotation("play", 10)
     monkeypatch.setattr(QMessageBox, "warning", lambda *args: QMessageBox.StandardButton.Cancel)
     assert not editor.new_from_template(BUILTIN_DIRECTORY / "viridian")
     assert editor.document is original
