@@ -24,7 +24,7 @@ tests prove parsing logic, not that YouTube Music accepts an action.
 scripts/check.sh        # the one command to run before committing: tsc + eslint +
                         # vitest, ruff + pytest, shellcheck
 scripts/build.sh        # multi-target build → dist/ (wheel, deb, flatpak, macos;
-                        # --install copies Amberfader.app to /Applications)
+                        # --install copies both apps to /Applications)
 npm start               # build the page bundle and run the app
 uv run amberfader --self-test  # installation check on the scripted test page
 uv run amberfader-face-editor  # standalone face editor

@@ -163,8 +163,16 @@ for target in "${TARGETS[@]}"; do
           INSTALLED=()
           for APP in "${APPS[@]}"; do
             name="$(basename "$APP")"
+            exe="${name%.app}"
+            if pgrep -x "$exe" >/dev/null; then
+              echo "-- quitting running $exe"
+              pkill -x "$exe"; sleep 1
+            fi
             echo "-- installing /Applications/$name"
-            rm -rf "/Applications/$name"
+            if ! rm -rf "/Applications/$name"; then
+              echo "!! cannot replace /Applications/$name (permissions?)" >&2
+              FAILED+=("macos (install $name)"); continue
+            fi
             # ditto preserves the signature, resource forks and permissions.
             if [[ -d "$APP" ]] && ditto "$APP" "/Applications/$name"; then
               OK+=("installed → /Applications/$name")
@@ -181,7 +189,12 @@ for target in "${TARGETS[@]}"; do
             fi
           fi
         elif [[ $RUN -eq 1 ]]; then
-          open "$DIST/macos/dist/Amberfader.app"
+          if [[ -d "$DIST/macos/dist/Amberfader.app" ]]; then
+            open "$DIST/macos/dist/Amberfader.app"
+          else
+            echo "!! nothing to run: $DIST/macos/dist/Amberfader.app missing" >&2
+            FAILED+=("macos (run)")
+          fi
         fi
       else
         FAILED+=("macos")
