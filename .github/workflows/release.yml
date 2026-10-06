@@ -122,15 +122,30 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # The README promises every package from 0.2.0 on.
+          for package in deb flatpak dmg; do
+            compgen -G "dist/*.$package" >/dev/null || { echo "::error::no .$package"; exit 1; }
+          done
+          # The .dmg comes with its checksum from CI's macos job.
+          (cd dist && for f in *.deb *.flatpak; do sha256sum "$f" > "$f.sha256"; done)
           artifacts=()
           while IFS= read -r f; do artifacts+=("$f"); done < <(find dist -maxdepth 2 -type f \( -name '*.deb' -o -name '*.flatpak' -o -name '*.dmg' -o -name '*.sha256' \))
           if [ ${#artifacts[@]} -eq 0 ]; then
             echo "::error::no release artifacts produced"
             exit 1
           fi
-          # The README promises the macOS .dmg from 0.2.0 on.
-          compgen -G 'dist/*.dmg' >/dev/null || { echo "::error::no macOS .dmg"; exit 1; }
+          # This version's CHANGELOG section leads the notes; GitHub appends
+          # the merged pull requests.
+          version="${GITHUB_REF_NAME#v}"
+          awk -v heading="## [$version]" '
+            index($0, heading) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::warning::CHANGELOG.md has no section for $version"
+          fi
           gh release create "${{ github.ref_name }}" \
             --title "Amberfader ${{ github.ref_name }}" \
-            --generate-notes \
+            --notes-file release-notes.md --generate-notes \
             "${artifacts[@]}"

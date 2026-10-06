@@ -1,6 +1,6 @@
 # Handoff: standalone app and release 0.2.0
 
-Last updated: 2026-10-06, 03:40 UTC. Keep this file current; it is the
+Last updated: 2026-10-06, 05:00 UTC. Keep this file current; it is the
 starting point for whoever continues the work.
 
 ## Goal
@@ -30,9 +30,10 @@ The standalone app, ad blocking, continue playing, macOS folders,
 Since then, merged: #36 (deb: Depends, Python launcher, AppArmor profile,
 CI self-tests with the userns restriction; `8e752dc`), #39 (privacy.md
 also names the HTTP cache folder; `dbf5363`) and #38 (hicolor icons;
-`424bd47`). In review: the Flatpak on Flathub's PySide BaseApp, branch
-`feature/flatpak-pyside-baseapp` (see the plan's Phase 2 outcome). Then
-release 0.2.0.
+`424bd47`) and #40 (the Flatpak on Flathub's PySide BaseApp, see the
+plan's Phase 2 outcome; `32bc019`). Current step: release 0.2.0, prepared
+on branch `release/0.2.0-prep` (CHANGELOG section, release notes from it,
+checksums for every package).
 
 On 2026-10-06 two sessions worked in parallel for a while: the cloud
 session that wrote #36 kept pushing to it after the hand-over. Before
@@ -74,10 +75,16 @@ not a test failure; a re-run (or the owner) got them through.
    Not done yet:
    thinning the universal2 Qt binaries to arm64 (size), and a one-hour
    hidden playback check from the frozen app (App Nap).
-3. **Release 0.2.0**: `scripts/release.sh 0.2.0 --push` uses
-   `L-K-M/release-tool` with `RELEASE_KIND=python` (version source
-   `native/amberfader/__init__.py`). Tag pushes may need the owner if the
-   session cannot push tags.
+3. **Release 0.2.0**: once the prep PR is merged, run
+   `scripts/release.sh 0.2.0 --push` on a clean, current main. It uses
+   `L-K-M/release-tool` (`lkm-release`; set `LKM_RELEASE_BIN` to a fresh
+   clone if the installed one is stale) with `RELEASE_KIND=python`: it
+   commits "Bump version to 0.2.0" (`__init__.py`, `package.json`,
+   `pyproject.toml`, `uv.lock`, the README marker), tags `v0.2.0` and pushes
+   both. `release.yml` then gates on CI and publishes the deb, Flatpak and
+   `.dmg` with checksums. The CHANGELOG has no automatic step: give each
+   release its `## [x.y.z] - date` section before tagging, or its notes
+   start with only GitHub's generated list.
 4. Later: pop-up windows, settings/diagnostics window, MPRIS and Now Playing,
    removing helper-only message kinds from `protocol/schemas`.
 
