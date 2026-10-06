@@ -132,6 +132,8 @@ class FaceDocument:
         self._saved = snapshot if path is not None else None
         self._disk_snapshot = snapshot if path is not None else None
         self._path = path
+        # The copy as first made from a template, which still exists.
+        self._template: _Snapshot | None = None
         self._undo: list[_Snapshot] = []
         self._redo: list[_Snapshot] = []
         self._gesture: _Snapshot | None = None
@@ -163,6 +165,7 @@ class FaceDocument:
             )
             data["name"] = name if name is not None else data["name"][:57] + " Custom"
             document = cls(_snapshot(data, snapshot.assets))
+            document._template = document._current
             document.preview(validate_layout=True)
             return document
         except (OSError, ValueError) as exc:
@@ -197,6 +200,12 @@ class FaceDocument:
     @property
     def dirty(self) -> bool:
         return self._current != self._saved
+
+    @property
+    def needs_save(self) -> bool:
+        """Whether discarding the document loses work. An unedited template
+        copy does not: making the copy again gives the same face."""
+        return self.dirty and self._current != self._template
 
     @property
     def can_undo(self) -> bool:
@@ -411,6 +420,7 @@ class FaceDocument:
         self._path = target
         self._saved = self._current
         self._disk_snapshot = self._current
+        self._template = None  # A saved face is no longer a disposable copy.
         return target
 
     def export(self, path: Path) -> Path:

@@ -660,7 +660,7 @@ class FaceEditorWindow(QMainWindow):
         self._sync_inspector()
         data = self._document.manifest
         self.setWindowTitle(f"{data['name']}[*] · Amberfader Face Editor")
-        self.setWindowModified(self._document.dirty)
+        self.setWindowModified(self._document.needs_save)
         self.setWindowFilePath(str(self._document.path) if self._document.path is not None else "")
 
     def _edit_rect(self) -> None:
@@ -876,7 +876,7 @@ class FaceEditorWindow(QMainWindow):
         # Save and Cancel preserve the current visible edit, including a drag.
         self._flush_inspector()
         self._canvas.finish_gesture()
-        if not self._document.dirty:
+        if not self._document.needs_save:
             return True
         choice = QMessageBox.warning(
             self,

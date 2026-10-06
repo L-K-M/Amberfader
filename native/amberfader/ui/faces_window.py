@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QPushButton,
@@ -58,6 +59,10 @@ class FacePreview(QWidget):
         self._face, self._artwork = face, artwork
         self.update()
 
+    def clear(self) -> None:
+        self._face, self._artwork = None, None
+        self.update()
+
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor("#34363d"))
@@ -85,6 +90,10 @@ class FacesWindow(QDialog):
         self._choose = choose
         self._edit = edit
         self._selected: str | None = None
+        self._filter = QLineEdit(self)
+        self._filter.setPlaceholderText("Filter faces by name")
+        self._filter.setAccessibleName("Filter faces")
+        self._filter.setClearButtonEnabled(True)
         self._list = QListWidget(self)
         self._list.setMinimumWidth(180)
         self._preview = FacePreview(self)
@@ -107,7 +116,10 @@ class FacesWindow(QDialog):
         heading = QLabel("Faces change the shell. Your music keeps playing.", self)
         root.addWidget(heading)
         body = QHBoxLayout()
-        body.addWidget(self._list, 1)
+        left = QVBoxLayout()
+        left.addWidget(self._filter)
+        left.addWidget(self._list, 1)
+        body.addLayout(left, 1)
         right = QVBoxLayout()
         right.addWidget(self._preview, 1)
         right.addWidget(self._description)
@@ -122,6 +134,7 @@ class FacesWindow(QDialog):
         buttons.addWidget(close)
         root.addLayout(buttons)
 
+        self._filter.textChanged.connect(self._filter_faces)
         self._list.currentItemChanged.connect(self._preview_item)
         self._list.itemActivated.connect(lambda _: self._use_face())
         self._apply.clicked.connect(self._use_face)
@@ -140,12 +153,30 @@ class FacesWindow(QDialog):
             if face.id == current_id:
                 self._list.setCurrentItem(item)
         self._status.setText("\n".join(self._library.problems))
+        self._filter_faces()
+
+    def _filter_faces(self) -> None:
+        query = self._filter.text().casefold().strip()
+        first = None
+        for index in range(self._list.count()):
+            item = self._list.item(index)
+            item.setHidden(query not in item.text().casefold())
+            if first is None and not item.isHidden():
+                first = item
+        current = self._list.currentItem()
+        if current is None or current.isHidden():
+            # Use face and Edit a copy must never act on a hidden face.
+            self._list.setCurrentItem(first)
+        if first is None:
+            self._description.setText("No faces match this filter.")
 
     def _preview_item(self, item: QListWidgetItem | None, previous=None) -> None:
         self._selected = None
         self._apply.setEnabled(False)
         self._edit_button.setEnabled(False)
         if item is None:
+            self._preview.clear()
+            self._description.clear()
             return
         try:
             face = self._library.load(item.data(Qt.ItemDataRole.UserRole))
@@ -181,6 +212,7 @@ class FacesWindow(QDialog):
         try:
             prepare_face(load_face(Path(path)))
             info = self._library.install(Path(path))
+            self._filter.clear()  # Show the installed face even if the filter would hide it.
             self.refresh(info.id)
             self._status.setText(f"Installed {info.name}. Select Use face to apply it.")
         except FaceError as exc:

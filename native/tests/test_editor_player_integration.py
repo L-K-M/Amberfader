@@ -59,6 +59,7 @@ def test_picker_edit_copy_respects_unsaved_editor_cancellation(player, qapp, mon
     editor = window._face_editor
     assert editor.document.manifest["name"] == "Viridian Custom"
     document = editor.document
+    document.set_rotation("play", 10)
 
     monkeypatch.setattr(
         QMessageBox, "warning", lambda *args: QMessageBox.StandardButton.Cancel,

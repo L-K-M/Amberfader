@@ -40,7 +40,8 @@ copy. Filter the list by name; **View → Faces** shows or hides the panel.
 Choose a bundled face as your starting template. The editor creates a custom
 copy with its own ID and name; it never saves over the bundled artwork. You can
 also use **Face editor…** in the player's menu or **Edit a copy…** in the face
-picker to start with that face.
+picker to start with that face. Until you change a copy, you can open another
+face or close the editor without being asked to save it.
 
 Select a control on the canvas or in the control list. Drag it to move it, resize
 it with its handles, or adjust its exact position and size in the inspector.
