@@ -52,10 +52,13 @@ not a test failure; a re-run (or the owner) got them through.
 
 1. **Linux packages** (plan Phase 2):
    - deb: PR #36 (Depends, Python launcher, AppArmor profile, two CI
-     self-tests). Its first CI run showed the profile works: with
-     `kernel.apparmor_restrict_unprivileged_userns=1` the installed deb
-     reported `renderer sandbox: ok (on)`. Desktop launch on a real Ubuntu
-     machine still needs the owner.
+     self-tests). CI on ubuntu-24.04 with
+     `kernel.apparmor_restrict_unprivileged_userns=1` (run 37405322699):
+     `unshare -Ur` fails (restriction in effect), the installed deb reports
+     `renderer sandbox: ok (on)`, and the same app started outside the
+     profile reports `FAILED (seccomp only)`. So the profile is what grants
+     Chromium's namespace layer. Desktop launch on a real Ubuntu machine
+     still needs the owner.
    - Flatpak: add `--share=network`, `--socket=pulseaudio`; keep the
      `xdg-run/amberfader` share (single-instance socket). Chromium's sandbox
      inside Flatpak needs the spike described in the plan.

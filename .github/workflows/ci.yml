@@ -288,16 +288,18 @@ jobs:
           sudo apt-get install -y --no-install-recommends ./dist/amberfader_*_*.deb
           sudo aa-status | grep amberfader
           # Under the restriction an unconfined process cannot map itself
-          # into a new user namespace.
-          if unshare -Ur true; then echo "userns: unrestricted"; else echo "userns: restricted"; fi
+          # into a new user namespace; without it this step proves nothing.
+          if unshare -Ur true; then
+            echo "::error::user namespaces are not restricted; the profile is untested"; exit 1
+          fi
           QT_QPA_PLATFORM=offscreen amberfader --self-test
           # Control: started outside the profile's path, the same app must
-          # not get the sandbox, or the restriction was never in effect.
+          # lose Chromium's namespace layer, so the profile is what grants it.
           PYTHONPATH=/opt/amberfader/lib QT_QPA_PLATFORM=offscreen timeout 120 \
             python3 -m amberfader --self-test > control.log 2>&1 || true
-          grep "renderer sandbox" control.log || echo "control: no sandbox line"
-          if grep -q "renderer sandbox: ok (on)" control.log; then
-            echo "::error::the sandbox started without the AppArmor profile"; exit 1
+          grep "renderer sandbox" control.log || true
+          if ! grep -q "renderer sandbox: FAILED (seccomp only)" control.log; then
+            echo "::error::the control run did not lose the namespace layer"; exit 1
           fi
 
       - name: Upload .deb
