@@ -254,6 +254,16 @@ jobs:
           dpkg-deb --info dist/amberfader_*_*.deb
           dpkg-deb --contents dist/amberfader_*_*.deb | grep -E "applications|bin/amberfader|icon"
 
+      # Hints and "will be fatal in the future" errors exit 0, so any output fails.
+      - name: Validate the desktop entry
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends desktop-file-utils >/dev/null
+          dpkg-deb --fsys-tarfile dist/amberfader_*_*.deb |
+            tar -xO ./usr/share/applications/ch.lkmc.amberfader.desktop > ch.lkmc.amberfader.desktop
+          report="$(desktop-file-validate ch.lkmc.amberfader.desktop 2>&1)" || true
+          if [ -n "$report" ]; then echo "$report"; exit 1; fi
+
       # Depends must be complete: a clean container has only what they pull
       # in. Root in a container cannot start Chromium's sandbox, so every
       # check but that one must pass here; the next step covers the sandbox.

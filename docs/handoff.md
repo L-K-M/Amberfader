@@ -1,6 +1,6 @@
 # Handoff: standalone app and release 0.2.0
 
-Last updated: 2026-10-06, 02:30 UTC. Keep this file current; it is the
+Last updated: 2026-10-06, 03:40 UTC. Keep this file current; it is the
 starting point for whoever continues the work.
 
 ## Goal
@@ -25,21 +25,17 @@ Releases. The full plan and the owner's decisions are in
 The standalone app, ad blocking, continue playing, macOS folders,
 `--self-test` and the macOS `.dmg` build merged to main on 2026-10-06 as
 [L-K-M/Amberfader#35](https://github.com/L-K-M/Amberfader/pull/35)
-(`4e6500d`). Its review triage is in the PR's commit messages. Deferred from
-its review: `docs/privacy.md` could also tell readers to delete the HTTP
-cache folder.
+(`4e6500d`). Its review triage is in the PR's commit messages.
 
-Current step: the Linux deb, on branch `claude/busy-ramanujan-bqitel` (the
-session may only push to this branch; restart it from origin/main after
-each merge). Its PR adds the computed `Depends`, a Python launcher, the
-AppArmor profile (`packaging/linux/apparmor-amberfader`) and two CI steps:
-a self-test in a clean `ubuntu:24.04` container (sandbox off, as root) and
-a self-test of the installed deb on the runner with
-`kernel.apparmor_restrict_unprivileged_userns=1`. Locally (no AppArmor in
-this container) the installed deb passes its self-test with the sandbox on
-as an unprivileged user. Whether the profile is enough under the
-restriction is answered by that CI step; if it fails, see the open problem
-below.
+Since then, merged: #36 (deb: Depends, Python launcher, AppArmor profile,
+CI self-tests with the userns restriction; `8e752dc`) and #39 (privacy.md
+also names the HTTP cache folder; `dbf5363`). Current step: the hicolor
+icons, branch `feature/hicolor-icons` (#38). Next: the Flatpak on Flathub's
+PySide BaseApp (see the plan's Phase 2 outcome), then release 0.2.0.
+
+On 2026-10-06 two sessions worked in parallel for a while: the cloud
+session that wrote #36 kept pushing to it after the hand-over. Before
+pushing, check `gh pr list` and recent branches for work in flight.
 
 Earlier PRs, all merged: #28 (prototype), #32 (macOS socket), #33 (Start
 mix), #34 (plan), #35 (standalone app).
@@ -64,7 +60,9 @@ not a test failure; a re-run (or the owner) got them through.
      inside Flatpak needs the spike described in the plan.
    - CI: a `flatpak` job that runs `amberfader --self-test` on the
      installed bundle (the `deb` job already does this for the deb).
-   - Desktop entry and hicolor icons from `media-sources/icon.png`.
+   - Desktop entry and hicolor icons: #38 (`scripts/render_icons.py`
+     renders 128, 256 and 512 px from `media-sources/icon.png`; a test
+     catches stale files). How docks show it needs the owner's desktop.
 2. **macOS target** (plan Phase 3): `4dd2452`; CI builds the `.dmg` and the
    frozen app's self-test passes on macos-15. The owner still has to install
    it and check sign-in, the data move, ad blocking and continue playing.

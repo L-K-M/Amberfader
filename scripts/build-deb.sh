@@ -7,7 +7,7 @@
 #   /usr/bin/amberfader-face-editor   wrapper setting PYTHONPATH
 #   /etc/apparmor.d/amberfader        lets Chromium's sandbox use user namespaces
 #   /usr/share/applications/ch.lkmc.amberfader.desktop
-#   /usr/share/icons/hicolor/96x96/apps/amberfader.png
+#   /usr/share/icons/hicolor/<n>x<n>/apps/ch.lkmc.amberfader.png (scripts/render_icons.py)
 # Depends: the launcher's Python ABI, libdbus for native menus, and the system
 # libraries Qt WebEngine links against. PySide6, including Qt WebEngine,
 # arrives inside the pip --target tree.
@@ -36,7 +36,7 @@ NEXT_PYTHON_VERSION="$PYTHON_MAJOR.$((PYTHON_MINOR + 1))~"
 echo "-- staging .deb tree (version $VERSION, arch $ARCH)"
 rm -rf "$DIST/deb"
 mkdir -p "$LIB" "$STAGE/usr/bin" "$STAGE/etc/apparmor.d" \
-  "$STAGE/usr/share/applications" "$STAGE/usr/share/icons/hicolor/96x96/apps" \
+  "$STAGE/usr/share/applications" "$STAGE/usr/share/icons" \
   "$STAGE/DEBIAN"
 
 # Resolve native wheels for the launcher's interpreter, not an active venv.
@@ -65,7 +65,7 @@ exec env PYTHONPATH=/opt/amberfader/lib /usr/bin/python3 -m amberfader.editor_ap
 EOF
 chmod 755 "$STAGE/usr/bin/amberfader" "$STAGE/usr/bin/amberfader-face-editor"
 
-cp packaging/icons/amberfader-96.png "$STAGE/usr/share/icons/hicolor/96x96/apps/amberfader.png"
+cp -r packaging/icons/hicolor "$STAGE/usr/share/icons/"
 
 cp packaging/linux/apparmor-amberfader "$STAGE/etc/apparmor.d/amberfader"
 echo /etc/apparmor.d/amberfader > "$STAGE/DEBIAN/conffiles"
@@ -110,9 +110,9 @@ Type=Application
 Name=Amberfader
 Comment=Compact classic-style player for YouTube Music
 Exec=amberfader
-Icon=amberfader
+Icon=ch.lkmc.amberfader
 Terminal=false
-Categories=Audio;Music;Player;
+Categories=AudioVideo;Audio;Music;Player;
 StartupWMClass=amberfader
 EOF
 
