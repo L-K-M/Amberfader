@@ -50,6 +50,7 @@ ZIP_CENTRAL = struct.Struct("<4s6H3I5H2I")
 ZIP_MAX_COMMENT = 65535
 SUPPORTED_ZIP_METHODS = frozenset({ZIP_STORED, ZIP_DEFLATED})
 ZIP_COMPRESSION_ERROR = "Audion ZIP members must use stored or deflate compression"
+_READ_ERRORS = (OSError, ValueError, RecursionError, BadZipFile, RuntimeError, EOFError, zlib.error)
 SOURCE_HELP = (
     "Choose a converted Audion face folder or a ZIP from Panic's preserved collection. "
     "Classic resource-fork/PICT faces must be converted first."
@@ -79,7 +80,8 @@ class AudionInstallStatus(Enum):
 class AudionInstallOutcome:
     face: AudionFaceSource
     status: AudionInstallStatus
-    detail: str  # The installed face ID, or why the face was not installed.
+    face_id: str | None = None  # The installed face, unless the face failed.
+    problem: str = ""  # Why a face failed.
 
 
 @contextmanager
@@ -658,9 +660,7 @@ def _convert(
         if not isinstance(index, dict):
             raise FaceError("Audion index.json must contain an object")
         return _Converter(source, reader, index, face_id).convert()
-    except (
-        OSError, ValueError, RecursionError, BadZipFile, RuntimeError, EOFError, zlib.error,
-    ) as exc:
+    except _READ_ERRORS as exc:
         if isinstance(exc, FaceError):
             raise
         reason = (
@@ -716,20 +716,35 @@ class AudionArchive:
     ) -> AudionInstallOutcome:
         """Convert one face and install it unless its ID is already installed.
 
-        The ID derives from the face's path in the archive, so importing the
-        same ZIP again skips faces it installed before. `check` gets the
-        converted face and raises FaceError to reject it, e.g. when it cannot
-        be decoded for display.
+        `check` gets the converted face and raises FaceError to reject it,
+        e.g. when it cannot be decoded for display.
         """
-        suffix = hashlib.sha256(f"{face.prefix}\n{face.name}".encode()).hexdigest()[:8]
-        face_id = _face_id(face, suffix)
-        if any(info.id == face_id for info in library.faces):
-            return AudionInstallOutcome(face, AudionInstallStatus.ALREADY_INSTALLED, face_id)
-
         try:
+            face_id = self._stable_id(face)
+            if any(info.id == face_id for info in library.faces):
+                return AudionInstallOutcome(face, AudionInstallStatus.ALREADY_INSTALLED, face_id)
+
             document = _convert(face, face_id, self._members).document
             check(document.preview(validate_layout=True))
             info = library.install_snapshot(document.manifest, document.assets)
         except (OSError, ValueError) as exc:  # FaceError is a ValueError.
-            return AudionInstallOutcome(face, AudionInstallStatus.FAILED, str(exc))
+            return AudionInstallOutcome(face, AudionInstallStatus.FAILED, problem=str(exc))
         return AudionInstallOutcome(face, AudionInstallStatus.INSTALLED, info.id)
+
+    def _stable_id(self, face: AudionFaceSource) -> str:
+        """Derive the ID from the face's path and its index.json.
+
+        Importing the same ZIP again finds the faces it installed; another
+        collection's face at the same path, e.g. "Faces/Hi-Fi/", does not.
+        """
+        reader = _SourceReader(face, self._members)
+        try:
+            index = reader.read("index.json")
+        except _READ_ERRORS as exc:
+            if isinstance(exc, FaceError):
+                raise
+            raise FaceError(f"Cannot import Audion face: {exc}") from exc
+        finally:
+            reader.close()
+        digest = hashlib.sha256(face.prefix.encode() + b"\0" + index).hexdigest()[:8]
+        return _face_id(face, digest)

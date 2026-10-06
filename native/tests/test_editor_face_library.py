@@ -116,8 +116,9 @@ def test_editor_opens_with_installed_and_builtin_faces_listed(editor):
     dock = editor.findChild(QDockWidget, "facesDock")
     assert dock is not None and dock.isVisible()
     tree = editor._faces_panel._tree
+    bundled = sum((folder / "face.json").is_file() for folder in BUILTIN_DIRECTORY.iterdir())
     assert tree.topLevelItem(0).text(0) == "Installed (1)"
-    assert tree.topLevelItem(1).text(0) == "Built-in (18)"
+    assert tree.topLevelItem(1).text(0) == f"Built-in ({bundled})"
     assert _faces(editor, 0) == ["My Viridian"]
     assert "Amber Classic" in _faces(editor, 1)
     view_menu = editor.menuBar().actions()[2].menu()
@@ -230,3 +231,58 @@ def test_failed_faces_are_listed_in_the_details(editor, tmp_path, messages):
     text, details = messages[-1]
     assert "1 could not be imported." in text
     assert details.startswith("Broken: ") and "base.png" in details
+
+
+def test_failed_rescan_after_save_keeps_the_list_and_reports_it(
+    editor, installed, library, monkeypatch,
+):
+    from amberfader.face_library import FaceError
+
+    _edit(editor, "My Viridian")
+    editor._metadata["name"].setText("Viridian Night")
+    editor._edit_metadata("name")
+
+    def broken_refresh():
+        raise FaceError("Bundled faces are unavailable. Reinstall Amberfader.")
+
+    monkeypatch.setattr(library, "refresh", broken_refresh)
+    assert editor.save()
+    assert _faces(editor, 0) == ["My Viridian"]
+    assert "Reinstall Amberfader" in editor._faces_panel._problems.text()
+
+
+def test_filter_hides_empty_groups_and_never_edits_a_hidden_face(editor):
+    panel = editor._faces_panel
+    panel._tree.setCurrentItem(_item(editor, "My Viridian"))
+    assert panel._edit.isEnabled()
+    panel._filter.setText("amber")
+    assert panel._tree.topLevelItem(0).isHidden()
+    assert not panel._tree.topLevelItem(1).isHidden()
+    assert panel._tree.currentItem() is None
+    assert not panel._edit.isEnabled()
+    assert not panel.select(_item(editor, "My Viridian").data(0, 256))
+
+
+def test_progress_names_each_face_before_it_is_imported(editor, tmp_path, messages, monkeypatch):
+    from PySide6.QtWidgets import QProgressDialog
+
+    from amberfader.audion_import import AudionArchive
+
+    seen = []
+    original = AudionArchive.install
+
+    def install(archive, face, library, check):
+        [progress] = editor.findChildren(QProgressDialog)
+        seen.append((face.name, progress.isVisible(), progress.labelText()))
+        return original(archive, face, library, check)
+
+    monkeypatch.setattr(AudionArchive, "install", install)
+    assert editor.import_audion_archive(_audion_zip(tmp_path))
+    assert seen == [
+        ("Amber Orb", True, "Importing Amber Orb…"),
+        ("Chromatic Orb", True, "Importing Chromatic Orb…"),
+    ]
+
+
+def test_default_libraries_live_in_the_private_test_home(private_app_dirs):
+    assert FaceLibrary().ensure_directory().is_relative_to(private_app_dirs)

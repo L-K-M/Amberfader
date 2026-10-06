@@ -35,7 +35,7 @@ MAX_PACK_BYTES = 16 * 1024 * 1024
 MAX_IMAGE_DIMENSION = 2048
 MAX_DECODED_PIXELS = 32 * 1024 * 1024
 MAX_DRAFT_GEOMETRY = 2048
-# Panic's preserved Audion collection alone holds 883 faces.
+# Panic's three Audion collection ZIPs hold 883 faces together.
 MAX_USER_FACES = 1024
 CATALOG_CACHE = ".catalog.json"
 MAX_CATALOG_CACHE_BYTES = 16 * 1024 * 1024
@@ -655,19 +655,20 @@ class FaceLibrary:
         faces installed since, so a batch of N faces probes N folders instead
         of rescanning the library N times.
         """
-        face = load_face_snapshot(dict(manifest), images, self._directory)
+        data = dict(manifest)
+        face = load_face_snapshot(data, images, self._directory)
 
         def write(staging: Path) -> None:
             (staging / "face.json").write_text(
-                json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+                json.dumps(data, indent=2) + "\n", encoding="utf-8"
             )
-            for name in declared_image_names(manifest):
+            for name in declared_image_names(data):
                 (staging / name).write_bytes(images[name])
 
         # _install validated the staged files that now form the target.
         info = replace(face.info, source=self._install(face.info.id, write).resolve())
         self._catalog[info.id] = info
-        entry = _catalog_entry(info, declared_image_names(manifest))
+        entry = _catalog_entry(info, declared_image_names(data))
         if entry is not None:
             self._installed_entries[info.source.name] = entry
         return info

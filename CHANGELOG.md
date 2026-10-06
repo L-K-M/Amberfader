@@ -18,8 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Up to 1024 installed faces load, up from 64, so Panic's complete Audion
-  collection (883 faces) fits. A catalog cache (`.catalog.json` in the faces
+- Up to 1024 installed faces load, up from 64, so all three of Panic's
+  Audion collection ZIPs (883 faces together) fit. A catalog cache (`.catalog.json` in the faces
   folder) keeps listing them fast: about 0.4 s for 900 faces instead of 4.6 s.
 
 ## [0.2.0] - 2026-10-06

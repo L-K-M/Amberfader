@@ -453,6 +453,7 @@ def test_snapshot_install_respects_the_face_limit(pack, library, monkeypatch):
     manifest["id"] = "my-second-face"
     with pytest.raises(FaceError, match="1-face limit"):
         library.install_snapshot(manifest, images)
+    assert not (library.ensure_directory() / "my-second-face").exists()
 
 
 def test_catalog_cache_skips_probing_unchanged_faces(pack, library, monkeypatch, tmp_path):
@@ -492,7 +493,8 @@ def test_catalog_cache_lists_a_renamed_face(pack, library):
 
 
 @pytest.mark.parametrize("contents", [
-    "not json", "[]", '{"version": "0.0.0", "faces": {}}', '{"version": "%s", "faces": []}',
+    "not json", "[]", "{}", '{"version": "0.0.0", "faces": {}}', '{"version": "%s"}',
+    '{"version": "%s", "faces": []}', '{"version": "%s", "faces": {"my-face": []}}',
 ])
 def test_stale_or_corrupt_catalog_cache_is_rebuilt(pack, library, monkeypatch, contents):
     from amberfader import __version__
@@ -507,7 +509,10 @@ def test_stale_or_corrupt_catalog_cache_is_rebuilt(pack, library, monkeypatch, c
     assert stored["version"] == __version__ and "my-face" in stored["faces"]
 
 
-def test_forged_catalog_entry_is_not_trusted(pack, library):
+def test_cache_entry_for_changed_files_is_probed_again(pack, library):
+    # The cache only spares unchanged faces a probe. It is not a security
+    # boundary: whoever can write it can write face folders, and load()
+    # validates every face it uses.
     library.install(pack[0])
     cache = library.ensure_directory() / face_module.CATALOG_CACHE
     data = json.loads(cache.read_text())

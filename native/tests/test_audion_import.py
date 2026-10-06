@@ -510,9 +510,9 @@ def test_archive_installs_every_face_and_skips_them_on_reimport(
     assert len(opened) == 1
     assert [outcome.status for outcome in outcomes] == [AudionInstallStatus.INSTALLED] * 2
     assert len(checked) == 2
-    ids = [outcome.detail for outcome in outcomes]
+    ids = [outcome.face_id for outcome in outcomes]
     for outcome in outcomes:
-        face = library.load(outcome.detail)
+        face = library.load(outcome.face_id)
         assert face.info.name == outcome.face.name
         assert face.source_credit.startswith("Chromatic Orb by Sample Artist")
     assert len(set(ids)) == 2
@@ -520,7 +520,7 @@ def test_archive_installs_every_face_and_skips_them_on_reimport(
     restarted = FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json")
     again = _install_all(archive, restarted)
     assert [outcome.status for outcome in again] == [AudionInstallStatus.ALREADY_INSTALLED] * 2
-    assert [outcome.detail for outcome in again] == ids
+    assert [outcome.face_id for outcome in again] == ids
 
 
 def test_archive_reports_a_broken_face_and_installs_the_rest(audion_pack, tmp_path, qapp):
@@ -532,10 +532,10 @@ def test_archive_reports_a_broken_face_and_installs_the_rest(audion_pack, tmp_pa
     library = FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json")
     outcomes = {outcome.face.name: outcome for outcome in _install_all(archive, library)}
     assert outcomes["Broken"].status is AudionInstallStatus.FAILED
-    assert "base.png" in outcomes["Broken"].detail
+    assert "base.png" in outcomes["Broken"].problem
     assert outcomes["Good"].status is AudionInstallStatus.INSTALLED
     assert [face.id for face in library.faces if face.id.startswith("audion-")] == [
-        outcomes["Good"].detail,
+        outcomes["Good"].face_id,
     ]
 
 
@@ -546,7 +546,7 @@ def test_duplicate_artwork_fails_only_its_own_face(audion_pack, tmp_path, qapp):
     library = FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json")
     outcomes = {outcome.face.name: outcome for outcome in _install_all(archive, library)}
     assert outcomes["Doubled"].status is AudionInstallStatus.FAILED
-    assert "duplicate artwork" in outcomes["Doubled"].detail
+    assert "duplicate artwork" in outcomes["Doubled"].problem
     assert outcomes["Good"].status is AudionInstallStatus.INSTALLED
 
 
@@ -559,7 +559,7 @@ def test_rejected_face_is_not_installed(audion_pack, tmp_path, qapp):
 
     [outcome] = _install_all(archive, library, reject)
     assert outcome.status is AudionInstallStatus.FAILED
-    assert outcome.detail == "Cannot display this face"
+    assert outcome.problem == "Cannot display this face"
     assert not any(face.id.startswith("audion-") for face in library.faces)
     assert not any(library.ensure_directory().iterdir())
 
@@ -571,3 +571,17 @@ def test_unreadable_archive_is_a_face_error(tmp_path):
     for archive in (tmp_path / "Missing.zip", tmp_path / "Text.zip", tmp_path / "Empty.zip"):
         with pytest.raises(FaceError):
             AudionArchive(archive)
+
+
+def test_same_path_in_another_collection_is_a_different_face(audion_pack, tmp_path, qapp):
+    first = _collection(audion_pack, tmp_path / "First.zip", ("Chromatic Orb",))
+    index = json.loads((audion_pack / "index.json").read_text())
+    index["faceInfo"] = ["Another Orb by Another Artist"]
+    (audion_pack / "index.json").write_text(json.dumps(index))
+    second = _collection(audion_pack, tmp_path / "Second.zip", ("Chromatic Orb",))
+    library = FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json")
+    [installed] = _install_all(first, library)
+    [other] = _install_all(second, library)
+    assert other.status is AudionInstallStatus.INSTALLED
+    assert other.face_id != installed.face_id
+    assert library.load(other.face_id).source_credit.startswith("Another Orb")

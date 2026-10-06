@@ -954,7 +954,7 @@ class FaceEditorWindow(QMainWindow):
             return False
         self._faces_panel.reload(self._document.path)
         if batch.installed:
-            first_id = batch.installed[0].detail
+            first_id = batch.installed[0].face_id
             first = next((info for info in self._library.faces if info.id == first_id), None)
             if first is not None:
                 self._faces_panel.select(first.source)

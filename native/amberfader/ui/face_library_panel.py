@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..face_library import BUILTIN_DIRECTORY, FaceInfo, FaceLibrary
+from ..face_library import BUILTIN_DIRECTORY, FaceError, FaceInfo, FaceLibrary
 
 MAX_SHOWN_PROBLEMS = 3
 SOURCE_ROLE = Qt.ItemDataRole.UserRole
@@ -70,8 +70,16 @@ class FaceLibraryPanel(QWidget):
         self._populate()
 
     def reload(self, current: Path | None = None) -> None:
-        """Rescan the faces folder, e.g. after an import or a save."""
-        self._library.refresh()
+        """Rescan the faces folder, e.g. after an import or a save.
+
+        A failed rescan keeps the previous list and shows why.
+        """
+        try:
+            self._library.refresh()
+        except FaceError as exc:
+            self._problems.setText(str(exc))
+            self._problems.setVisible(True)
+            return
         self._populate()
         self.select(current)
 
@@ -83,7 +91,7 @@ class FaceLibraryPanel(QWidget):
         for group in (self._installed, self._bundled):
             for index in range(group.childCount()):
                 item = group.child(index)
-                if item.data(0, SOURCE_ROLE) == source:
+                if item.data(0, SOURCE_ROLE) == source and not item.isHidden():
                     self._tree.setCurrentItem(item)
                     return True
         return False
@@ -116,9 +124,17 @@ class FaceLibraryPanel(QWidget):
     def _apply_filter(self) -> None:
         query = self._filter.text().casefold().strip()
         for group in (self._installed, self._bundled):
+            shown = 0
             for index in range(group.childCount()):
                 item = group.child(index)
                 item.setHidden(query not in item.text(0).casefold())
+                shown += not item.isHidden()
+            group.setHidden(group.childCount() > 0 and shown == 0)
+
+        # Edit face must never act on a face the filter hides.
+        current = self._tree.currentItem()
+        if current is not None and current.isHidden():
+            self._tree.setCurrentItem(None)
 
     def _selection_changed(self, item: QTreeWidgetItem | None, previous=None) -> None:
         self._edit.setEnabled(item is not None and item.data(0, SOURCE_ROLE) is not None)

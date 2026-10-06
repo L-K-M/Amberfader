@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QProgressDialog, QWidget
+from PySide6.QtWidgets import QApplication, QProgressDialog, QWidget
 
 from ..audion_import import AudionArchive, AudionInstallOutcome, AudionInstallStatus
 from ..face_library import FaceLibrary
@@ -43,7 +43,7 @@ class AudionArchiveImport:
         if installed:
             lines.append("Double-click a face under Installed to edit it.")
         details = "\n".join(
-            f"{outcome.face.name}: {outcome.detail}" for outcome in self.outcomes
+            f"{outcome.face.name}: {outcome.problem}" for outcome in self.outcomes
             if outcome.status is AudionInstallStatus.FAILED
         )
         return "\n".join(lines), details
@@ -59,21 +59,25 @@ def import_audion_archive(
     library.refresh()  # Skip faces installed since the library last looked.
     with AudionArchive(path) as archive:
         faces = archive.faces
-        progress = QProgressDialog("Reading the archive…", "Stop", 0, len(faces), parent)
+        progress = QProgressDialog("Importing Audion faces…", "Stop", 0, len(faces), parent)
         progress.setWindowTitle("Import Audion faces")
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(0)
         progress.setAutoClose(False)
         progress.setAutoReset(False)
         outcomes = []
+        # setValue() alone would show the dialog only after the first face.
+        progress.show()
         try:
             for index, face in enumerate(faces):
+                progress.setLabelText(f"Importing {face.name}…")
+                progress.setValue(index)
+                # Paint the face about to block and deliver Stop clicks.
+                QApplication.processEvents()
                 if progress.wasCanceled():
                     break
-                progress.setLabelText(f"Importing {face.name}…")
                 outcomes.append(archive.install(face, library, prepare_face))
-                # A modal progress dialog processes events here, so Stop works.
-                progress.setValue(index + 1)
+            progress.setValue(len(faces))
         finally:
             progress.close()
             progress.deleteLater()
