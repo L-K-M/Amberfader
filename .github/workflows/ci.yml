@@ -320,24 +320,70 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Repack as Flatpak and smoke-check the payload
-        run: |
-          # Ubuntu 24.04 denies the unprivileged user namespaces bubblewrap
-          # (flatpak's sandbox helper) builds in.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
-          # elfutils is required: flatpak-builder execs eu-strip on payload ELFs
-          sudo apt-get update && sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
-          DEB="$(find dist -maxdepth 1 -type f -name 'amberfader_*.deb' -print -quit)"
-          [ -n "$DEB" ] || { echo "::error::no .deb to repack"; exit 1; }
-          scripts/build-flatpak.sh "$DEB"
+  flatpak:
+    name: Flatpak builds and self-tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - name: Checksum and upload Flatpak bundle
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Build the page scripts and the wheel
+        run: npm ci && npm run build && uv build --wheel --out-dir dist
+
+      # Only this job relaxes the restriction: bubblewrap, which builds and
+      # runs every Flatpak, needs unprivileged user namespaces.
+      - name: Build the Flatpak
         run: |
-          for f in dist/*.flatpak; do
-            (cd dist && sha256sum "$(basename "$f")" > "$(basename "$f").sha256")
-          done
-        shell: bash
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true   # absent on kernels without the knob
+          sudo apt-get update -qq
+          # elfutils: flatpak-builder runs eu-strip. dbus: the self-test below.
+          sudo apt-get install -y -qq --no-install-recommends flatpak flatpak-builder elfutils dbus >/dev/null
+          scripts/build-flatpak.sh dist/amberfader-*.whl
+
+      - name: Install the bundle and check its permissions
+        run: |
+          flatpak install --user -y --noninteractive dist/amberfader_*.flatpak
+          flatpak info --user --show-permissions ch.lkmc.amberfader | tee permissions.txt
+          grep -Fxq 'com.canonical.AppMenu.Registrar=talk' permissions.txt
+          grep -q '^shared=.*network' permissions.txt
+          grep -q '^sockets=.*pulseaudio' permissions.txt
+          grep -q '^filesystems=.*xdg-run/amberfader:create' permissions.txt
+
+      # Chromium's renderers run in a sub-sandbox that the Flatpak portal
+      # starts, which needs a session bus, as every desktop session has.
+      - name: Self-test the installed Flatpak
+        run: dbus-run-session -- flatpak run --env=QT_QPA_PLATFORM=offscreen ch.lkmc.amberfader --self-test
+
+      # Each Flatpak instance has its own sandbox; the shared xdg-run folder is
+      # what lets a second launch find the first one's socket.
+      - name: A second launch hands over to the running one
+        run: |
+          dbus-run-session -- bash -euo pipefail -c '
+            app=(flatpak run --env=QT_QPA_PLATFORM=offscreen ch.lkmc.amberfader --test-page --background)
+            "${app[@]}" > first.log 2>&1 &
+            first=$!
+            socket="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/amberfader/embedded.sock"
+            for _ in $(seq 90); do [ -S "$socket" ] && break; sleep 1; done
+            [ -S "$socket" ] || { cat first.log; echo "::error::no socket from the first instance"; exit 1; }
+            timeout 60 "${app[@]}"
+            kill -0 "$first" || { cat first.log; echo "::error::the first instance stopped"; exit 1; }
+            flatpak kill ch.lkmc.amberfader
+          '
+
+      - name: Checksum the bundle
+        run: cd dist && for f in amberfader_*.flatpak; do sha256sum "$f" > "$f.sha256"; done
+
+      - name: Upload the Flatpak
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: linux-flatpak
           path: |

@@ -14,6 +14,25 @@ keeps running out of sight.
 
 Amberfader runs on Linux (deb or Flatpak) and on macOS with Apple silicon.
 
+### Install on Linux
+
+Packages are attached to releases from 0.2.0 on, for x86_64. Download one
+from the [latest release](https://github.com/L-K-M/Amberfader/releases/latest).
+
+- **Ubuntu 24.04** (`amberfader_<version>_amd64.deb`): the deb needs the
+  Python 3.12 it was built for. Install it with
+  `sudo apt install ./amberfader_<version>_amd64.deb`.
+- **Flatpak** (`amberfader_<version>.flatpak`): the bundle uses the KDE
+  runtime from Flathub. Add Flathub once, then install the bundle:
+
+  ```sh
+  flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+  flatpak install --user ./amberfader_<version>.flatpak
+  ```
+
+Start **Amberfader** from your app menu and sign in to YouTube Music with
+**Show YT**.
+
 ### Install on macOS
 
 The `.dmg` is attached to releases from 0.2.0 on.
@@ -75,6 +94,8 @@ Where your data lives. On macOS, everything except the cache is in
 | Faces | `~/.local/share/amberfader/faces` | *Support*`/faces` |
 | Appearance | `~/.config/amberfader/appearance.json` | *Support*`/appearance.json` |
 | Ad blocking and continue playing switches | `~/.config/amberfader/settings.json` | *Support*`/settings.json` |
+
+The Flatpak keeps the Linux folders inside `~/.var/app/ch.lkmc.amberfader/`.
 
 On macOS, the first start moves faces, appearance, recent searches and the
 sign-in from the old `~/.local/share/amberfader`-style folders, without

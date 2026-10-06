@@ -33,7 +33,7 @@ Build targets at the end:
 | --- | --- | --- | --- |
 | `wheel` | Linux, macOS | `dist/amberfader-<ver>-py3-none-any.whl`, sdist | Includes the page bundle. For developers and `pipx` users. |
 | `deb` | Linux (Ubuntu 24.04 in CI) | `dist/amberfader_<ver>_amd64.deb` | QtWebEngine inside, Chromium sandbox on, AppArmor profile for Ubuntu 23.10 and later. |
-| `flatpak` | Linux | `dist/amberfader_<ver>.flatpak` | Network and audio permissions; sandbox approach decided in Phase 2. |
+| `flatpak` | Linux | `dist/amberfader_<ver>.flatpak` | Built on Flathub's PySide BaseApp, renderer sandbox on; network and audio permissions. |
 | `macos` | macOS (Apple silicon) | `dist/Amberfader-<ver>-macos-arm64.dmg` | `.app` frozen with PyInstaller, ad-hoc signed, not notarized (D2). |
 
 ## 2. Where things stand (2026-10-05)
@@ -235,6 +235,21 @@ on Linux and macOS.
   Pick (b) if it keeps renderer sandboxing at a reasonable build cost. If
   (a) means the sandbox is off, record that in `privacy.md` and the release
   notes.
+
+  Outcome (2026-10-06, CI runs on scratch branches):
+  - (a) Inside Flatpak, creating a user namespace fails with EPERM.
+    Chromium from the pip wheels keeps running without its namespace
+    layer, and the self-test reports `seccomp only`.
+  - (b) costs no build of our own: Flathub's `io.qt.PySide.BaseApp//6.11`
+    ships PySide6 6.11.2 built against `io.qt.qtwebengine.BaseApp//6.11`,
+    whose Chromium is patched to start its sandboxed zygote through the
+    Flatpak portal (`chromium-flatpak-add-initial-sandbox-support.patch`).
+    Renderers then sit in a sub-sandbox with their own PID namespace and
+    their own seccomp filter. All self-test checks pass.
+  - Chosen: (b). The Flatpak is built from the wheel on the PySide BaseApp
+    (KDE runtime 6.11; 6.8 is end of life) instead of repacking the deb.
+    It needs `QTWEBENGINEPROCESS_PATH`, because Python is the browser
+    process, and a session bus for the portal, which every desktop has.
 - Replace the helper checks in the smoke probe with `amberfader --self-test`
   inside the installed bundle.
 
@@ -242,8 +257,8 @@ on Linux and macOS.
 
 - The `deb` job builds, installs and self-tests the deb with the AppArmor
   knob set to 1.
-- A separate `flatpak` job repacks that deb and self-tests the Flatpak.
-  Only this job relaxes the knob, which flatpak-builder needs.
+- A separate `flatpak` job builds the Flatpak from the wheel and
+  self-tests it. Only this job relaxes the knob, which bubblewrap needs.
 
 **Exit:** deb and Flatpak artifacts self-test green in CI. You confirm sign-in
 and one hour of hidden playback from the installed deb or Flatpak on your
@@ -397,7 +412,7 @@ acceptance matrix passed on Linux and macOS.
 | `python` | ubuntu-24.04 | ruff, pytest (offscreen), global menu over D-Bus, wheel contains the bundle |
 | `embedded` | ubuntu-24.04 | Bridge end to end in real QtWebEngine against the test page |
 | `deb` | ubuntu-24.04 | deb installs and self-tests with the sandbox on and the AppArmor restriction set |
-| `flatpak` | ubuntu-24.04 | Flatpak repacks the deb, installs and self-tests |
+| `flatpak` | ubuntu-24.04 | Flatpak builds from the wheel, installs, self-tests and hands a second launch over |
 | `macos` | macos-15 | Unit and e2e tests, frozen `.app` self-tests, `.dmg` uploaded |
 | `face-editor-macos` | macos-14 | Kept as is, or folded into `macos` |
 | Release | same jobs | Publishes `.deb`, `.flatpak`, `.dmg`, wheel and checksums |
