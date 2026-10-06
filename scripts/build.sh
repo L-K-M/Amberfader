@@ -13,8 +13,8 @@
 #
 #   --clean    remove dist/ first
 #   --check    print the plan and exit
-#   --install  build the macOS app and install it into /Applications, then
-#              reveal it (implies the macos target)
+#   --install  build the macOS apps and install them into /Applications, then
+#              reveal them (implies the macos target)
 #   --run      launch the installed/built app (implies the macos target)
 #
 # Requirements: Node 22+ (page scripts, every target), Python 3.11+ + uv
@@ -158,23 +158,30 @@ for target in "${TARGETS[@]}"; do
       page_scripts || { FAILED+=("macos"); continue; }
       if scripts/build-macos.sh "$VERSION" "$DIST"; then
         OK+=("macos → $DIST/")
-        APP="$DIST/macos/dist/Amberfader.app"
+        APPS=("$DIST/macos/dist/Amberfader.app" "$DIST/macos/dist/Amberfader Face Editor.app")
         if [[ $INSTALL -eq 1 ]]; then
-          echo "-- installing /Applications/Amberfader.app"
-          rm -rf /Applications/Amberfader.app
-          # ditto preserves the signature, resource forks and permissions.
-          if [[ -d "$APP" ]] && ditto "$APP" /Applications/Amberfader.app; then
-            OK+=("installed → /Applications/Amberfader.app")
-            if [[ $RUN -eq 1 ]]; then
-              open /Applications/Amberfader.app
+          INSTALLED=()
+          for APP in "${APPS[@]}"; do
+            name="$(basename "$APP")"
+            echo "-- installing /Applications/$name"
+            rm -rf "/Applications/$name"
+            # ditto preserves the signature, resource forks and permissions.
+            if [[ -d "$APP" ]] && ditto "$APP" "/Applications/$name"; then
+              OK+=("installed → /Applications/$name")
+              INSTALLED+=("/Applications/$name")
             else
-              open -R /Applications/Amberfader.app
+              FAILED+=("macos (install $name)")
             fi
-          else
-            FAILED+=("macos (install)")
+          done
+          if [[ ${#INSTALLED[@]} -gt 0 ]]; then
+            if [[ $RUN -eq 1 ]]; then
+              open "${INSTALLED[@]}"
+            else
+              open -R "${INSTALLED[@]}"
+            fi
           fi
         elif [[ $RUN -eq 1 ]]; then
-          open "$APP"
+          open "$DIST/macos/dist/Amberfader.app"
         fi
       else
         FAILED+=("macos")
