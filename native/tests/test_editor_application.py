@@ -1,0 +1,171 @@
+"""The standalone editor manages one window per face, like a Mac document app."""
+from __future__ import annotations
+
+import pytest
+
+from amberfader.face_autosave import AutosaveStore
+from amberfader.face_document import FaceDocument
+from amberfader.face_library import BUILTIN_DIRECTORY, FaceLibrary
+
+
+@pytest.fixture()
+def saved_face(tmp_path):
+    document = FaceDocument.from_template(BUILTIN_DIRECTORY / "viridian", name="Saved Viridian")
+    return document.save(tmp_path / "Saved Viridian")
+
+
+@pytest.fixture()
+def make_editor(qapp, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from amberfader.ui.editor_application import FaceEditorApplication
+    from amberfader.ui.editor_settings import EditorSettings
+
+    monkeypatch.setattr(QMessageBox, "warning", lambda *args: QMessageBox.StandardButton.Discard)
+    created = []
+
+    def make():
+        editor = FaceEditorApplication(
+            qapp,
+            library=FaceLibrary(tmp_path / "installed", tmp_path / "appearance.json"),
+            settings=EditorSettings(tmp_path / "editor.ini"),
+            autosave=AutosaveStore(tmp_path / "autosave"),
+        )
+        created.append(editor)
+        return editor
+
+    yield make
+    for editor in created:
+        for window in list(editor._windows):
+            window.close()
+        if editor._gallery is not None:
+            editor._gallery.close()
+            editor._gallery.deleteLater()
+        editor.setParent(None)
+        editor.deleteLater()
+    qapp.processEvents()
+
+
+def _create(editor, template="amber-classic"):
+    gallery = editor._gallery
+    editor._create_from_template(BUILTIN_DIRECTORY / template)
+    return gallery
+
+
+def test_launch_shows_the_gallery_and_a_template_opens_a_window(make_editor):
+    editor = make_editor()
+    editor.start([])
+    assert editor._gallery.isVisible()
+    assert editor.windows() == []
+    _create(editor)
+    [window] = editor.windows()
+    assert window.document.path is None
+    assert not editor._gallery.isVisible()
+
+
+def test_untouched_untitled_window_is_reused_for_the_next_face(make_editor, saved_face):
+    editor = make_editor()
+    editor.start([])
+    _create(editor)
+    [window] = editor.windows()
+    assert editor.open_face(saved_face, window)
+    assert editor.windows() == [window]
+    assert window.document.path == saved_face
+
+
+def test_edited_window_is_kept_and_the_face_opens_beside_it(make_editor, saved_face):
+    editor = make_editor()
+    editor.start([])
+    _create(editor)
+    [window] = editor.windows()
+    window.document.set_rotation("play", 5)
+    window._changed()
+    assert editor.open_face(saved_face, window)
+    assert len(editor.windows()) == 2
+    assert window.document.manifest["controlRotations"]["play"] == 5
+
+
+def test_opening_an_open_face_brings_its_window_forward(make_editor, saved_face):
+    editor = make_editor()
+    editor.start([FaceDocument.open(saved_face)])
+    assert len(editor.windows()) == 1
+    assert editor.open_face(saved_face / "face.json", None)
+    assert len(editor.windows()) == 1
+
+
+def test_recent_faces_follow_opens_and_feed_every_menu(make_editor, saved_face):
+    editor = make_editor()
+    editor.start([])
+    _create(editor)
+    [window] = editor.windows()
+    editor.open_face(saved_face, None)
+    assert editor.recent_faces() == [saved_face]
+    titles = [action.text() for action in window._recent_menu.actions()]
+    assert titles[0] == "Saved Viridian"
+    assert titles[-1] == "Clear Menu"
+    editor.clear_recent()
+    assert editor.recent_faces() == []
+    assert [action.text() for action in window._recent_menu.actions()] == ["Clear Menu"]
+
+
+def test_finder_file_open_event_opens_the_face_and_closes_the_launch_gallery(
+    make_editor, saved_face, qapp,
+):
+    from PySide6.QtGui import QFileOpenEvent
+
+    editor = make_editor()
+    editor.start([])
+    assert editor._gallery.isVisible()
+    qapp.sendEvent(qapp, QFileOpenEvent(str(saved_face)))
+    [window] = editor.windows()
+    assert window.document.path == saved_face
+    assert not editor._gallery.isVisible()
+
+
+def test_unsaved_work_is_autosaved_and_recovered_after_a_crash(make_editor, saved_face):
+    editor = make_editor()
+    editor.start([FaceDocument.open(saved_face)])
+    [window] = editor.windows()
+    window.document.set_rotation("play", 21, label="Rotate")
+    window._changed()
+    editor.autosave_now()
+    assert (editor._autosave.root / window.autosave_token).is_dir()
+
+    # A second process after a crash: the window returns, attached to its folder.
+    recovered = make_editor()
+    recovered.start([])
+    [again] = recovered.windows()
+    assert again.document.path == saved_face
+    assert again.document.manifest["controlRotations"]["play"] == 21
+    assert again._undo_action.text() == "Undo Recover Changes"
+    assert again.autosave_token == window.autosave_token
+    assert recovered._gallery is None
+
+    # Discarding the recovered work removes its snapshot.
+    again.close()
+    assert not (recovered._autosave.root / again.autosave_token).exists()
+
+
+def test_saving_removes_the_autosave(make_editor, saved_face):
+    editor = make_editor()
+    editor.start([FaceDocument.open(saved_face)])
+    [window] = editor.windows()
+    window.document.set_rotation("play", 3)
+    window._changed()
+    editor.autosave_now()
+    assert window.save()
+    editor.autosave_now()
+    assert not (editor._autosave.root / window.autosave_token).exists()
+
+
+def test_dock_reopen_shows_the_gallery_when_no_window_is_open(make_editor, monkeypatch):
+    from PySide6.QtCore import Qt
+
+    from amberfader.ui import editor_application
+
+    editor = make_editor()
+    # Only the reopen rule is macOS-specific; the Dock menu needs real macOS.
+    monkeypatch.setattr(editor_application, "MACOS", True)
+    editor._state = Qt.ApplicationState.ApplicationActive
+    editor._state_changed(Qt.ApplicationState.ApplicationActive)
+    assert editor._gallery is not None and editor._gallery.isVisible()
