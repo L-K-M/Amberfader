@@ -11,8 +11,9 @@ discover the menu registrar. Each main window exports its own menu:
 - Player: **File**, **Playback**, **View**, and **Window**. The menus open faces,
   the editor, search and cover view, control playback, show or hide YouTube
   Music, minimize the player, or close it.
-- Face editor: **File**, **Edit**, and **View**, using the same actions as its
-  toolbar. Undo/Redo availability follows your document.
+- Face editor: **File**, **Edit**, **View**, **Element**, **Face**, **Window**
+  and **Help**, using the same actions as its toolbar. Undo and Redo name the
+  change they revert and follow your document.
 
 Playback menu actions use the existing player command path. Their labels and
 availability follow reported playback, capabilities, and pending requests.

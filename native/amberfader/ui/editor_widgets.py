@@ -22,6 +22,7 @@ from PySide6.QtGui import (
     QKeySequence,
     QLinearGradient,
     QPainter,
+    QPainterPath,
     QPalette,
     QPen,
     QPixmap,
@@ -226,6 +227,8 @@ class TextField(QLineEdit):
         """
         if not self.hasFocus() or value != self._model:
             self.setText(value)
+            if not self.hasFocus():
+                self.setCursorPosition(0)
         self._model = value
 
     def has_pending_edit(self) -> bool:
@@ -372,22 +375,65 @@ class ColorWell(QAbstractButton):
         painter.end()
 
 
+class _DisclosureHeader(QAbstractButton):
+    """A section title with a disclosure chevron, drawn flat like Xcode's."""
+
+    def __init__(self, title: str, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setText(title)
+        self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.expanded = True
+        font = QFont(self.font())
+        font.setBold(True)
+        self.setFont(font)
+
+    def sizeHint(self) -> QSize:
+        metrics = self.fontMetrics()
+        return QSize(metrics.horizontalAdvance(self.text()) + 26, metrics.height() + 8)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        palette = self.palette()
+        chevron = secondary_color(palette)
+        pen = QPen(chevron, 1.6)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        middle = self.height() / 2
+        if self.expanded:
+            points = ((6.0, middle - 2), (9.5, middle + 2), (13.0, middle - 2))
+        else:
+            points = ((8.0, middle - 3.5), (11.5, middle), (8.0, middle + 3.5))
+        path = QPainterPath()
+        path.moveTo(*points[0])
+        for point in points[1:]:
+            path.lineTo(*point)
+        painter.drawPath(path)
+        painter.setPen(palette.color(QPalette.ColorRole.WindowText))
+        painter.setFont(self.font())
+        text_rect = self.rect().adjusted(20, 0, 0, 0)
+        painter.drawText(text_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                         self.text())
+        if self.hasFocus():
+            ring = QColor(palette.color(QPalette.ColorRole.Accent))
+            ring.setAlphaF(0.6)
+            painter.setPen(QPen(ring, 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), 4, 4)
+        painter.end()
+
+
 class InspectorSection(QWidget):
-    """A titled group whose content collapses with its disclosure button."""
+    """A titled group whose content collapses with its disclosure header."""
 
     def __init__(self, title: str, parent: QWidget, *, name: str) -> None:
         super().__init__(parent)
         self.setObjectName(name)
-        self._header = QToolButton(self)
+        self._header = _DisclosureHeader(title, self)
         self._header.setObjectName(f"{name}Header")
-        self._header.setText(title)
-        self._header.setAutoRaise(True)
-        self._header.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self._header.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self._header.setAccessibleName(f"{title} section")
-        font = QFont(self._header.font())
-        font.setBold(True)
-        self._header.setFont(font)
         self._header.clicked.connect(lambda: self._toggle(not self._expanded))
         self._expanded = True
         self.body = QWidget(self)
@@ -399,7 +445,7 @@ class InspectorSection(QWidget):
         layout.setContentsMargins(0, 2, 0, 6)
         layout.setSpacing(4)
         header_row = QHBoxLayout()
-        header_row.setContentsMargins(4, 0, 0, 0)
+        header_row.setContentsMargins(6, 0, 6, 0)
         header_row.addWidget(self._header)
         header_row.addStretch(1)
         layout.addLayout(header_row)
@@ -415,16 +461,9 @@ class InspectorSection(QWidget):
 
     def _toggle(self, expanded: bool) -> None:
         self._expanded = expanded
+        self._header.expanded = expanded
         self._header.setAccessibleDescription("Expanded" if expanded else "Collapsed")
-        self._header.setIcon(symbol_icon(
-            "chevron.down" if expanded else "chevron.right",
-            "pan-down-symbolic" if expanded else "pan-end-symbolic",
-        ))
-        self._header.setIconSize(QSize(10, 10))
-        if self._header.icon().isNull():
-            self._header.setArrowType(
-                Qt.ArrowType.DownArrow if expanded else Qt.ArrowType.RightArrow
-            )
+        self._header.update()
         self.body.setVisible(expanded)
 
 

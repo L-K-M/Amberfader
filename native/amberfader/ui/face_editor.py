@@ -78,7 +78,7 @@ VALIDATION_DELAY_MS = 200
 DEFAULT_WINDOW_SIZE = QSize(1180, 740)
 MINIMUM_WINDOW_SIZE = QSize(720, 460)
 SIDEBAR_WIDTH = 200
-INSPECTOR_WIDTH = 290
+INSPECTOR_WIDTH = 300
 PNG_FILTER = "PNG Images (*.png)"
 ZIP_FILTER = "ZIP Archives (*.zip)"
 ZOOM_PRESETS = (0.5, 1.0, 2.0, 4.0)
@@ -473,7 +473,7 @@ class FaceEditorWindow(QMainWindow):
         self._splitter.setStretchFactor(1, 1)
         self._splitter.setStretchFactor(2, 0)
         self._sidebar.setMinimumWidth(160)
-        self._inspector.setMinimumWidth(260)
+        self._inspector.setMinimumWidth(270)
         self._canvas.setMinimumWidth(240)
         self._splitter.setSizes([SIDEBAR_WIDTH, 700, INSPECTOR_WIDTH])
         self.setCentralWidget(self._splitter)

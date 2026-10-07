@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QTabBar,
     QVBoxLayout,
@@ -142,6 +143,36 @@ def _pair(parent: QWidget, fields, captions) -> QWidget:
         grid.addWidget(field, 0, column)
         grid.addWidget(caption(text, box), 1, column)
     return box
+
+
+class _ImagePreview(QLabel):
+    """Shows an image scaled to the label's width, never widening the pane."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self._source = QPixmap()
+
+    def set_image(self, pixmap: QPixmap) -> None:
+        self._source = pixmap
+        self._fit()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._fit()
+
+    def _fit(self) -> None:
+        if self._source.isNull():
+            self.clear()
+            return
+        scale = self.devicePixelRatioF()
+        size = self.contentsRect().size() * scale
+        image = self._source.scaled(
+            size, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation,
+        )
+        image.setDevicePixelRatio(scale)
+        self.setPixmap(image)
 
 
 def _scrolling(page: QWidget) -> QScrollArea:
@@ -313,6 +344,8 @@ class ElementInspector(QWidget):
         self._states.setObjectName("artworkStates")
         self._states.setAccessibleName("Artwork states")
         self._states.setIconSize(THUMBNAIL)
+        self._blank_thumbnail = QPixmap(THUMBNAIL)
+        self._blank_thumbnail.fill(Qt.GlobalColor.transparent)
         self._states.setUniformItemSizes(True)
         self._states.itemActivated.connect(lambda _item: self._command(
             InspectorCommand.IMPORT_ARTWORK,
@@ -434,6 +467,8 @@ class ElementInspector(QWidget):
                         THUMBNAIL, Qt.AspectRatioMode.KeepAspectRatio,
                         Qt.TransformationMode.SmoothTransformation,
                     ))
+                else:
+                    item.setIcon(self._blank_thumbnail)
                 self._states.addItem(item)
             self._states.setCurrentRow(states.index(current) if current in states else 0)
         rows = min(len(states), 6)
@@ -511,6 +546,7 @@ class FaceInspector(QWidget):
         self._syncing = False
         self._steps = _StepSessions()
         self._undo_filter = UndoPassthrough(self)
+        self._shown_background = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 8, 0, 8)
         layout.setSpacing(4)
@@ -571,13 +607,15 @@ class FaceInspector(QWidget):
             ("sliderStyle",), self._slider_style.currentData(), "Change Slider Style",
         ))
         form.addRow("Sliders", self._slider_style)
-        self._glass = QCheckBox("Reflection over album artwork", section.body)
+        self._glass = QCheckBox("Glass over album art", section.body)
+        self._glass.setToolTip("Draw a reflection over the album artwork")
         self._glass.setObjectName("coverGlass")
         self._glass.toggled.connect(lambda value: self._emit(
             ("coverGlass",), value, "Change Artwork Reflection",
         ))
         form.addRow("", self._glass)
-        self._sprite_labels = QCheckBox("Labels over button artwork", section.body)
+        self._sprite_labels = QCheckBox("Labels on button art", section.body)
+        self._sprite_labels.setToolTip("Draw button labels over imported button artwork")
         self._sprite_labels.setObjectName("spriteLabels")
         self._sprite_labels.toggled.connect(lambda value: self._emit(
             ("spriteLabels",), value, "Change Button Labels",
@@ -588,11 +626,9 @@ class FaceInspector(QWidget):
     def _background_section(self) -> InspectorSection:
         section = InspectorSection("Background", self, name="backgroundSection")
         form = _form(section.body)
-        self._background_preview = QLabel(section.body)
+        self._background_preview = _ImagePreview(section.body)
         self._background_preview.setObjectName("backgroundPreview")
-        self._background_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._background_preview.setFixedHeight(BACKGROUND_PREVIEW_HEIGHT)
-        self._background_preview.setFrameShape(QFrame.Shape.StyledPanel)
         form.addRow(self._background_preview)
         self._background_name = caption("", section.body)
         self._background_name.setTextFormat(Qt.TextFormat.PlainText)
@@ -603,10 +639,11 @@ class FaceInspector(QWidget):
             lambda: self.command.emit(InspectorCommand.IMPORT_BACKGROUND, ""),
         )
         form.addRow("Image", import_background)
-        self._adopt_background = QCheckBox("Resize face to fit the image", section.body)
+        self._adopt_background = QCheckBox("Match face size", section.body)
         self._adopt_background.setObjectName("adoptBackgroundSize")
         self._adopt_background.setToolTip(
-            "When off, the image must match the face size at 1x or 2x."
+            "Resize the face to the imported image. When off, the image must "
+            "match the face size at 1x or 2x."
         )
         form.addRow("", self._adopt_background)
         mask_row = QWidget(section.body)
@@ -691,11 +728,9 @@ class FaceInspector(QWidget):
             with QSignalBlocker(self._sprite_labels):
                 self._sprite_labels.setChecked(data.get("spriteLabels", True))
             self._background_name.setText(data["background"])
-            if artwork is not None and not artwork.background.isNull():
-                self._background_preview.setPixmap(artwork.background.scaled(
-                    QSize(240, BACKGROUND_PREVIEW_HEIGHT - 8), Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                ))
+            if artwork is not None and artwork.background is not self._shown_background:
+                self._shown_background = artwork.background
+                self._background_preview.set_image(artwork.background)
             mask = data.get("alphaMask")
             self._mask_name.setText(mask or "None. The background's transparency shapes the face.")
             self._mask_remove.setEnabled(mask is not None)

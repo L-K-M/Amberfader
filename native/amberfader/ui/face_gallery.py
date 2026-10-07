@@ -188,10 +188,9 @@ class FaceGallery(QDialog):
         self._problems.clicked.connect(self._show_problems)
 
         self._buttons = QDialogButtonBox(self)
-        self._open_other = self._buttons.addButton(
-            "Open Other…", QDialogButtonBox.ButtonRole.ResetRole,
-        )
+        self._open_other = QPushButton("Open Other…", self)
         self._open_other.setObjectName("galleryOpenOther")
+        self._open_other.setToolTip("Open a face folder with the Open panel")
         self._open_other.clicked.connect(self.openOtherRequested)
         self._cancel = self._buttons.addButton(QDialogButtonBox.StandardButton.Cancel)
         self._cancel.clicked.connect(self.close)
@@ -218,6 +217,7 @@ class FaceGallery(QDialog):
         splitter.setSizes([170, 700])
         footer = QHBoxLayout()
         footer.setContentsMargins(12, 6, 12, 12)
+        footer.addWidget(self._open_other)
         footer.addWidget(self._problems)
         footer.addStretch(1)
         footer.addWidget(self._buttons)
@@ -363,6 +363,8 @@ class FaceGallery(QDialog):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        # Arrow keys browse faces; ⌘F or a click reaches the search field.
+        self._grid.setFocus(Qt.FocusReason.OtherFocusReason)
         self._schedule()
 
     def hideEvent(self, event) -> None:
