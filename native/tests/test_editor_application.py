@@ -169,3 +169,40 @@ def test_dock_reopen_shows_the_gallery_when_no_window_is_open(make_editor, monke
     editor._state = Qt.ApplicationState.ApplicationActive
     editor._state_changed(Qt.ApplicationState.ApplicationActive)
     assert editor._gallery is not None and editor._gallery.isVisible()
+
+
+def test_a_recovered_face_is_not_opened_twice_from_the_command_line(make_editor, saved_face):
+    editor = make_editor()
+    editor.start([FaceDocument.open(saved_face)])
+    [window] = editor.windows()
+    window.document.set_rotation("play", 4)
+    window._changed()
+    editor.autosave_now()
+    recovered = make_editor()
+    recovered.start([FaceDocument.open(saved_face)])
+    [again] = recovered.windows()
+    assert again.document.manifest["controlRotations"]["play"] == 4
+
+
+def test_quitting_remembers_open_faces_for_window_restoration(
+    make_editor, saved_face, qapp, monkeypatch,
+):
+    from PySide6.QtCore import QEvent
+
+    from amberfader.ui import editor_application
+
+    editor = make_editor()
+    editor.start([FaceDocument.open(saved_face)])
+    _create(editor)  # Untitled windows have nothing to reopen.
+    # The app's filter sees Quit before any window closes.
+    assert editor.eventFilter(qapp, QEvent(QEvent.Type.Quit)) is False
+    assert editor._settings.session_faces() == [saved_face]
+
+    for window in list(editor._windows):
+        window.close()
+    monkeypatch.setattr(editor_application, "_system_keeps_windows", lambda: True)
+    restored = make_editor()
+    restored._settings = editor._settings
+    restored.start([])
+    assert [window.document.path for window in restored.windows()] == [saved_face]
+    assert restored._gallery is None

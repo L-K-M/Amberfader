@@ -18,7 +18,6 @@ import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from tempfile import mkdtemp
 
 from .face_document import FaceDocument
 from .face_library import FaceError, _read_bounded
@@ -29,6 +28,13 @@ INFO_FILE = "autosave.json"
 INFO_VERSION = 1
 MAX_INFO_BYTES = 16 * 1024
 TOKEN_CHARACTERS = frozenset("0123456789abcdef")
+# A rewrite builds <token>~new, moves <token> aside to <token>~old, then
+# renames ~new into place. Whatever an interruption leaves behind, one
+# complete snapshot remains: <token>, else ~new (complete once its info file
+# exists), else ~old.
+NEW_SUFFIX = "~new"
+OLD_SUFFIX = "~old"
+SUFFIXES = ("", NEW_SUFFIX, OLD_SUFFIX)
 
 
 @dataclass(frozen=True)
@@ -53,62 +59,79 @@ class AutosaveStore:
         """Replace the token's snapshot with the document's working state."""
         if not _valid_token(token):
             raise FaceError("Invalid autosave token")
+        target = self._root / token
+        fresh = self._root / f"{token}{NEW_SUFFIX}"
+        old = self._root / f"{token}{OLD_SUFFIX}"
         try:
             self._root.mkdir(parents=True, exist_ok=True, mode=0o700)
-            staging = Path(mkdtemp(prefix=f".{token}-", dir=self._root))
-            try:
-                snapshot = staging / "face"
-                document.write_recovery(snapshot)
-                info = {
-                    "version": INFO_VERSION,
-                    "source": str(document.path) if document.path is not None else None,
-                    "saved": document.saved_fingerprint,
-                }
-                (snapshot / INFO_FILE).write_text(json.dumps(info), encoding="utf-8")
-                target = self._root / token
-                if target.exists():
-                    target.replace(staging / "previous")
-                snapshot.replace(target)
-            finally:
-                shutil.rmtree(staging, ignore_errors=True)
+            shutil.rmtree(fresh, ignore_errors=True)
+            document.write_recovery(fresh)
+            info = {
+                "version": INFO_VERSION,
+                "source": str(document.path) if document.path is not None else None,
+                "saved": document.saved_fingerprint,
+            }
+            # Written last: a snapshot without it is incomplete.
+            (fresh / INFO_FILE).write_text(json.dumps(info), encoding="utf-8")
+            if target.exists():
+                shutil.rmtree(old, ignore_errors=True)
+                target.replace(old)
+            fresh.replace(target)
+            shutil.rmtree(old, ignore_errors=True)
         except OSError as exc:
             raise FaceError(f"Cannot write autosave: {exc}") from exc
 
     def remove(self, token: str) -> None:
         if _valid_token(token):
-            shutil.rmtree(self._root / token, ignore_errors=True)
+            for suffix in SUFFIXES:
+                shutil.rmtree(self._root / f"{token}{suffix}", ignore_errors=True)
 
     def recover(self) -> tuple[list[RecoveredFace], list[str]]:
         """Documents left by an unexpected exit, and problems with the rest.
 
         Unreadable snapshots stay on disk so nothing is deleted silently.
         """
-        faces: list[RecoveredFace] = []
-        problems: list[str] = []
         try:
             entries = sorted(self._root.iterdir()) if self._root.is_dir() else []
         except OSError as exc:
             return [], [f"Cannot read autosaves: {exc}"]
+        tokens = []
         for entry in entries:
-            if entry.name.startswith(".") or not entry.is_dir() or entry.is_symlink():
-                if entry.name.startswith("."):
-                    shutil.rmtree(entry, ignore_errors=True)  # An interrupted write.
-                continue
-            if not _valid_token(entry.name):
-                continue
-            try:
-                info = json.loads(_read_bounded(entry / INFO_FILE, MAX_INFO_BYTES))
-                if not isinstance(info, dict) or info.get("version") != INFO_VERSION:
-                    raise FaceError("Unsupported autosave")
-                source = info.get("source")
-                saved = info.get("saved")
-                document = FaceDocument.recover(
-                    entry,
-                    source=Path(source) if isinstance(source, str) else None,
-                    fingerprint=saved if isinstance(saved, str) else None,
-                )
-            except (FaceError, OSError, ValueError, RecursionError) as exc:
-                problems.append(f"{entry.name}: {exc}")
-                continue
-            faces.append(RecoveredFace(entry.name, document))
+            token = entry.name.split("~", 1)[0]
+            if (
+                entry.is_dir() and not entry.is_symlink() and _valid_token(token)
+                and entry.name in {f"{token}{suffix}" for suffix in SUFFIXES}
+                and token not in tokens
+            ):
+                tokens.append(token)
+        faces: list[RecoveredFace] = []
+        problems: list[str] = []
+        for token in tokens:
+            candidates = [
+                self._root / f"{token}{suffix}" for suffix in SUFFIXES
+                if (self._root / f"{token}{suffix}" / INFO_FILE).is_file()
+            ]
+            failure = None
+            for candidate in candidates:
+                try:
+                    faces.append(RecoveredFace(token, self._read(candidate)))
+                    break
+                except (FaceError, OSError, ValueError, RecursionError) as exc:
+                    failure = failure or exc
+            else:
+                if failure is not None:
+                    problems.append(f"{token}: {failure}")
         return faces, problems
+
+    @staticmethod
+    def _read(snapshot: Path) -> FaceDocument:
+        info = json.loads(_read_bounded(snapshot / INFO_FILE, MAX_INFO_BYTES))
+        if not isinstance(info, dict) or info.get("version") != INFO_VERSION:
+            raise FaceError("Unsupported autosave")
+        source = info.get("source")
+        saved = info.get("saved")
+        return FaceDocument.recover(
+            snapshot,
+            source=Path(source) if isinstance(source, str) else None,
+            fingerprint=saved if isinstance(saved, str) else None,
+        )

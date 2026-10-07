@@ -293,6 +293,11 @@ class FaceEditorApplication(QObject):
     def adopt_document(
         self, document: FaceDocument, window: FaceEditorWindow | None, message: str = "",
     ) -> bool:
+        # A face folder is open in at most one window, e.g. after recovery.
+        existing = self._window_for(document.path) if document.path is not None else None
+        if existing is not None:
+            existing._activate()
+            return True
         target = self._replaceable(window)
         if target is not None:
             return target.adopt_document(document, message)

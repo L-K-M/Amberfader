@@ -82,10 +82,46 @@ def test_unreadable_snapshot_is_reported_and_kept(store):
     assert (store.root / TOKEN).is_dir()
 
 
-def test_interrupted_writes_are_cleaned_and_tokens_are_checked(store):
-    store.root.mkdir(parents=True)
-    (store.root / ".0123abcd-partial").mkdir()
-    assert store.recover() == ([], [])
-    assert not (store.root / ".0123abcd-partial").exists()
+@pytest.mark.parametrize("stage", ["moved-aside", "renamed-new"])
+def test_an_interrupted_rewrite_still_recovers_a_complete_snapshot(store, stage, monkeypatch):
+    document = FaceDocument.from_template(TEMPLATE)
+    document.set_value(("name",), "First")
+    store.write(TOKEN, document)
+    document.set_value(("name",), "Second")
+    real_replace = type(store.root).replace
+    calls = []
+
+    def crash(path, target):
+        calls.append(path.name)
+        # Crash before the second rename, or right after renaming ~new.
+        if stage == "moved-aside" and len(calls) == 2:
+            raise OSError("power lost")
+        result = real_replace(path, target)
+        if stage == "renamed-new" and len(calls) == 2:
+            raise OSError("power lost")
+        return result
+
+    monkeypatch.setattr(type(store.root), "replace", crash)
+    with pytest.raises(FaceError):
+        store.write(TOKEN, document)
+    monkeypatch.undo()
+    [face], problems = store.recover()
+    assert problems == []
+    assert face.token == TOKEN
+    assert face.document.manifest["name"] == "Second"
+    store.remove(TOKEN)
+    assert list(store.root.iterdir()) == []
+
+
+def test_an_incomplete_new_snapshot_falls_back_to_the_previous_one(store):
+    document = FaceDocument.from_template(TEMPLATE)
+    document.set_value(("name",), "Kept")
+    store.write(TOKEN, document)
+    (store.root / f"{TOKEN}~new").mkdir()  # A write that never finished.
+    [face], _ = store.recover()
+    assert face.document.manifest["name"] == "Kept"
+
+
+def test_tokens_are_checked(store):
     with pytest.raises(FaceError):
         store.write("../escape", FaceDocument.from_template(TEMPLATE))

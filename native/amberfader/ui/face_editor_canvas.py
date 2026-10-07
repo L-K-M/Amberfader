@@ -176,9 +176,10 @@ class FaceEditorCanvas(QGraphicsView):
         self._panning = False
         self._nudge_session: object = None
         self._rotate_cursor = _rotate_cursor()
+        # A bound method, so the connection ends with this canvas.
         self._style_hints = QGuiApplication.styleHints()
         self._style_hints.accessibility().contrastPreferenceChanged.connect(
-            lambda _preference: self.viewport().update(),
+            self._contrast_changed,
         )
 
     @property
@@ -210,6 +211,9 @@ class FaceEditorCanvas(QGraphicsView):
         self.setSceneRect(self._item.boundingRect().adjusted(-64, -64, 64, 64))
         if self._fitting or previous_size != self._item.face_rect().size():
             self.fit_face()
+        self.viewport().update()
+
+    def _contrast_changed(self, _preference) -> None:
         self.viewport().update()
 
     def select(self, name: str) -> None:
