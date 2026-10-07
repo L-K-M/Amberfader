@@ -792,6 +792,10 @@ class Inspector(QWidget):
         layout.addWidget(self._stack, 1)
 
     @property
+    def tabs(self) -> QTabBar:
+        return self._tabs
+
+    @property
     def pane(self) -> InspectorPane:
         return InspectorPane(self._tabs.currentIndex())
 

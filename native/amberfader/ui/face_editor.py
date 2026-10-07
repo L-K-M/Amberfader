@@ -477,6 +477,9 @@ class FaceEditorWindow(QMainWindow):
         self._canvas.setMinimumWidth(240)
         self._splitter.setSizes([SIDEBAR_WIDTH, 700, INSPECTOR_WIDTH])
         self.setCentralWidget(self._splitter)
+        # Tab moves left to right: elements, canvas, then the inspector.
+        QWidget.setTabOrder(self._sidebar.tree, self._canvas)
+        QWidget.setTabOrder(self._canvas, self._inspector.tabs)
 
     def _build_toolbar(self) -> None:
         toolbar = QToolBar("Toolbar", self)

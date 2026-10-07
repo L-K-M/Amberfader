@@ -23,6 +23,7 @@ from PySide6.QtGui import (
     QColor,
     QCursor,
     QFont,
+    QGuiApplication,
     QPainter,
     QPainterPath,
     QPalette,
@@ -35,6 +36,7 @@ from PySide6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView, QWid
 from ..face_document import FaceDocument
 from ..face_library import MAX_DRAFT_GEOMETRY, Face, control_bounds
 from . import face_elements
+from .editor_widgets import high_contrast
 from .face_surface import FaceArtwork, control_path, draw_face_preview
 
 MIN_ZOOM = 0.1
@@ -174,6 +176,10 @@ class FaceEditorCanvas(QGraphicsView):
         self._panning = False
         self._nudge_session: object = None
         self._rotate_cursor = _rotate_cursor()
+        self._style_hints = QGuiApplication.styleHints()
+        self._style_hints.accessibility().contrastPreferenceChanged.connect(
+            lambda _preference: self.viewport().update(),
+        )
 
     @property
     def selected(self) -> str:
@@ -331,18 +337,22 @@ class FaceEditorCanvas(QGraphicsView):
         if not self._show_guides:
             painter.restore()
             return
+        # Increase Contrast makes outlines solid and the selection heavier.
+        contrast = high_contrast()
+        stroke = (2.5 if contrast else 1.5) / self.zoom
         if self._gesture is None:
             outline = QColor(accent)
-            outline.setAlpha(90)
-            painter.setPen(QPen(outline, 0, Qt.PenStyle.DotLine))
+            outline.setAlpha(220 if contrast else 90)
+            style = Qt.PenStyle.SolidLine if contrast else Qt.PenStyle.DotLine
+            painter.setPen(QPen(outline, 1 / self.zoom if contrast else 0, style))
             for name in self._document.manifest["controls"]:
                 if name not in (self._selected, self._hovered):
                     painter.drawPath(self._outline(name))
             if self._hovered not in (None, self._selected):
-                painter.setPen(QPen(accent, 1.5 / self.zoom))
+                painter.setPen(QPen(accent, stroke))
                 painter.drawPath(self._outline(self._hovered))
         color = DRAG_REGION_COLOR if self._selected == "drag" else accent
-        painter.setPen(QPen(color, 1.5 / self.zoom))
+        painter.setPen(QPen(color, stroke))
         painter.drawPath(self._outline(self._selected))
         corners, rotation = self._handles()
         extent = HANDLE_EXTENT / self.zoom

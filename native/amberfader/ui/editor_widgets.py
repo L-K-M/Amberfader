@@ -18,6 +18,7 @@ from PySide6.QtCore import QEvent, QObject, QRectF, QSignalBlocker, QSize, Qt, S
 from PySide6.QtGui import (
     QColor,
     QFont,
+    QGuiApplication,
     QIcon,
     QKeySequence,
     QLinearGradient,
@@ -72,10 +73,18 @@ def sample_cover() -> QPixmap:
     return cover
 
 
+def high_contrast() -> bool:
+    """macOS Increase Contrast, or the desktop's high contrast setting."""
+    # Keep the style hints referenced: PySide frees a temporary's children.
+    style_hints = QGuiApplication.styleHints()
+    preference = style_hints.accessibility().contrastPreference()
+    return preference == Qt.ContrastPreference.HighContrast
+
+
 def secondary_color(palette: QPalette) -> QColor:
     """The equivalent of NSColor.secondaryLabelColor for this palette."""
     color = QColor(palette.color(QPalette.ColorRole.WindowText))
-    color.setAlphaF(0.55)
+    color.setAlphaF(0.8 if high_contrast() else 0.55)
     return color
 
 

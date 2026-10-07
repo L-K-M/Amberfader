@@ -129,6 +129,10 @@ class ElementSidebar(QWidget):
             self._style_tree()
             self._restyle_headers()
 
+    @property
+    def tree(self) -> QTreeWidget:
+        return self._tree
+
     def element_names(self) -> list[str]:
         """The listed elements in display order."""
         return [
