@@ -16,13 +16,14 @@ AdRequestFilter blocks ad requests for the whole profile.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Callable
 from enum import Enum
 from importlib import resources
 from pathlib import Path
 
-from PySide6.QtCore import QFile, QIODevice, QObject, QUrl, Signal, Slot
-from PySide6.QtGui import QCloseEvent, QDesktopServices
+from PySide6.QtCore import QFile, QIODevice, QObject, Qt, QUrl, Signal, Slot
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QResizeEvent
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import (
     QWebEnginePage,
@@ -47,6 +48,16 @@ TEST_PAGE_HTML = (
     "<p>Scripted test page for Amberfader. "
     "No YouTube Music session is involved.</p>"
 )
+# YouTube Music hides its player bar's Like button below 936 CSS px and
+# switches to a mobile layout without a usable one below about 616 px
+# (measured 2026-10-07). Amberfader reads and presses the laid-out button,
+# so the page always lays out at least this wide. The margin absorbs zoom
+# rounding and small breakpoint changes.
+MIN_LAYOUT_WIDTH = 1024
+# QWebEnginePage ignores smaller zoom factors.
+MIN_ZOOM = 0.25
+# Zoom factors pass through single precision on their way back from Chromium.
+ZOOM_TOLERANCE = 1e-3
 WORLD = QWebEngineScript.ScriptWorldId.ApplicationWorld
 BRIDGE_SCRIPT_NAME = "amberfader-page-bridge"
 AD_FILTER_SCRIPT_NAME = "amberfader-ad-filter"
@@ -241,13 +252,24 @@ class PageBridge(QObject):
 
 class BrowserWindow(QMainWindow):
     """Shows the page for sign-in and browsing. Closing it only hides it:
-    playback continues until the player window quits Amberfader."""
+    playback continues until the player window quits Amberfader.
+
+    The page always lays out at least MIN_LAYOUT_WIDTH wide:
+
+    - A page that loads behind a hidden window would lay out 0 px wide, so
+      the window shows off screen while it loads and hides again after.
+      The page then keeps that size while hidden.
+    - A narrower window zooms the page out. Your own zoom, for example
+      Ctrl+wheel, applies up to that limit and returns in a wider window.
+    """
 
     def __init__(self, page: GuardedPage, go_home: Callable[[], None]) -> None:
         super().__init__()
         self.setWindowTitle("Amberfader – YouTube Music")
         self.view = QWebEngineView(self)
         self.view.setPage(page)
+        # Narrower, even the smallest zoom could not fit MIN_LAYOUT_WIDTH.
+        self.view.setMinimumWidth(math.ceil(MIN_LAYOUT_WIDTH * MIN_ZOOM))
         self.setCentralWidget(self.view)
 
         toolbar = self.addToolBar("Navigation")
@@ -264,14 +286,93 @@ class BrowserWindow(QMainWindow):
         self._origin.setContentsMargins(8, 0, 8, 0)
         toolbar.addWidget(self._origin)
         page.urlChanged.connect(self._show_origin)
+
+        self._chosen_zoom = page.zoomFactor()
+        self._zoom = self._chosen_zoom
+        page.zoomFactorChanged.connect(self._zoom_changed)
+        page.loadStarted.connect(self._load_started)
+        page.loadFinished.connect(self._load_finished)
+        page.renderProcessTerminated.connect(self._renderer_exited)
         self.resize(1100, 800)
+
+    def reveal(self) -> None:
+        self._end_offscreen_layout()
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
+    def conceal(self) -> None:
+        if self.view.page().isLoading():
+            self._start_offscreen_layout()
+        else:
+            self.hide()
 
     def _show_origin(self, url: QUrl) -> None:
         self._origin.setText(origin_of(url.toString()) or url.scheme() or "")
 
     def closeEvent(self, event: QCloseEvent) -> None:
         event.ignore()
+        self.conceal()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._fit_zoom()
+
+    # ---- layout size while hidden -----------------------------------------
+
+    def _load_started(self) -> None:
+        if not self.isVisible():
+            self._start_offscreen_layout()
+
+    def _load_finished(self, _ok: bool) -> None:
+        # A newer load may still be running; it ends the layout instead.
+        if self.view.page().isLoading():
+            return
+        # A new renderer starts at the default zoom.
+        self._fit_zoom()
+        self._end_offscreen_layout()
+
+    def _renderer_exited(self, *_args: object) -> None:
+        # No load finishes after this; the next load lays out again.
+        self._end_offscreen_layout()
+
+    def _start_offscreen_layout(self) -> None:
+        if self._offscreen():
+            return
         self.hide()
+        # Shown for Qt and the page, never on screen.
+        self.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        self.show()
+
+    def _end_offscreen_layout(self) -> None:
+        if not self._offscreen():
+            return
+        self.hide()
+        self.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, False)
+
+    def _offscreen(self) -> bool:
+        return self.testAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen)
+
+    # ---- zoom -------------------------------------------------------------
+
+    def _fit_zoom(self) -> None:
+        # A window that was never shown has no real width yet.
+        if not self.isVisible():
+            return
+        fit = self.view.width() / MIN_LAYOUT_WIDTH
+        self._zoom = max(MIN_ZOOM, min(self._chosen_zoom, fit))
+        if not math.isclose(self.view.page().zoomFactor(), self._zoom, abs_tol=ZOOM_TOLERANCE):
+            self.view.page().setZoomFactor(self._zoom)
+
+    def _zoom_changed(self, zoom: float) -> None:
+        # Fitting and loads announce the zoom already applied.
+        if math.isclose(zoom, self._zoom, abs_tol=ZOOM_TOLERANCE):
+            return
+        # Only a window on screen takes your own zoom (Ctrl+wheel). Otherwise
+        # this is a new page at its default zoom.
+        if self.isVisible() and not self._offscreen():
+            self._chosen_zoom = zoom
+        self._fit_zoom()
 
 
 class PageHost(QObject):
@@ -355,11 +456,9 @@ class PageHost(QObject):
         if self.window is None:
             return False
         if visible:
-            self.window.showNormal()
-            self.window.raise_()
-            self.window.activateWindow()
+            self.window.reveal()
         else:
-            self.window.hide()
+            self.window.conceal()
         return True
 
     def shutdown(self) -> None:

@@ -25,6 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Up to 1024 installed faces load, up from 64, so all three of Panic's
   Audion collection ZIPs (883 faces together) fit. A catalog cache (`.catalog.json` in the faces
   folder) keeps listing them fast: about 0.4 s for 900 faces instead of 4.6 s.
+- A YouTube Music window narrower than 1024 px zooms the page out instead
+  of switching to a narrower layout. Your own zoom applies up to that width.
+
+### Fixed
+
+- The heart stayed **♡?** (unknown) when YouTube Music hid its Like button:
+  in a window narrower than 936 px or zoomed in, after closing the window
+  before the first page finished loading, with `--background`, or after a
+  reload while the window was hidden. Pages that load behind the hidden
+  window now get its full size.
 
 ## [0.2.0] - 2026-10-06
 

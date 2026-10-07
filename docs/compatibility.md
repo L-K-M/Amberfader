@@ -50,6 +50,29 @@ session still require the artwork checks in `docs/manual-test-plan.md`.
   `web/tests/fixtures/player-page-2026-10-05.json`. The full Start mix
   flow after this fix is not yet confirmed in a signed-in session.
 
+## Live observations (2026-10-07)
+
+Signed-out session in QtWebEngine 6.11.2, Linux container:
+
+- YouTube Music shows the player bar's Like button only when the page is
+  at least 936 CSS px wide. From 935 px down it hides
+  `ytmusic-like-button-renderer` (`display: none`). At about 615 px and
+  below it switches to a mobile layout
+  (`ytmusic-app-layout[is-mweb-modernization-enabled]`) with two player
+  bars and no laid-out Like button.
+- A page that loads while its window is hidden gets a 0×0 viewport, and so
+  the mobile layout. This applies to the first load behind a window that
+  was never shown, and to any page in a new renderer, for example a reload
+  after the renderer exits or a cross-site load. Pages loaded after the
+  window was shown keep its size. The 2026-10-05 layout with
+  `is-wiz-miniplayer-enabled` matches these 0×0 pages.
+- Amberfader keeps the page at least 1024 CSS px wide: hidden loads run
+  with the window shown off screen, and narrower windows zoom out. The
+  heart then showed the live Like state after a `--background` start,
+  after closing the window during the first load, in an 820 px window, and
+  after a reload in a new renderer behind the hidden window. Liking itself
+  needs a signed-in session and is not verified here.
+
 ## Platforms
 
 | Platform | Install type | Status |
