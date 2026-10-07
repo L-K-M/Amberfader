@@ -47,6 +47,12 @@ TEST_PAGE_HTML = (
     "<p>Scripted test page for Amberfader. "
     "No YouTube Music session is involved.</p>"
 )
+# YouTube Music hides its player bar's Like button below 936 CSS px and
+# switches to a mobile layout without a usable one below about 616 px
+# (measured 2026-10-07). Amberfader reads and presses the laid-out button,
+# so the page always lays out at least this wide. The margin absorbs zoom
+# rounding and small breakpoint changes.
+MIN_LAYOUT_WIDTH = 1024
 WORLD = QWebEngineScript.ScriptWorldId.ApplicationWorld
 BRIDGE_SCRIPT_NAME = "amberfader-page-bridge"
 AD_FILTER_SCRIPT_NAME = "amberfader-ad-filter"

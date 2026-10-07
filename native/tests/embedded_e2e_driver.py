@@ -46,7 +46,9 @@ def main() -> int:
 
     from amberfader import PROTOCOL_VERSION
     from amberfader.embedded import page as page_module
-    from amberfader.embedded.page import PageMode, load_ad_filter, load_bundle
+    from amberfader.embedded.page import (
+        MIN_LAYOUT_WIDTH, PageMode, load_ad_filter, load_bundle,
+    )
     from amberfader.embedded.runtime import EmbeddedRuntime, RuntimeOptions
 
     # Never launch a real browser from a test: record the hand-off instead.
@@ -111,6 +113,15 @@ def main() -> int:
         pump(lambda: result, timeout=5)
         return result[0] if result else None
 
+    def desktop_layout():
+        # YouTube Music hides its Like button in narrower layouts. One CSS
+        # pixel of slack absorbs zoom rounding.
+        width = main_world("innerWidth")
+        return isinstance(width, int | float) and width >= MIN_LAYOUT_WIDTH - 1
+
+    def zoom():
+        return runtime.host.page.zoomFactor()
+
     def report():
         runtime.shutdown()
         shutil.rmtree(tmp, ignore_errors=True)
@@ -137,6 +148,11 @@ def main() -> int:
         if not all(checks.values()):
             return  # every later step needs an attached page
         first_token = bound_tokens()[0]
+
+        # The browser window was never shown, as with --background. A page
+        # behind it would otherwise lay out 0 px wide.
+        check("hidden start lays out at desktop width", desktop_layout())
+        check("hidden start stays hidden", not runtime.host.window.isVisible())
 
         _, ok, _ = call("player.play")
         check("play ok", ok)
@@ -166,6 +182,21 @@ def main() -> int:
 
         _, ok, _ = call("browser.showPlayer")
         check("show window", ok and runtime.host.window.isVisible())
+
+        # A narrow window zooms the page out, and zooming in stops at the
+        # desktop width. A wide window returns to the zoom you chose.
+        browser = runtime.host.window
+        browser.resize(600, 700)
+        check("narrow window keeps a desktop layout", pump(desktop_layout, timeout=5))
+        runtime.host.page.setZoomFactor(2.0)  # as Ctrl+wheel does
+        check("zooming in keeps a desktop layout", pump(desktop_layout, timeout=5))
+        runtime.host.page.setZoomFactor(1.0)
+        browser.resize(1300, 800)
+        check("wide window shows the chosen zoom", pump(
+            lambda: zoom() == 1.0 and main_world("innerWidth") == browser.view.width(), timeout=5,
+        ))
+        browser.resize(1100, 800)
+
         _, ok, _ = call("browser.hidePlayer")
         check("hide window", ok and not runtime.host.window.isVisible())
 
@@ -227,6 +258,9 @@ def main() -> int:
         ))
         _, ok, _ = call("player.play")
         check("command after renderer exit", ok)
+        # The new renderer loaded behind the hidden window.
+        check("hidden reload lays out at desktop width", desktop_layout())
+        check("hidden reload stays hidden", not runtime.host.window.isVisible())
 
         # The menu switches turn both features off from the next load.
         options = {action.text(): action for action in window._playback_menu.actions()}
