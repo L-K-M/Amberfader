@@ -50,7 +50,10 @@ echo "-- verify the ad-hoc signatures"
 for APP in "${APPS[@]}"; do
   codesign --verify --deep --strict "$APP" ||
     { echo "error: signature of $APP does not verify" >&2; exit 1; }
-  codesign -dv "$APP" 2>&1 | grep -q "Signature=adhoc" ||
+  # Capture first: grep -q can close the pipe and make codesign fail with SIGPIPE.
+  SIGNATURE_INFO="$(codesign -dv "$APP" 2>&1)" ||
+    { echo "error: could not inspect signature of $APP" >&2; exit 1; }
+  grep -Fxq "Signature=adhoc" <<< "$SIGNATURE_INFO" ||
     { echo "error: $APP is not ad-hoc signed" >&2; exit 1; }
 done
 
