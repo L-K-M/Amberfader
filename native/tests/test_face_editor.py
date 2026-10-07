@@ -769,3 +769,153 @@ def test_save_during_active_drag_keeps_numeric_inspector_text_not_yet_committed(
     assert load_face(destination).controls["play"][0] == original[0] + 3
     assert editor.document.manifest["controls"]["play"][0] == original[0] + 3
     assert editor._canvas._gesture is None
+
+
+def test_shift_constrains_a_move_to_one_axis(editor, qapp):
+    from PySide6.QtCore import QEvent, QPointF, QRectF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtTest import QTest
+
+    canvas = editor._canvas
+    original = editor.document.manifest["controls"]["play"]
+    start = canvas.mapFromScene(QRectF(*original).center())
+    finish = canvas.mapFromScene(QRectF(*original).center() + QPointF(30, 6))
+    QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    move = QMouseEvent(
+        QEvent.Type.MouseMove, QPointF(finish), QPointF(canvas.viewport().mapToGlobal(finish)),
+        Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier,
+    )
+    canvas.mouseMoveEvent(move)
+    QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=finish)
+    moved = editor.document.manifest["controls"]["play"]
+    assert moved[1] == original[1]
+    assert abs(moved[0] - original[0] - 30) <= 1
+
+
+def test_held_arrow_key_is_one_undo_step(editor):
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+
+    original = editor.document.manifest["controls"]["play"]
+    for repeat in (False, True, True, True):
+        event = QKeyEvent(
+            QEvent.Type.KeyPress, Qt.Key.Key_Right, Qt.KeyboardModifier.NoModifier,
+            "", repeat,
+        )
+        editor._canvas.keyPressEvent(event)
+    assert editor.document.manifest["controls"]["play"][0] == original[0] + 4
+    assert editor._undo_action.text() == "Undo Move"
+    editor._undo()
+    assert editor.document.manifest["controls"]["play"] == original
+    assert not editor.document.can_undo
+
+
+def test_delete_key_removes_the_selected_element_with_a_named_undo(editor, qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    editor._canvas.setFocus()
+    editor._canvas.select("like")
+    QTest.keyClick(editor._canvas, Qt.Key.Key_Backspace)
+    assert "like" not in editor.document.manifest["controls"]
+    assert "like" not in editor._sidebar.element_names()
+    assert editor._undo_action.text() == "Undo Remove Like"
+    editor._undo()
+    assert "like" in editor.document.manifest["controls"]
+    editor._canvas.select("drag")
+    QTest.keyClick(editor._canvas, Qt.Key.Key_Delete)
+    assert editor._canvas.selected == "drag"  # The drag region is required.
+
+
+def test_space_drag_pans_and_releasing_space_restores_editing(editor):
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+    from PySide6.QtWidgets import QGraphicsView
+
+    canvas = editor._canvas
+    press = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
+    canvas.keyPressEvent(press)
+    assert canvas.dragMode() == QGraphicsView.DragMode.ScrollHandDrag
+    release = QKeyEvent(
+        QEvent.Type.KeyRelease, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier,
+    )
+    canvas.keyReleaseEvent(release)
+    assert canvas.dragMode() == QGraphicsView.DragMode.NoDrag
+
+
+def test_context_menu_targets_the_element_under_the_pointer(editor):
+    from PySide6.QtCore import QPoint, QRectF
+    from PySide6.QtGui import QContextMenuEvent
+
+    requests = []
+    editor._canvas.contextMenuRequested.disconnect()
+    editor._canvas.contextMenuRequested.connect(lambda name, _pos: requests.append(name))
+    center = editor._canvas.mapFromScene(
+        QRectF(*editor.document.manifest["controls"]["next"]).center(),
+    )
+    editor._canvas.contextMenuEvent(
+        QContextMenuEvent(QContextMenuEvent.Reason.Mouse, center, QPoint(0, 0)),
+    )
+    editor._canvas.contextMenuEvent(
+        QContextMenuEvent(QContextMenuEvent.Reason.Mouse, QPoint(2, 2), QPoint(0, 0)),
+    )
+    assert requests == ["next", ""]
+    assert editor._canvas.selected == "next"
+
+
+def test_dragging_a_png_highlights_what_it_will_replace(editor, tmp_path):
+    from PySide6.QtCore import QMimeData, QRectF, Qt, QUrl
+    from PySide6.QtGui import QDragMoveEvent
+
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(tmp_path / "art.png"))])
+
+    def move_over(name):
+        point = editor._canvas.mapFromScene(
+            QRectF(*editor.document.manifest["controls"][name]).center(),
+        )
+        event = QDragMoveEvent(
+            point, Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        editor._canvas.dragMoveEvent(event)
+        return event
+
+    assert move_over("play").isAccepted()
+    assert editor._canvas._drop_target == "play"
+    move_over("title")
+    assert editor._canvas._drop_target == ""  # Screen text takes no artwork: background.
+    editor._canvas.dragLeaveEvent(None)
+    assert editor._canvas._drop_target is None
+
+
+def test_zoom_steps_through_standard_percentages(editor):
+    editor._canvas.set_zoom(1)
+    editor._zoom_in_action.trigger()
+    assert editor._canvas.zoom == pytest.approx(1.25)
+    assert editor._zoom_button_action.text() == "125%"
+    editor._zoom_out_action.trigger()
+    editor._zoom_out_action.trigger()
+    assert editor._canvas.zoom == pytest.approx(0.75)
+
+
+def test_edit_commands_follow_keyboard_focus(editor, qapp):
+    from amberfader.ui.face_inspector import InspectorPane
+
+    editor._canvas.setFocus()
+    qapp.processEvents()
+    editor._update_edit_actions()
+    assert editor._delete_action.isEnabled()
+    assert not editor._copy_action.isEnabled()
+    assert not editor._select_all_action.isEnabled()
+
+    editor._inspector.show_pane(InspectorPane.FACE)
+    field = editor._inspector.face._metadata["name"]
+    field.setFocus()
+    qapp.processEvents()
+    field.selectAll()
+    assert editor._cut_action.isEnabled() and editor._copy_action.isEnabled()
+    assert editor._select_all_action.isEnabled()
+    editor._delete_action.trigger()
+    assert field.text() == ""
+    assert editor.document.manifest["name"] != ""  # Deleting text is not a document edit.
