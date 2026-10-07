@@ -25,7 +25,7 @@ from ..face_document import FaceDocument
 from ..face_library import FaceError, FaceLibrary
 from .editor_settings import EditorSettings
 from .editor_widgets import MACOS
-from .face_editor import APP_NAME, FaceEditorWindow, _choose_face_folder
+from .face_editor import APP_NAME, FaceEditorWindow, _choose_face_folder, show_about
 from .face_gallery import FaceGallery, GallerySource
 
 AUTOSAVE_DELAY_MS = 3000
@@ -147,6 +147,10 @@ class FaceEditorApplication(QObject):
         help_action = QAction(f"{APP_NAME} Help", bar)
         help_action.triggered.connect(self._open_help)
         help_menu.addAction(help_action)
+        about = QAction(f"About {APP_NAME}", bar)
+        about.setMenuRole(QAction.MenuRole.AboutRole)
+        about.triggered.connect(lambda: show_about(None))
+        help_menu.addAction(about)
         return bar
 
     @staticmethod

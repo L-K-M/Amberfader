@@ -190,6 +190,19 @@ def _normalized_problem(problem: str) -> str:
     return f"{match.group(1)} must fit inside the face" if match else problem
 
 
+def show_about(parent: QWidget | None) -> None:
+    """A native alert, so macOS shows the application icon."""
+    from .. import __version__
+
+    box = QMessageBox(QMessageBox.Icon.Information, f"About {APP_NAME}", APP_NAME, parent=parent)
+    box.setInformativeText(
+        f"Version {__version__}\n\n"
+        "Design faces for Amberfader, the compact player for YouTube Music."
+    )
+    box.exec()
+    box.deleteLater()
+
+
 def _problem_element(problem: str, names) -> str | None:
     """The element a layout problem names first ("play overlaps next")."""
     first = _normalized_problem(problem).split(" ", 1)[0]
@@ -1424,13 +1437,7 @@ class FaceEditorWindow(QMainWindow):
         return True
 
     def _about(self) -> None:
-        from .. import __version__
-
-        QMessageBox.about(
-            self, f"About {APP_NAME}",
-            f"<b>{APP_NAME}</b><br>Version {__version__}<br><br>"
-            "Design faces for Amberfader, the compact player for YouTube Music.",
-        )
+        show_about(self)
 
     def _confirm_revert(self) -> bool:
         box = QMessageBox(
