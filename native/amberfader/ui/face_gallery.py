@@ -17,7 +17,7 @@ from enum import Enum
 from pathlib import Path
 
 from PySide6.QtCore import QRect, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QKeySequence, QPainter, QPixmap, QShortcut
+from PySide6.QtGui import QColor, QKeySequence, QPainter, QPalette, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -39,7 +39,13 @@ from PySide6.QtWidgets import (
 
 from .. import desktop
 from ..face_library import BUILTIN_DIRECTORY, FaceError, FaceInfo, FaceLibrary, load_face
-from .editor_widgets import MACOS, sample_cover, secondary_color, symbol_icon
+from .editor_widgets import (
+    MACOS,
+    sample_cover,
+    symbol_icon,
+    use_secondary_text,
+    use_source_list_background,
+)
 from .face_surface import draw_face_preview, prepare_face_preview
 
 THUMBNAIL = QSize(176, 112)
@@ -147,9 +153,7 @@ class FaceGallery(QDialog):
         self._sources.currentRowChanged.connect(
             lambda row: self.show_source(GallerySource(row)) if row >= 0 else None,
         )
-        palette = self._sources.palette()
-        palette.setColor(palette.ColorRole.Base, palette.color(palette.ColorRole.Window))
-        self._sources.setPalette(palette)
+        use_source_list_background(self._sources)
 
         self._grid = QListWidget(self)
         self._grid.setObjectName("galleryFaces")
@@ -174,9 +178,7 @@ class FaceGallery(QDialog):
         self._empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._empty.setWordWrap(True)
         self._empty.setTextFormat(Qt.TextFormat.PlainText)
-        empty_palette = self._empty.palette()
-        empty_palette.setColor(self._empty.foregroundRole(), secondary_color(empty_palette))
-        self._empty.setPalette(empty_palette)
+        use_secondary_text(self._empty)
         self._content = QStackedWidget(self)
         self._content.addWidget(self._grid)
         self._content.addWidget(self._empty)
@@ -227,7 +229,7 @@ class FaceGallery(QDialog):
         layout.addLayout(header)
         line = QFrame(self)
         line.setFrameShape(QFrame.Shape.HLine)
-        line.setForegroundRole(palette.ColorRole.Mid)
+        line.setForegroundRole(QPalette.ColorRole.Mid)
         layout.addWidget(line)
         layout.addWidget(splitter, 1)
         layout.addLayout(footer)

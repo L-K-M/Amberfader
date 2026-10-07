@@ -88,6 +88,51 @@ def secondary_color(palette: QPalette) -> QColor:
     return color
 
 
+class _PaletteFollower(QObject):
+    """Reapplies a widget's derived colors when Light or Dark Mode changes."""
+
+    def __init__(self, widget: QWidget, apply) -> None:
+        super().__init__(widget)
+        self._apply = apply
+        self._busy = False
+        widget.installEventFilter(self)
+        apply(widget)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        changes = (QEvent.Type.ApplicationPaletteChange, QEvent.Type.PaletteChange)
+        if event.type() in changes and not self._busy:
+            self._busy = True
+            try:
+                self._apply(watched)
+            finally:
+                self._busy = False
+        return False
+
+
+def _secondary_text(widget: QWidget) -> None:
+    palette = widget.palette()
+    palette.setColor(widget.foregroundRole(), secondary_color(QGuiApplication.palette()))
+    widget.setPalette(palette)
+
+
+def _window_background(widget: QWidget) -> None:
+    palette = widget.palette()
+    palette.setColor(
+        QPalette.ColorRole.Base, QGuiApplication.palette().color(QPalette.ColorRole.Window),
+    )
+    widget.setPalette(palette)
+
+
+def use_secondary_text(widget: QWidget) -> None:
+    """Draw a label in the secondary label color, in either appearance."""
+    _PaletteFollower(widget, _secondary_text)
+
+
+def use_source_list_background(widget: QWidget) -> None:
+    """A sidebar list sits on the window background, not a white field."""
+    _PaletteFollower(widget, _window_background)
+
+
 def caption(text: str, parent: QWidget) -> QLabel:
     """A small secondary label, such as "Width" under a number field."""
     label = QLabel(text, parent)
@@ -95,9 +140,7 @@ def caption(text: str, parent: QWidget) -> QLabel:
     font.setPointSizeF(max(8.0, font.pointSizeF() - 2))
     label.setFont(font)
     label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-    palette = label.palette()
-    palette.setColor(QPalette.ColorRole.WindowText, secondary_color(palette))
-    label.setPalette(palette)
+    use_secondary_text(label)
     return label
 
 

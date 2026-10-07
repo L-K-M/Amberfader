@@ -52,8 +52,8 @@ from .editor_widgets import (
     TextField,
     UndoPassthrough,
     caption,
-    secondary_color,
     symbol_icon,
+    use_secondary_text,
 )
 from .face_surface import READOUT_CONTROLS, FaceArtwork
 
@@ -237,9 +237,7 @@ class ElementInspector(QWidget):
         font.setPointSizeF(font.pointSizeF() + 1)
         self._title.setFont(font)
         self._kind = QLabel(self)
-        palette = self._kind.palette()
-        palette.setColor(self._kind.foregroundRole(), secondary_color(palette))
-        self._kind.setPalette(palette)
+        use_secondary_text(self._kind)
         text = QVBoxLayout()
         text.setSpacing(0)
         text.addWidget(self._title)

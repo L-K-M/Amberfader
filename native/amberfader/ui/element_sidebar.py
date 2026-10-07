@@ -12,7 +12,7 @@ The sidebar only reports intent; the window applies edits and owns undo.
 from __future__ import annotations
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QFont, QPalette
+from PySide6.QtGui import QFont, QGuiApplication, QPalette
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import face_elements
-from .editor_widgets import secondary_color, symbol_icon
+from .editor_widgets import secondary_color, symbol_icon, use_source_list_background
 
 NAME_ROLE = Qt.ItemDataRole.UserRole
 
@@ -115,18 +115,11 @@ class ElementSidebar(QWidget):
         line.setForegroundRole(QPalette.ColorRole.Mid)
         layout.addWidget(line)
         layout.addLayout(bar)
-        self._style_tree()
-
-    def _style_tree(self) -> None:
-        # A source list sits on the window background, not a white field.
-        palette = self._tree.palette()
-        palette.setColor(QPalette.ColorRole.Base, palette.color(QPalette.ColorRole.Window))
-        self._tree.setPalette(palette)
+        use_source_list_background(self._tree)
 
     def changeEvent(self, event) -> None:
         super().changeEvent(event)
-        if event.type() == event.Type.PaletteChange:
-            self._style_tree()
+        if event.type() in (event.Type.PaletteChange, event.Type.ApplicationPaletteChange):
             self._restyle_headers()
 
     @property
@@ -167,7 +160,7 @@ class ElementSidebar(QWidget):
         self._remove.setEnabled(selected != face_elements.DRAG)
 
     def _restyle_headers(self) -> None:
-        color = secondary_color(self._tree.palette())
+        color = secondary_color(QGuiApplication.palette())
         for index in range(self._tree.topLevelItemCount()):
             header = self._tree.topLevelItem(index)
             font = QFont(self._tree.font())

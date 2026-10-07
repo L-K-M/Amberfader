@@ -73,9 +73,12 @@ class EditorSettings:
         self._settings.setValue("toolbar/style", style.value)
 
     def last_folder(self) -> Path:
+        """Where Open and Save panels start: the last folder used, else Documents."""
+        documents = Path.home() / "Documents"
+        default = documents if documents.is_dir() else Path.home()
         value = self._settings.value("panels/folder", "")
-        folder = Path(value) if isinstance(value, str) and value else Path.home()
-        return folder if folder.is_dir() else Path.home()
+        folder = Path(value) if isinstance(value, str) and value else default
+        return folder if folder.is_dir() else default
 
     def set_last_folder(self, folder: Path) -> None:
         self._settings.setValue("panels/folder", str(folder))

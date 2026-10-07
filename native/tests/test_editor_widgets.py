@@ -168,3 +168,28 @@ def test_collapsed_section_hides_its_content(host):
     section._header.click()
     assert not section.is_expanded() and not section.body.isVisible()
     assert section._header.accessibleDescription() == "Collapsed"
+
+
+def test_derived_colors_follow_a_dark_appearance(host, qapp):
+    from PySide6.QtGui import QColor, QPalette
+    from PySide6.QtWidgets import QListWidget
+
+    from amberfader.ui.editor_widgets import caption, use_source_list_background
+
+    label = _add(host, caption("Width", host))
+    sources = _add(host, QListWidget(host))
+    use_source_list_background(sources)
+    original = qapp.palette()
+    dark = QPalette(original)
+    dark.setColor(QPalette.ColorRole.Window, QColor("#323232"))
+    dark.setColor(QPalette.ColorRole.WindowText, QColor("#ffffff"))
+    try:
+        qapp.setPalette(dark)
+        qapp.processEvents()
+        text = label.palette().color(label.foregroundRole())
+        assert (text.red(), text.green(), text.blue()) == (255, 255, 255)
+        assert 0 < text.alphaF() < 1
+        assert sources.palette().color(QPalette.ColorRole.Base) == QColor("#323232")
+    finally:
+        qapp.setPalette(original)
+        qapp.processEvents()
