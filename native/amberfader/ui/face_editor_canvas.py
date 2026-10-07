@@ -135,6 +135,7 @@ class FaceEditorCanvas(QGraphicsView):
     documentChanged = Signal()
     zoomChanged = Signal(float)
     imageDropped = Signal(str, str)  # PNG path, target element ("" for the background)
+    faceDropped = Signal(str)  # a face folder or its face.json, to open
     contextMenuRequested = Signal(str, object)  # element ("" for none), global QPoint
     removeRequested = Signal()
 
@@ -713,7 +714,21 @@ class FaceEditorCanvas(QGraphicsView):
             return name
         return ""
 
+    @staticmethod
+    def _face_drop(event) -> Path | None:
+        urls = event.mimeData().urls()
+        if len(urls) != 1 or not urls[0].isLocalFile():
+            return None
+        path = Path(urls[0].toLocalFile())
+        if path.name == "face.json" or (path.is_dir() and (path / "face.json").is_file()):
+            return path
+        return None
+
     def dragEnterEvent(self, event) -> None:
+        if self._face_drop(event) is not None:
+            event.acceptProposedAction()
+            self._set_drop_target(None)
+            return
         if self._png_drop(event) is None:
             event.ignore()
             return
@@ -734,6 +749,11 @@ class FaceEditorCanvas(QGraphicsView):
 
     def dropEvent(self, event) -> None:
         self._set_drop_target(None)
+        face = self._face_drop(event)
+        if face is not None:
+            event.acceptProposedAction()
+            self.faceDropped.emit(str(face))
+            return
         path = self._png_drop(event)
         if path is None:
             event.ignore()

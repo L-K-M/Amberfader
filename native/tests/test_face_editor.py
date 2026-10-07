@@ -945,3 +945,72 @@ def test_zoomed_canvas_pans_with_scrolling_and_fitting_is_stable(editor, qapp):
     qapp.processEvents()
     assert 1 <= len(zooms) <= 4
     assert not canvas.horizontalScrollBar().isVisible()
+
+
+def test_revert_to_saved_reloads_the_folder_after_confirmation(editor, tmp_path, monkeypatch):
+    destination = tmp_path / "revert"
+    assert editor._save_to(destination)
+    assert not editor._revert_action.isEnabled()
+    editor.document.set_rotation("play", 20, label="Rotate")
+    editor._changed()
+    assert editor._revert_action.isEnabled()
+    monkeypatch.setattr(editor, "_confirm_revert", lambda: False)
+    assert not editor.revert()
+    assert editor.document.manifest["controlRotations"]["play"] == 20
+    monkeypatch.setattr(editor, "_confirm_revert", lambda: True)
+    assert editor.revert()
+    assert editor.document.path == destination
+    assert "play" not in editor.document.manifest.get("controlRotations", {})
+    assert not editor.document.dirty and not editor.isWindowModified()
+
+
+def test_show_in_finder_reveals_the_saved_folder(editor, tmp_path, monkeypatch):
+    from amberfader import desktop
+
+    revealed = []
+    monkeypatch.setattr(desktop, "reveal", lambda path: revealed.append(path) or True)
+    assert not editor._reveal_action.isEnabled()
+    assert editor._save_to(tmp_path / "shown")
+    assert editor._reveal_action.isEnabled()
+    editor._reveal_action.trigger()
+    assert revealed == [tmp_path / "shown"]
+
+
+def test_artwork_list_imports_and_removes_one_state(editor, tmp_path, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QImage
+
+    image = QImage(88, 44, QImage.Format.Format_ARGB32)
+    image.fill(Qt.GlobalColor.cyan)
+    path = tmp_path / "hover.png"
+    assert image.save(str(path))
+    monkeypatch.setattr(editor, "_choose_png", lambda caption: path)
+    inspector = editor._inspector.element
+    states = inspector._states
+    hover = next(row for row in range(states.count())
+                 if states.item(row).data(Qt.ItemDataRole.UserRole) == "hover")
+    states.setCurrentRow(hover)
+    inspector._import_artwork.click()
+    name = editor.document.manifest["buttons"]["play"]["hover"]
+    assert editor.document.assets[name] == path.read_bytes()
+    assert inspector.artwork_state == "hover"  # The selection survives the refresh.
+    assert editor._undo_action.text() == "Undo Import Artwork"
+    inspector._remove_artwork.click()
+    assert "hover" not in editor.document.manifest["buttons"]["play"]
+    assert editor._undo_action.text() == "Undo Remove Artwork"
+
+
+def test_dropping_a_face_folder_opens_it(editor, tmp_path):
+    from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
+    from PySide6.QtGui import QDropEvent
+
+    folder = FaceDocument.from_template(BUILTIN_DIRECTORY / "viridian").save(tmp_path / "drop")
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(folder))])
+    event = QDropEvent(
+        QPointF(10, 10), Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    editor._canvas.dropEvent(event)
+    assert event.isAccepted()
+    assert editor.document.path == folder

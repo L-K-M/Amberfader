@@ -659,6 +659,9 @@ class FaceEditorWindow(QMainWindow):
         self._canvas.documentChanged.connect(self._changed)
         self._canvas.zoomChanged.connect(self._zoom_changed)
         self._canvas.imageDropped.connect(self._drop_image)
+        self._canvas.faceDropped.connect(
+            lambda path: self._workspace.open_face(Path(path), self),
+        )
         self._canvas.contextMenuRequested.connect(self._canvas_menu)
         self._canvas.removeRequested.connect(self._remove_element)
         self._sidebar.selected.connect(self._select_sidebar)
@@ -1410,20 +1413,7 @@ class FaceEditorWindow(QMainWindow):
             return False
         self._flush_inspector()
         self._canvas.finish_gesture()
-        box = QMessageBox(
-            QMessageBox.Icon.Warning, APP_NAME,
-            f"Do you want to revert “{self.display_name()}” to the saved version?",
-            parent=self,
-        )
-        box.setInformativeText("Your current changes will be lost.")
-        revert = box.addButton("Revert", QMessageBox.ButtonRole.DestructiveRole)
-        box.addButton(QMessageBox.StandardButton.Cancel)
-        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
-        box.setWindowModality(Qt.WindowModality.WindowModal)
-        box.exec()
-        confirmed = box.clickedButton() is revert
-        box.deleteLater()
-        if not confirmed:
+        if not self._confirm_revert():
             return False
         try:
             document = FaceDocument.open(path)
@@ -1441,6 +1431,22 @@ class FaceEditorWindow(QMainWindow):
             f"<b>{APP_NAME}</b><br>Version {__version__}<br><br>"
             "Design faces for Amberfader, the compact player for YouTube Music.",
         )
+
+    def _confirm_revert(self) -> bool:
+        box = QMessageBox(
+            QMessageBox.Icon.Warning, APP_NAME,
+            f"Do you want to revert “{self.display_name()}” to the saved version?",
+            parent=self,
+        )
+        box.setInformativeText("Your current changes will be lost.")
+        revert = box.addButton("Revert", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        box.setWindowModality(Qt.WindowModality.WindowModal)
+        box.exec()
+        confirmed = box.clickedButton() is revert
+        box.deleteLater()
+        return confirmed
 
     def _reveal(self) -> None:
         path = self._document.path
