@@ -16,7 +16,7 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 
-from PySide6.QtCore import QRect, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QRect, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPalette, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSplitter,
     QStackedWidget,
+    QStyle,
+    QStyledItemDelegate,
     QVBoxLayout,
     QWidget,
 )
@@ -105,6 +107,55 @@ def _placeholder(scale: float) -> QPixmap:
     return pixmap
 
 
+class _ThumbnailDelegate(QStyledItemDelegate):
+    """Finder-style cells: a rounded highlight behind the face, a pill behind its name."""
+
+    def paint(self, painter: QPainter, option, index) -> None:
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = option.rect
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        active = bool(option.state & QStyle.StateFlag.State_Active)
+        palette = option.palette
+        image_area = QRectF(rect.x() + 4, rect.y() + 4, rect.width() - 8, THUMBNAIL.height() + 8)
+        if selected:
+            shade = QColor(palette.color(QPalette.ColorRole.WindowText))
+            shade.setAlphaF(0.12)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(shade)
+            painter.drawRoundedRect(image_area, 8, 8)
+        icon = index.data(Qt.ItemDataRole.DecorationRole)
+        if icon is not None:
+            pixmap = icon if isinstance(icon, QPixmap) else icon.pixmap(THUMBNAIL)
+            size = pixmap.deviceIndependentSize()
+            target = QRectF(
+                image_area.center().x() - size.width() / 2,
+                image_area.center().y() - size.height() / 2,
+                size.width(), size.height(),
+            )
+            painter.drawPixmap(target.toRect(), pixmap)
+        text = index.data(Qt.ItemDataRole.DisplayRole) or ""
+        metrics = option.fontMetrics
+        label = metrics.elidedText(text, Qt.TextElideMode.ElideRight, rect.width() - 16)
+        width = metrics.horizontalAdvance(label) + 14
+        pill = QRectF(
+            rect.center().x() - width / 2, image_area.bottom() + 4, width, metrics.height() + 4,
+        )
+        if selected:
+            painter.setPen(Qt.PenStyle.NoPen)
+            accent = palette.color(QPalette.ColorRole.Accent)
+            painter.setBrush(accent if active else palette.color(QPalette.ColorRole.Mid))
+            painter.drawRoundedRect(pill, pill.height() / 2, pill.height() / 2)
+            painter.setPen(QColor("white"))
+        else:
+            painter.setPen(palette.color(QPalette.ColorRole.Text))
+        painter.drawText(pill, Qt.AlignmentFlag.AlignCenter, label)
+        painter.restore()
+
+    def sizeHint(self, option, index) -> QSize:
+        return GRID
+
+
 class FaceGallery(QDialog):
     createRequested = Signal(Path)  # start an untitled copy of this face
     editRequested = Signal(Path)  # open this installed face in place
@@ -172,6 +223,7 @@ class FaceGallery(QDialog):
         self._grid.itemActivated.connect(lambda _item: self._choose())
         self._grid.currentItemChanged.connect(lambda *_: self._update_buttons())
         self._grid.verticalScrollBar().valueChanged.connect(lambda _: self._schedule())
+        self._grid.setItemDelegate(_ThumbnailDelegate(self._grid))
 
         self._empty = QLabel(self)
         self._empty.setObjectName("galleryEmpty")
