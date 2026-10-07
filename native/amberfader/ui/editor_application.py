@@ -128,7 +128,7 @@ class FaceEditorApplication(QObject):
         installed.triggered.connect(self._open_installed)
         file_menu.addAction(installed)
         self._recent_menu = file_menu.addMenu("Open Recent")
-        self._recent_menu.aboutToShow.connect(self._fill_recent_menu)
+        self._fill_recent_menu()
         file_menu.addSeparator()
         close = QAction("Close", bar)
         close.setShortcut(QKeySequence.StandardKey.Close)
@@ -304,9 +304,17 @@ class FaceEditorApplication(QObject):
 
     def clear_recent(self) -> None:
         self._settings.clear_recent()
+        self._recent_changed()
 
     def note_recent(self, path: Path) -> None:
         self._settings.note_recent(path)
+        self._recent_changed()
+
+    def _recent_changed(self) -> None:
+        if MACOS:
+            self._fill_recent_menu()
+        for window in self._windows:
+            window.refresh_recent_menu()
 
     def library_changed(self, select: Path | None = None) -> None:
         if self._gallery is not None:

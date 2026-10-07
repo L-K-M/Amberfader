@@ -687,9 +687,8 @@ def test_replacing_document_with_focused_metadata_keeps_incoming_identity_and_hi
     assert editor.document.manifest["name"] == "Viridian Custom"
     assert editor._inspector.face._metadata["name"].text() == "Viridian Custom"
     assert editor._canvas.selected == "play"
-    assert [field.value() for field in editor._inspector.element._rect_fields] == editor.document.manifest["controls"][
-        "play"
-    ]
+    fields = editor._inspector.element._rect_fields
+    assert [field.value() for field in fields] == editor.document.manifest["controls"]["play"]
     assert not editor.document.can_undo
 
 

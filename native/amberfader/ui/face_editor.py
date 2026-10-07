@@ -567,7 +567,7 @@ class FaceEditorWindow(QMainWindow):
         file_menu.addAction(self._open_installed_action)
         self._recent_menu = file_menu.addMenu("Open Recent")
         self._recent_menu.setObjectName("openRecentMenu")
-        self._recent_menu.aboutToShow.connect(self._fill_recent_menu)
+        self.refresh_recent_menu()
         file_menu.addSeparator()
         file_menu.addAction(self._close_action)
         file_menu.addAction(self._save_action)
@@ -1118,7 +1118,8 @@ class FaceEditorWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
 
-    def _fill_recent_menu(self) -> None:
+    def refresh_recent_menu(self) -> None:
+        """Rebuild Open Recent; the workspace calls this when the list changes."""
         menu = self._recent_menu
         menu.clear()
         recent = [path for path in self._workspace.recent_faces() if path.is_dir()]

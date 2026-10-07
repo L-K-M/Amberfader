@@ -59,7 +59,8 @@ def test_sparse_import_can_select_add_remove_and_undo_elements(editor, qapp, mon
     editor._fill_add_menu()
     labels = [action.text() for action in editor._add_menu.actions() if not action.isSeparator()]
     assert "Play / Pause" in labels and "Track Title" not in labels
-    next(action for action in editor._add_menu.actions() if action.text() == "Play / Pause").trigger()
+    actions = editor._add_menu.actions()
+    next(action for action in actions if action.text() == "Play / Pause").trigger()
     assert editor._canvas.selected == "play"
     assert editor._undo_action.text() == "Undo Add Play / Pause"
     assert "play" in document.manifest["controls"]
