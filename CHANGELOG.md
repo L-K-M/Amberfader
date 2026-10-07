@@ -9,10 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- The face editor opens with a **Faces** panel listing the installed and
+- The face editor is rebuilt as a Mac document app. Each face opens in its own
+  window with an element sidebar, an Element/Face inspector with collapsible
+  sections and color wells, and a symbol toolbar. Menus cover every command
+  with standard shortcuts, Undo names each change, and Edit commands follow
+  the focused field. The **Face Gallery** replaces the Faces panel for
+  templates and installed faces. The editor adds Open Recent, Revert to Saved,
+  Show in Finder, Finder and Dock opening on macOS, and crash recovery of
+  unsaved faces. Dropped PNGs go to the element under the pointer.
+- The face editor opens with the Face Gallery listing the installed and
   built-in faces. Installed faces open for editing in place; built-in faces
   open as a copy.
-- **File → Import all Audion faces from ZIP…** in the face editor converts
+- **File → Import Audion Collection…** in the face editor converts
   and installs every face in an Audion collection ZIP, with progress and a
   Stop button. Importing the same ZIP again skips installed faces.
 - The player's **Faces** window has a filter box to find a face by name.

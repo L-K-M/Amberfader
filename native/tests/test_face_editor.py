@@ -919,3 +919,29 @@ def test_edit_commands_follow_keyboard_focus(editor, qapp):
     editor._delete_action.trigger()
     assert field.text() == ""
     assert editor.document.manifest["name"] != ""  # Deleting text is not a document edit.
+
+
+def test_zoomed_canvas_pans_with_scrolling_and_fitting_is_stable(editor, qapp):
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+
+    canvas = editor._canvas
+    canvas.set_zoom(3)
+    before = canvas.horizontalScrollBar().value()
+    event = QWheelEvent(
+        QPointF(20, 20), QPointF(canvas.viewport().mapToGlobal(QPoint(20, 20))),
+        QPoint(-60, 0), QPoint(-120, 0), Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False,
+    )
+    canvas.wheelEvent(event)
+    assert canvas.horizontalScrollBar().value() != before
+    # Hiding a panel refits once; the view never toggles scroll bars and refits again.
+    canvas.fit_face()
+    zooms = []
+    canvas.zoomChanged.connect(zooms.append)
+    editor._toggle_sidebar()
+    qapp.processEvents()
+    editor._toggle_inspector()
+    qapp.processEvents()
+    assert 1 <= len(zooms) <= 4
+    assert not canvas.horizontalScrollBar().isVisible()

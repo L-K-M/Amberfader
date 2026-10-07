@@ -187,11 +187,12 @@ uv run amberfader-face-editor
 uv run amberfader-face-editor path/to/your/face
 ```
 
-Drag controls into place, resize and rotate them, adjust their appearance,
-and save a portable JSON/PNG face folder. The editor works independently of
+Start from a template in the Face Gallery, drag controls into place, resize
+and rotate them, adjust their appearance, and save a portable JSON/PNG face
+folder. On macOS it behaves like a document app: one window per face, named
+undo, an inspector, and crash recovery. The editor works independently of
 YouTube Music and playback. See the [editor guide](docs/face-editor.md).
 
-Choose **File → Import Audion face…** to turn a converted Audion face folder or
+Choose **File → Import Audion Face…** to turn a converted Audion face folder or
 collection ZIP into an editable copy, retaining its artwork and original credits.
-**File → Import all Audion faces from ZIP…** installs a whole collection at
-once. The **Faces** panel lists your installed and built-in faces for editing.
+**File → Import Audion Collection…** installs a whole collection at once.

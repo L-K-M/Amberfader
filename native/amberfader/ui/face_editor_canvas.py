@@ -144,6 +144,10 @@ class FaceEditorCanvas(QGraphicsView):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setAttribute(Qt.WidgetAttribute.WA_MacShowFocusRect, True)
         self.setFrameShape(QGraphicsView.Shape.NoFrame)
+        # Pan by scrolling or Space-drag, as on Mac canvases. Scroll bars that
+        # appear while fitting would resize the view and refit it in a loop.
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setAcceptDrops(True)
         self.setRenderHints(
             QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform,
