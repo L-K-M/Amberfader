@@ -47,7 +47,10 @@ def main() -> int:
     from amberfader import PROTOCOL_VERSION
     from amberfader.embedded import page as page_module
     from amberfader.embedded.page import (
-        MIN_LAYOUT_WIDTH, PageMode, load_ad_filter, load_bundle,
+        MIN_LAYOUT_WIDTH,
+        PageMode,
+        load_ad_filter,
+        load_bundle,
     )
     from amberfader.embedded.runtime import EmbeddedRuntime, RuntimeOptions
 
@@ -122,6 +125,9 @@ def main() -> int:
     def zoom():
         return runtime.host.page.zoomFactor()
 
+    def browser_hidden():
+        return pump(lambda: not runtime.host.window.isVisible(), timeout=5)
+
     def report():
         runtime.shutdown()
         shutil.rmtree(tmp, ignore_errors=True)
@@ -152,7 +158,7 @@ def main() -> int:
         # The browser window was never shown, as with --background. A page
         # behind it would otherwise lay out 0 px wide.
         check("hidden start lays out at desktop width", desktop_layout())
-        check("hidden start stays hidden", not runtime.host.window.isVisible())
+        check("hidden start stays hidden", browser_hidden())
 
         _, ok, _ = call("player.play")
         check("play ok", ok)
@@ -193,7 +199,8 @@ def main() -> int:
         runtime.host.page.setZoomFactor(1.0)
         browser.resize(1300, 800)
         check("wide window shows the chosen zoom", pump(
-            lambda: zoom() == 1.0 and main_world("innerWidth") == browser.view.width(), timeout=5,
+            lambda: abs(zoom() - 1.0) < 1e-3 and main_world("innerWidth") == browser.view.width(),
+            timeout=5,
         ))
         browser.resize(1100, 800)
 
@@ -260,7 +267,7 @@ def main() -> int:
         check("command after renderer exit", ok)
         # The new renderer loaded behind the hidden window.
         check("hidden reload lays out at desktop width", desktop_layout())
-        check("hidden reload stays hidden", not runtime.host.window.isVisible())
+        check("hidden reload stays hidden", browser_hidden())
 
         # The menu switches turn both features off from the next load.
         options = {action.text(): action for action in window._playback_menu.actions()}

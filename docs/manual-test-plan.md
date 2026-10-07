@@ -50,7 +50,9 @@ Change a selector only with evidence from a live page:
 - [ ] Compare the heart with YouTube Music's Like button. Click to like, then
       unlike. Each request acts once and the icon changes only after
       `aria-pressed` confirms it. Unknown or conflicting controls disable the
-      heart. Switch tracks while a request is pending.
+      heart. Switch tracks while a request is pending. Repeat with the
+      YouTube Music window narrower than 936 px, and after starting with
+      `--background` without opening it: the heart still shows the state.
 - [ ] Search twice, close and reopen the search window, and restart
       Amberfader. The window shows the saved newest-first queries and played
       artists. Clicking either entry submits a search. **Clear recents**
