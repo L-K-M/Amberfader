@@ -9,6 +9,10 @@ import pytest
 
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 
+from PySide6.QtGui import QImage
+
+from amberfader.face_library import BUILTIN_DIRECTORY, load_face
+
 ROOT = Path(__file__).resolve().parents[2]
 FACE_ID = "amber-classic"
 
@@ -72,3 +76,19 @@ def test_plate_wider_than_drag_region_is_rejected(exporter, monkeypatch):
     monkeypatch.setitem(module.FACE_PLATE_WIDTH, FACE_ID, face["drag"][2] + 1)
     with pytest.raises(RuntimeError, match="exceeds drag width"):
         _export(module, monkeypatch)
+
+
+@pytest.mark.parametrize("face_id", ["aureole", "viridian"])
+def test_export_preserves_supplied_lens_layout_and_sprite_sizes(exporter, monkeypatch, face_id):
+    module, original, _ = exporter
+    directory = original.parent / face_id
+    shutil.copytree(BUILTIN_DIRECTORY / face_id, directory)
+    manifest = (directory / "face.json").read_bytes()
+    image_sizes = {path.name: QImage(str(path)).size() for path in directory.glob("*.png")}
+    monkeypatch.setattr(sys, "argv", ["render_faces.py", "--face", face_id])
+
+    module.main()
+
+    assert (directory / "face.json").read_bytes() == manifest
+    assert {path.name: QImage(str(path)).size() for path in directory.glob("*.png")} == image_sizes
+    assert load_face(directory).info.id == face_id

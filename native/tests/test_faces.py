@@ -94,6 +94,18 @@ def test_bundled_shared_sprites_fit_one_button_size(face_id):
         for sprite in images.values():
             members.setdefault(sprite, {})[name] = outline
     for sprite, outlines in members.items():
+        if face_id == "viridian" and sprite in {
+            "utility-normal.png", "utility-hover.png",
+            "utility-pressed.png", "utility-disabled.png",
+        }:
+            # The owner's replacement intentionally enlarges Show YT while
+            # retaining the original utility surfaces along the curved rim.
+            assert outlines == {
+                "search": ((70, 22), "ellipse"),
+                "show": ((71, 24), "ellipse"),
+                "hide": ((70, 22), "ellipse"),
+            }
+            continue
         assert len(set(outlines.values())) == 1, (face_id, sprite, outlines)
 
 
