@@ -9,13 +9,18 @@ from pathlib import Path
 from . import __version__
 from .face_library import FaceError
 
+APP_NAME = "Amberfader Face Editor"
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="amberfader-face-editor",
         description="Create and edit Amberfader faces on macOS or Linux.",
     )
-    parser.add_argument("face", nargs="?", type=Path, help="face folder or face.json to open")
+    parser.add_argument(
+        "faces", nargs="*", type=Path, metavar="face",
+        help="face folder or face.json to open",
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     args = parser.parse_args(argv)
 
@@ -36,26 +41,26 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     from .face_document import FaceDocument
 
-    document = None
-    if args.face is not None:
-        directory = args.face.parent if args.face.name == "face.json" else args.face
+    documents = []
+    for face in args.faces:
+        directory = face.parent if face.name == "face.json" else face
         try:
-            document = FaceDocument.open(directory)
+            documents.append(FaceDocument.open(directory))
         except FaceError as exc:
             print(f"amberfader-face-editor: {exc}", file=sys.stderr)
             return 2
 
-    from .ui.face_editor import FaceEditorWindow
+    from .ui.editor_application import FaceEditorApplication
 
     app = QApplication([sys.argv[0]])
-    app.setApplicationName("Amberfader Face Editor")
+    app.setApplicationName(APP_NAME)
     app.setOrganizationDomain("ch.lkmc")
     try:
-        window = FaceEditorWindow(document=document)
+        editor = FaceEditorApplication(app)
+        editor.start(documents)
     except FaceError as exc:
         print(f"amberfader-face-editor: {exc}", file=sys.stderr)
         return 2
-    window.show()
     return app.exec()
 
 

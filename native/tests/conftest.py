@@ -13,13 +13,55 @@ def private_app_dirs(monkeypatch, tmp_path_factory):
     They never read the developer's installed faces or write a catalog
     cache next to them. Tests can still set XDG variables themselves.
     """
-    from amberfader import face_library, paths
+    from amberfader import face_autosave, face_library, paths
 
     home = tmp_path_factory.mktemp("home")
     for variable in ("XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
         monkeypatch.delenv(variable, raising=False)
-    monkeypatch.setattr(face_library, "app_dirs", lambda: paths.app_dirs(home=home))
+    private = lambda: paths.app_dirs(home=home)  # noqa: E731
+    monkeypatch.setattr(face_library, "app_dirs", private)
+    monkeypatch.setattr(face_autosave, "app_dirs", private)
+    try:
+        from amberfader.ui import editor_settings
+    except ImportError:
+        pass  # No Qt; only Qt-free tests run.
+    else:
+        monkeypatch.setattr(editor_settings, "app_dirs", private)
     return home
+
+
+@pytest.fixture(autouse=True)
+def no_unexpected_modal_dialogs(monkeypatch):
+    """A modal dialog nobody answers would hang the suite; fail instead.
+
+    Tests that expect a dialog replace these with their own answers.
+    """
+    try:
+        from PySide6.QtWidgets import (
+            QColorDialog,
+            QDialog,
+            QFileDialog,
+            QInputDialog,
+            QMenu,
+            QMessageBox,
+        )
+    except ImportError:
+        return
+
+    def refuse(*args, **kwargs):
+        detail = next((arg for arg in args if isinstance(arg, str)), "")
+        pytest.fail(f"Unexpected modal dialog or menu {detail!r}")
+
+    for owner, names in (
+        (QDialog, ("exec",)),
+        (QMessageBox, ("exec", "warning", "question", "information", "critical", "about")),
+        (QFileDialog, ("getOpenFileName", "getExistingDirectory", "getSaveFileName")),
+        (QColorDialog, ("getColor",)),
+        (QInputDialog, ("getItem", "getText")),
+        (QMenu, ("exec",)),
+    ):
+        for name in names:
+            monkeypatch.setattr(owner, name, refuse)
 
 
 @pytest.fixture(scope="session")

@@ -105,6 +105,64 @@ def test_gesture_coalesces_moves_and_cancel_restores_exact_snapshot():
     assert document.manifest == original
 
 
+def test_undo_and_redo_name_the_step_they_revert():
+    document = FaceDocument.from_template(TEMPLATE)
+    assert document.undo_label is None and document.redo_label is None
+    document.set_value(("name",), "Named", label="Change Name")
+    document.begin_gesture("Move")
+    document.set_rect("play", [10, 10, 60, 48])
+    assert document.undo_label == "Move"
+    document.end_gesture()
+    assert document.undo_label == "Move"
+    document.undo()
+    assert (document.undo_label, document.redo_label) == ("Change Name", "Move")
+    document.undo()
+    assert (document.undo_label, document.redo_label) == (None, "Change Name")
+    document.redo()
+    assert document.undo_label == "Change Name"
+
+
+def test_coalesced_edits_share_one_undo_step_until_another_edit():
+    document = FaceDocument.from_template(TEMPLATE)
+    original = document.manifest
+    for degrees in (5, 10, 15):
+        document.set_rotation("play", degrees, label="Rotate", coalesce="dial-1")
+    document.undo()
+    assert document.manifest == original
+    assert not document.can_undo
+    document.redo()
+    assert document.manifest["controlRotations"]["play"] == 15
+
+    # A different edit ends the session; the same key then starts a new step.
+    document.set_value(("name",), "Between", label="Change Name")
+    document.set_rotation("play", 20, coalesce="dial-1")
+    document.undo()
+    assert document.manifest["controlRotations"]["play"] == 15
+    assert document.manifest["name"] == "Between"
+
+
+def test_coalescing_back_to_the_start_leaves_nothing_to_undo():
+    document = FaceDocument.from_template(TEMPLATE)
+    original = document.manifest["palette"]["accent"]
+    document.set_value(("palette", "accent"), "#123456", coalesce="color-panel")
+    document.set_value(("palette", "accent"), original, coalesce="color-panel")
+    assert not document.can_undo
+
+
+def test_removing_normal_artwork_removes_every_state():
+    document = FaceDocument.from_template(BUILTIN_DIRECTORY / "viridian")
+    states = set(document.manifest["buttons"]["search"])
+    assert {"normal", "hover"} <= states
+    document.remove_button_image("search", "hover")
+    assert set(document.manifest["buttons"]["search"]) == states - {"hover"}
+    document.remove_button_image("search", "normal")
+    assert "search" not in document.manifest["buttons"]
+    assert document.undo_label == "Remove Artwork"
+    document.undo()
+    assert set(document.manifest["buttons"]["search"]) == states - {"hover"}
+    assert document.validate() == ()
+
+
 def test_invalid_layout_stays_editable_but_cannot_save(tmp_path):
     document = FaceDocument.from_template(TEMPLATE)
     document.set_rect("play", document.manifest["controls"]["next"])

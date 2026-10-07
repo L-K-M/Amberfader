@@ -37,11 +37,13 @@ def _imported_document():
 
 def test_editor_file_menu_offers_audion_import(editor):
     file_menu = editor.menuBar().actions()[0].menu()
-    assert "Import Audion face…" in [action.text() for action in file_menu.actions()]
+    texts = [action.text() for action in file_menu.actions()]
+    assert "Import Audion Face…" in texts
+    assert "Import Audion Collection…" in texts
 
 
 def test_sparse_import_can_select_add_remove_and_undo_elements(editor, qapp, monkeypatch):
-    from PySide6.QtWidgets import QInputDialog, QMessageBox
+    from PySide6.QtWidgets import QMessageBox
 
     document = _imported_document()
     result = SimpleNamespace(document=document, warnings=("Some controls were omitted.",))
@@ -49,15 +51,17 @@ def test_sparse_import_can_select_add_remove_and_undo_elements(editor, qapp, mon
     assert editor.import_audion_result(result)
     assert editor.document is document and document.path is None and document.dirty
     assert editor._canvas.selected == "title"
-    assert [editor._layers.item(index).data(256) for index in range(editor._layers.count())] == [
-        "title", "drag",
-    ]
-    assert editor._source_credit.toPlainText() == document.manifest["sourceCredit"]
+    assert editor._sidebar.element_names() == ["title", "drag"]
+    credits = editor._inspector.face._source_credit
+    assert credits.toPlainText() == document.manifest["sourceCredit"]
     assert editor._canvas._item.face.controls.keys() == {"title"}
 
-    monkeypatch.setattr(QInputDialog, "getItem", lambda *args: ("Play / pause", True))
-    editor._add_element()
+    editor._fill_add_menu()
+    labels = [action.text() for action in editor._add_menu.actions() if not action.isSeparator()]
+    assert "Play / Pause" in labels and "Track Title" not in labels
+    next(action for action in editor._add_menu.actions() if action.text() == "Play / Pause").trigger()
     assert editor._canvas.selected == "play"
+    assert editor._undo_action.text() == "Undo Add Play / Pause"
     assert "play" in document.manifest["controls"]
     editor._remove_element()
     assert "play" not in document.manifest["controls"]
@@ -77,7 +81,7 @@ def test_cancelled_import_keeps_current_document_and_pending_text(editor, monkey
     from PySide6.QtWidgets import QMessageBox
 
     previous = editor.document
-    editor._metadata["name"].setText("Keep my pending name")
+    editor._inspector.face._metadata["name"].setText("Keep my pending name")
     monkeypatch.setattr(QMessageBox, "warning", lambda *args: QMessageBox.StandardButton.Cancel)
     result = SimpleNamespace(document=_imported_document(), warnings=())
     assert not editor.import_audion_result(result)
@@ -95,7 +99,7 @@ def test_failed_import_does_not_prompt_or_replace_current_document(editor, monke
     invalid = SimpleNamespace(preview=lambda **kwargs: (_ for _ in ()).throw(FaceError("Bad PNG")))
     assert not editor.import_audion_result(SimpleNamespace(document=invalid, warnings=()))
     assert editor.document is previous
-    assert errors == [("Could not import Audion face", errors[0][1])]
+    assert errors == [("The Audion face could not be imported.", errors[0][1])]
     assert str(errors[0][1]) == "Bad PNG"
 
 
@@ -171,16 +175,17 @@ def test_imported_typography_and_small_canvas_survive_inspector_refresh(editor, 
     document.set_value(("readoutStyles", "title", "color"), "#123456")
     monkeypatch.setattr(QMessageBox, "warning", lambda *args: QMessageBox.StandardButton.Discard)
     assert editor.import_audion_result(SimpleNamespace(document=document, warnings=()))
-    assert editor._text_size.value() == 6
-    assert editor._text_family.text() == "Courier"
-    assert editor._text_italic.isChecked()
-    assert editor._text_color.text() == "#123456"
+    inspector = editor._inspector.element
+    assert inspector._text_size.value() == 6
+    assert inspector._text_family.text() == "Courier"
+    assert inspector._text_style.button("italic").isChecked()
+    assert inspector._text_color.color().name() == "#123456"
 
-    editor._text_family.setFocus()
+    inspector._text_family.setFocus()
     qapp.processEvents()
-    editor._text_family.setText("Still typing a family")
-    editor._rotation.setValue(5)
-    assert editor._text_family.text() == "Still typing a family"
+    inspector._text_family.setText("Still typing a family")
+    inspector._rotation.setValue(5)
+    assert inspector._text_family.text() == "Still typing a family"
     editor._flush_inspector()
     assert document.manifest["readoutStyles"]["title"]["fontFamily"] == "Still typing a family"
 
@@ -336,9 +341,10 @@ def test_real_import_dialog_to_editor_save_and_reopen_is_portable(
         assert "<Preserved credits>" in dialog._details.toPlainText()
         assert editor.import_audion_result(result)
         assert editor.document.path is None and editor.document.dirty
-        assert [field.value() for field in editor._face_size] == [180, 120]
-        assert not editor._sprite_labels.isChecked()
-        assert editor._slider_style.currentText() == "popup"
+        face = editor._inspector.face
+        assert [field.value() for field in face._face_size] == [180, 120]
+        assert not face._sprite_labels.isChecked()
+        assert face._slider_style.currentData() == "popup"
         assert set(editor.document.manifest["controls"]) == {"play", "title"}
         saved = tmp_path / "Converted"
         assert editor._save_to(saved)
@@ -393,11 +399,13 @@ def test_alpha_mask_import_refreshes_preview_and_can_be_cleared(editor, tmp_path
     editor._import_alpha_mask()
     assert editor.document.preview().alpha_mask is not None
     assert editor._artwork is not previous_artwork
-    assert editor._alpha_mask_name.text() == editor.document.manifest["alphaMask"]
-    assert editor._clear_alpha_mask_button.isEnabled()
-    editor._clear_alpha_mask()
+    face = editor._inspector.face
+    assert face._mask_name.text() == editor.document.manifest["alphaMask"]
+    assert face._mask_remove.isEnabled() and editor._remove_mask_action.isEnabled()
+    face._mask_remove.click()
     assert "alphaMask" not in editor.document.manifest
     assert editor.document.preview().alpha_mask is None
-    assert not editor._clear_alpha_mask_button.isEnabled()
+    assert not face._mask_remove.isEnabled()
+    assert editor._undo_action.text() == "Undo Remove Window Mask"
     editor._undo()
     assert editor.document.preview().alpha_mask is not None

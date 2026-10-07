@@ -58,6 +58,14 @@ IMPORT_BUTTON_STATES = BUTTON_STATES | {
 
 
 @dataclass(frozen=True)
+class _Step:
+    """The state before an edit, and its name for the Undo menu ("Move")."""
+
+    before: _Snapshot
+    label: str
+
+
+@dataclass(frozen=True)
 class _Snapshot:
     manifest: bytes
     assets: Mapping[str, bytes]
@@ -97,6 +105,37 @@ def _read_snapshot(source: Path) -> _Snapshot:
     return snapshot
 
 
+def _fingerprint(snapshot: _Snapshot) -> str:
+    digest = hashlib.sha256(snapshot.manifest)
+    for name in sorted(snapshot.assets):
+        digest.update(name.encode("utf-8") + b"\0")
+        digest.update(hashlib.sha256(snapshot.assets[name]).digest())
+    return digest.hexdigest()
+
+
+def _read_draft_snapshot(folder: Path) -> _Snapshot:
+    """Read an editor recovery folder. Its layout may be an unfinished draft."""
+    try:
+        data = json.loads(face_library._read_bounded(folder / "face.json", MAX_MANIFEST_BYTES))
+    except (OSError, ValueError, RecursionError) as exc:
+        raise FaceError(f"Invalid face.json: {exc}") from exc
+    if not isinstance(data, dict):
+        raise FaceError("Invalid face.json")
+    face_library._validate_manifest(data, face_library.FaceValidation.DRAFT)
+    assets = {}
+    total = 0
+    for name in sorted(_declared_names(data)):
+        assets[name] = face_library._image(folder, name)[0]
+        total += len(assets[name])
+        if total > MAX_PACK_BYTES:
+            raise FaceError(PACK_LIMIT_ERROR)
+    snapshot = _snapshot(data, assets)
+    face_library.load_face_snapshot(
+        data, snapshot.assets, folder, validation=face_library.FaceValidation.DRAFT,
+    )
+    return snapshot
+
+
 def _is_within_directory(path: Path, directory: Path) -> bool:
     """Recognize physical ancestry, including case aliases on macOS volumes."""
     try:
@@ -125,6 +164,14 @@ class FaceDocument:
 
     Bounded layout mistakes remain editable and can be rendered as draft previews.
     Saves always use strict validation, even while a gesture is active.
+
+    Every edit takes an optional undo `label`. Continuous edits, such as a
+    held arrow key or live color panel changes, pass the same `coalesce` key
+    to share one undo step:
+
+        set_rotation("play", 10, label="Rotate", coalesce=dial_session)
+        set_rotation("play", 20, label="Rotate", coalesce=dial_session)
+        undo()  # back to the rotation before the first call
     """
 
     def __init__(self, snapshot: _Snapshot, path: Path | None = None) -> None:
@@ -134,9 +181,11 @@ class FaceDocument:
         self._path = path
         # The copy as first made from a template, which still exists.
         self._template: _Snapshot | None = None
-        self._undo: list[_Snapshot] = []
-        self._redo: list[_Snapshot] = []
+        self._undo: list[_Step] = []
+        self._redo: list[_Step] = []
         self._gesture: _Snapshot | None = None
+        self._gesture_label = ""
+        self._coalesce_key: object = None
 
     @classmethod
     def open(cls, folder: Path) -> FaceDocument:
@@ -172,6 +221,32 @@ class FaceDocument:
             raise FaceError(f"Cannot create face: {exc}") from exc
 
     @classmethod
+    def recover(
+        cls, folder: Path, *, source: Path | None, fingerprint: str | None,
+    ) -> FaceDocument:
+        """Reopen work written by write_recovery() after the editor ended unexpectedly.
+
+        The document stays attached to its face folder only while that folder
+        still holds what the document last saved or opened; otherwise it
+        reopens untitled, so a later Save cannot overwrite newer files.
+        Undo returns to the saved version.
+        """
+        try:
+            recovered = _read_draft_snapshot(Path(folder))
+        except (OSError, ValueError) as exc:
+            raise FaceError(f"Cannot recover face: {exc}") from exc
+        if source is not None and fingerprint is not None:
+            try:
+                disk = _read_snapshot(Path(source))
+            except (OSError, ValueError):
+                disk = None
+            if disk is not None and _fingerprint(disk) == fingerprint:
+                document = cls(disk, Path(source))
+                document._apply(recovered, "Recover Changes")
+                return document
+        return cls(recovered)
+
+    @classmethod
     def from_snapshot(
         cls, manifest: Mapping[str, Any], assets: Mapping[str, bytes],
     ) -> FaceDocument:
@@ -202,6 +277,19 @@ class FaceDocument:
         return self._current != self._saved
 
     @property
+    def saved_fingerprint(self) -> str | None:
+        """Identifies the folder contents this document last opened or saved."""
+        return _fingerprint(self._disk_snapshot) if self._disk_snapshot is not None else None
+
+    def write_recovery(self, folder: Path) -> None:
+        """Write the working state, even an unfinished draft, to a new folder."""
+        folder = Path(folder)
+        folder.mkdir()
+        (folder / "face.json").write_bytes(self._current.manifest)
+        for name, data in self._current.assets.items():
+            (folder / name).write_bytes(data)
+
+    @property
     def needs_save(self) -> bool:
         """Whether discarding the document loses work. An unedited template
         copy does not: making the copy again gives the same face."""
@@ -215,10 +303,23 @@ class FaceDocument:
     def can_redo(self) -> bool:
         return bool(self._redo) and not self._gesture_changed()
 
+    @property
+    def undo_label(self) -> str | None:
+        """Name of the step Undo reverts ("" if unnamed), or None if there is none."""
+        if self._gesture_changed():
+            return self._gesture_label
+        return self._undo[-1].label if self._undo else None
+
+    @property
+    def redo_label(self) -> str | None:
+        return self._redo[-1].label if self.can_redo else None
+
     def _gesture_changed(self) -> bool:
         return self._gesture is not None and self._gesture != self._current
 
-    def set_value(self, path: tuple[str, ...], value: Any) -> None:
+    def set_value(
+        self, path: tuple[str, ...], value: Any, *, label: str = "", coalesce: object = None,
+    ) -> None:
         """Edit a presentation field. None removes an optional override."""
         self._check_edit_path(path, value)
         data = self.manifest
@@ -250,7 +351,7 @@ class FaceDocument:
         data["formatVersion"] = (
             max(version, IMPORT_FACE_FORMAT_VERSION) if imported_field else version
         )
-        self._apply(_snapshot(data, self.assets))
+        self._apply(_snapshot(data, self.assets), label, coalesce)
 
     @staticmethod
     def _check_edit_path(path: tuple[str, ...], value: Any) -> None:
@@ -278,19 +379,30 @@ class FaceDocument:
         ):
             raise FaceError("Required face fields cannot be removed")
 
-    def set_rect(self, name: str, rect: Sequence[int]) -> None:
+    def set_rect(
+        self, name: str, rect: Sequence[int], *, label: str = "", coalesce: object = None,
+    ) -> None:
         path = ("drag",) if name == "drag" else ("controls", name)
-        self.set_value(path, list(rect))
+        self.set_value(path, list(rect), label=label, coalesce=coalesce)
 
-    def set_rotation(self, name: str, degrees: float) -> None:
-        self.set_value(("controlRotations", name), degrees)
+    def set_rotation(
+        self, name: str, degrees: float, *, label: str = "", coalesce: object = None,
+    ) -> None:
+        self.set_value(("controlRotations", name), degrees, label=label, coalesce=coalesce)
 
-    def _apply(self, snapshot: _Snapshot) -> None:
+    def _apply(self, snapshot: _Snapshot, label: str = "", coalesce: object = None) -> None:
         if snapshot == self._current:
             return
         if self._gesture is None:
-            self._undo.append(self._current)
-            self._redo.clear()
+            if coalesce is not None and coalesce == self._coalesce_key and self._undo:
+                # Continue the previous step. Returning to its starting
+                # state leaves nothing to undo.
+                if self._undo[-1].before == snapshot:
+                    self._undo.pop()
+            else:
+                self._undo.append(_Step(self._current, label))
+                self._redo.clear()
+            self._coalesce_key = coalesce
         self._current = snapshot
         self._trim_history()
 
@@ -298,7 +410,10 @@ class FaceDocument:
         del self._undo[:-MAX_HISTORY_STEPS]
         while self._undo or self._redo:
             unique_assets = {}
-            snapshots = [self._current, self._saved, self._gesture, *self._undo, *self._redo]
+            snapshots = [
+                self._current, self._saved, self._gesture,
+                *(step.before for step in self._undo), *(step.before for step in self._redo),
+            ]
             for snapshot in snapshots:
                 if snapshot is not None:
                     unique_assets.update({id(asset): asset for asset in snapshot.assets.values()})
@@ -309,10 +424,12 @@ class FaceDocument:
             else:
                 self._redo.pop(0)
 
-    def begin_gesture(self) -> None:
+    def begin_gesture(self, label: str = "") -> None:
         if self._gesture is not None:
             raise FaceError("Finish the current gesture before starting another")
         self._gesture = self._current
+        self._gesture_label = label
+        self._coalesce_key = None
 
     def end_gesture(self) -> None:
         if self._gesture is None:
@@ -320,7 +437,7 @@ class FaceDocument:
         before = self._gesture
         self._gesture = None
         if before != self._current:
-            self._undo.append(before)
+            self._undo.append(_Step(before, self._gesture_label))
             self._redo.clear()
             self._trim_history()
 
@@ -331,18 +448,22 @@ class FaceDocument:
 
     def undo(self) -> bool:
         self.end_gesture()
+        self._coalesce_key = None
         if not self._undo:
             return False
-        self._redo.append(self._current)
-        self._current = self._undo.pop()
+        step = self._undo.pop()
+        self._redo.append(_Step(self._current, step.label))
+        self._current = step.before
         return True
 
     def redo(self) -> bool:
         self.end_gesture()
+        self._coalesce_key = None
         if not self._redo:
             return False
-        self._undo.append(self._current)
-        self._current = self._redo.pop()
+        step = self._redo.pop()
+        self._undo.append(_Step(self._current, step.label))
+        self._current = step.before
         return True
 
     def _import_image(self, source: Path, prefix: str) -> tuple[str, bytes, tuple[int, int]]:
@@ -354,7 +475,9 @@ class FaceDocument:
         except (OSError, ValueError) as exc:
             raise FaceError(f"Cannot import PNG: {exc}") from exc
 
-    def import_background(self, source: Path, *, adopt_size: bool = False) -> None:
+    def import_background(
+        self, source: Path, *, adopt_size: bool = False, label: str = "Import Background",
+    ) -> None:
         """Snapshot a PNG, preserving the canvas unless adopt_size is requested."""
         name, image, dimensions = self._import_image(source, "background")
         data = self.manifest
@@ -363,9 +486,11 @@ class FaceDocument:
         else:
             face_library._check_background_size(data["size"], dimensions)
         data["background"] = name
-        self._apply(_snapshot(data, {**self.assets, name: image}))
+        self._apply(_snapshot(data, {**self.assets, name: image}), label)
 
-    def import_button(self, control: str, state: str, source: Path) -> None:
+    def import_button(
+        self, control: str, state: str, source: Path, *, label: str = "Import Artwork",
+    ) -> None:
         if control not in SPRITE_CONTROLS or state not in IMPORT_BUTTON_STATES:
             raise FaceError("Choose a supported button and sprite state")
         data = self.manifest
@@ -378,20 +503,39 @@ class FaceDocument:
         states[state] = name
         if control in {"seek", "volume"} or state not in BUTTON_STATES:
             data["formatVersion"] = IMPORT_FACE_FORMAT_VERSION
-        self._apply(_snapshot(data, {**self.assets, name: image}))
+        self._apply(_snapshot(data, {**self.assets, name: image}), label)
+
+    def remove_button_image(
+        self, control: str, state: str, *, label: str = "Remove Artwork",
+    ) -> None:
+        """Remove one state's sprite; removing normal removes every state."""
+        data = self.manifest
+        buttons = data.get("buttons", {})
+        states = buttons.get(control, {})
+        if state not in states:
+            return
+        if state == "normal":
+            states.clear()
+        else:
+            del states[state]
+        if not states:
+            buttons.pop(control, None)
+        if not buttons:
+            data.pop("buttons", None)
+        self._apply(_snapshot(data, self.assets), label)
 
     def import_alpha_mask(self, source: Path | None) -> None:
         """Snapshot or remove the global mask applied after face composition."""
         data = self.manifest
         if source is None:
             data.pop("alphaMask", None)
-            self._apply(_snapshot(data, self.assets))
+            self._apply(_snapshot(data, self.assets), "Remove Window Mask")
             return
         name, image, dimensions = self._import_image(source, "alpha-mask")
         face_library._check_background_size(data["size"], dimensions, name="Alpha mask")
         data["alphaMask"] = name
         data["formatVersion"] = IMPORT_FACE_FORMAT_VERSION
-        self._apply(_snapshot(data, {**self.assets, name: image}))
+        self._apply(_snapshot(data, {**self.assets, name: image}), "Import Window Mask")
 
     def preview(self, *, validate_layout: bool = False) -> Face:
         validation = (
@@ -417,6 +561,7 @@ class FaceDocument:
                 raise FaceError("Choose a folder to save this custom face")
             path = self._path
         target = self._publish(Path(path), allow_current=True)
+        self._coalesce_key = None
         self._path = target
         self._saved = self._current
         self._disk_snapshot = self._current
