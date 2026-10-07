@@ -268,6 +268,8 @@ class BrowserWindow(QMainWindow):
         self.setWindowTitle("Amberfader – YouTube Music")
         self.view = QWebEngineView(self)
         self.view.setPage(page)
+        # Narrower, even the smallest zoom could not fit MIN_LAYOUT_WIDTH.
+        self.view.setMinimumWidth(math.ceil(MIN_LAYOUT_WIDTH * MIN_ZOOM))
         self.setCentralWidget(self.view)
 
         toolbar = self.addToolBar("Navigation")
@@ -290,6 +292,7 @@ class BrowserWindow(QMainWindow):
         page.zoomFactorChanged.connect(self._zoom_changed)
         page.loadStarted.connect(self._load_started)
         page.loadFinished.connect(self._load_finished)
+        page.renderProcessTerminated.connect(self._renderer_exited)
         self.resize(1100, 800)
 
     def reveal(self) -> None:
@@ -323,8 +326,15 @@ class BrowserWindow(QMainWindow):
 
     def _load_finished(self, _ok: bool) -> None:
         # A newer load may still be running; it ends the layout instead.
-        if not self.view.page().isLoading():
-            self._end_offscreen_layout()
+        if self.view.page().isLoading():
+            return
+        # A new renderer starts at the default zoom.
+        self._fit_zoom()
+        self._end_offscreen_layout()
+
+    def _renderer_exited(self, *_args: object) -> None:
+        # No load finishes after this; the next load lays out again.
+        self._end_offscreen_layout()
 
     def _start_offscreen_layout(self) -> None:
         if self._offscreen():
@@ -355,11 +365,13 @@ class BrowserWindow(QMainWindow):
             self.view.page().setZoomFactor(self._zoom)
 
     def _zoom_changed(self, zoom: float) -> None:
-        # Fitting and loads announce the zoom already applied. Anything else
-        # is your own zoom.
+        # Fitting and loads announce the zoom already applied.
         if math.isclose(zoom, self._zoom, abs_tol=ZOOM_TOLERANCE):
             return
-        self._chosen_zoom = zoom
+        # Only a window on screen takes your own zoom (Ctrl+wheel). Otherwise
+        # this is a new page at its default zoom.
+        if self.isVisible() and not self._offscreen():
+            self._chosen_zoom = zoom
         self._fit_zoom()
 
 

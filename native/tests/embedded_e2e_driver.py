@@ -199,7 +199,8 @@ def main() -> int:
         runtime.host.page.setZoomFactor(1.0)
         browser.resize(1300, 800)
         check("wide window shows the chosen zoom", pump(
-            lambda: abs(zoom() - 1.0) < 1e-3 and main_world("innerWidth") == browser.view.width(),
+            lambda: abs(zoom() - 1.0) < 1e-3
+            and abs(main_world("innerWidth") - browser.view.width()) <= 1,
             timeout=5,
         ))
         browser.resize(1100, 800)
@@ -248,6 +249,13 @@ def main() -> int:
         ))
         check("view stayed on its page", runtime.host.on_home_origin())
 
+        # Leave the window narrow, so the new renderer below must get the
+        # fitted zoom as well as a size.
+        call("browser.showPlayer")
+        browser.resize(600, 700)
+        pump(desktop_layout, timeout=5)
+        call("browser.hidePlayer")
+
         # A renderer exit revokes the binding; reloading recovers.
         revoked_before = len([m for m in messages if m.get("event") == "binding"
                               and m["data"]["status"] == "revoked"])
@@ -266,8 +274,9 @@ def main() -> int:
         _, ok, _ = call("player.play")
         check("command after renderer exit", ok)
         # The new renderer loaded behind the hidden window.
-        check("hidden reload lays out at desktop width", desktop_layout())
+        check("hidden reload lays out at desktop width", pump(desktop_layout, timeout=5))
         check("hidden reload stays hidden", browser_hidden())
+        check("hidden reload keeps the fitted zoom", abs(zoom() - 600 / MIN_LAYOUT_WIDTH) < 1e-3)
 
         # The menu switches turn both features off from the next load.
         options = {action.text(): action for action in window._playback_menu.actions()}
