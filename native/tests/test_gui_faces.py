@@ -9,7 +9,7 @@ import pytest
 
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 
-from PySide6.QtCore import QRect, Qt
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt
 from PySide6.QtGui import QRegion
 from PySide6.QtWidgets import QFileDialog
 from test_faces import BUNDLED_IDS, make_pack, png
@@ -38,6 +38,19 @@ def themed(qapp, tmp_path):
     qapp.processEvents()
 
 
+def _control_region(window, name, control):
+    wrapper = window._surface._rotated.get(name)
+    if wrapper is None:
+        return QRegion(QRect(control.mapTo(window, QPoint()), control.size()))
+    # Widget geometry is local to its proxy. Map its occupied quadrilateral
+    # through the real scene and viewport, excluding unused wrapper corners.
+    polygon = wrapper.viewportTransform().map(
+        wrapper._proxy.mapToScene(QRectF(control.rect())),
+    )
+    polygon.translate(QPointF(wrapper.viewport().mapTo(window, QPoint())))
+    return QRegion(polygon.toPolygon())
+
+
 @pytest.mark.parametrize("face_id", sorted(BUNDLED_IDS))
 def test_each_face_keeps_all_controls_usable(themed, qapp, face_id):
     window, library, sent = themed
@@ -50,10 +63,12 @@ def test_each_face_keeps_all_controls_usable(themed, qapp, face_id):
     assert window._controls == original_widgets
     assert library.preferred_id() == face_id
     assert not sent
-    for control in window._controls.values():
+    for name, control in window._controls.items():
         assert control.isVisible()
-        assert window.rect().contains(control.geometry())
-        assert QRegion(control.geometry()).subtracted(window.mask()).isEmpty()
+        occupied = _control_region(window, name, control)
+        assert not occupied.isEmpty(), name
+        assert window.rect().contains(occupied.boundingRect()), name
+        assert occupied.subtracted(window.mask()).isEmpty(), name
     window._like.click()
     window._next.click()
     window._prev.click()
@@ -131,7 +146,10 @@ def test_scaled_faces_keep_controls_inside_the_shape(qapp, tmp_path, scale):
             window.select_face(face_id)
             qapp.processEvents()
             for name, control in window._controls.items():
-                assert QRegion(control.geometry()).subtracted(window.mask()).isEmpty(), name
+                occupied = _control_region(window, name, control)
+                assert not occupied.isEmpty(), name
+                assert window.rect().contains(occupied.boundingRect()), name
+                assert occupied.subtracted(window.mask()).isEmpty(), name
             assert window.width() <= window.screen().availableGeometry().width()
             assert window.height() <= window.screen().availableGeometry().height()
     finally:

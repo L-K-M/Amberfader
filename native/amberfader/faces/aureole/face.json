@@ -58,9 +58,9 @@
     "play": [172, 253, 38, 38],
     "next": [216, 258, 28, 28],
     "like": [250, 258, 28, 28],
-    "search": [304, 274, 68, 22],
-    "show": [379, 274, 68, 22],
-    "hide": [454, 274, 68, 22],
+    "search": [304, 271, 68, 22],
+    "show": [380, 273, 68, 22],
+    "hide": [455, 262, 68, 22],
     "menu": [71, 256, 22, 22],
     "minimize": [59, 100, 22, 22],
     "close": [86, 105, 22, 22]
@@ -126,5 +126,10 @@
       "pressed": "chrome-pressed.png",
       "disabled": "chrome-disabled.png"
     }
+  },
+  "controlRotations": {
+    "search": 5.7,
+    "hide": -14.0,
+    "show": -2.1
   }
 }

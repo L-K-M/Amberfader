@@ -539,6 +539,14 @@ def _render_shaped_button(face: dict, control: str, state: str) -> QImage:
     return image
 
 
+def _group_representative(face: dict, group: str) -> str:
+    # Viridian's supplied layout enlarges Show YT while retaining the original
+    # utility images. Re-export those images at Search's original dimensions.
+    if face["id"] == "viridian" and group == "utility":
+        return "search"
+    return GROUP_REPRESENTATIVES[group]
+
+
 def _sprite_family(face: dict, name: str) -> str:
     """Name the surface a button uses; Qt stretches a sprite to its control.
 
@@ -547,10 +555,17 @@ def _sprite_family(face: dict, name: str) -> str:
     one button a different socket without distorting corners or rims.
     """
     group = BUTTON_GROUPS[name]
-    representative = GROUP_REPRESENTATIVES[group]
+    representative = _group_representative(face, group)
     controls, shapes = face["controls"], face.get("controlShapes", {})
     same_size = controls[name][2:] == controls[representative][2:]
     same_shape = shapes.get(name) == shapes.get(representative)
+    if (
+        face["id"] == "viridian" and name == "show"
+        and controls[name][2:] == [71, 24]
+        and controls[representative][2:] == [70, 22]
+        and shapes.get(name) == shapes.get(representative) == "ellipse"
+    ):
+        return group
     return group if same_size and same_shape else name
 
 
@@ -677,7 +692,9 @@ def main() -> None:
         sources = {}
         for name, family in families.items():
             group = BUTTON_GROUPS[name]
-            sources.setdefault(family, GROUP_REPRESENTATIVES[group] if family == group else name)
+            sources.setdefault(
+                family, _group_representative(face, group) if family == group else name,
+            )
         for family, control in sorted(sources.items()):
             for state in BUTTON_STATES:
                 image = render_button(face, BUTTON_GROUPS[control], state, control)
