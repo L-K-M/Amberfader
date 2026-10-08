@@ -13,17 +13,30 @@ TOKEN = "0123abcd"
 
 @pytest.fixture()
 def store(tmp_path):
-    return AutosaveStore(tmp_path / "autosave")
+    store = AutosaveStore(tmp_path / "autosave")
+    yield store
+    store.close()
+
+
+def _after_crash(store):
+    """The next editor, once the writer's session has ended without cleanup."""
+    store.close()
+    return AutosaveStore(store.root)
+
+
+def _snapshots(root):
+    return sorted(path.name for path in root.iterdir() if not path.name.startswith("."))
 
 
 def test_untitled_draft_round_trips_as_unsaved_work(store):
     document = FaceDocument.from_template(TEMPLATE)
     document.set_rect("play", [-40, 10, 60, 48], label="Move")  # A draft outside the face.
     store.write(TOKEN, document)
-    faces, problems = store.recover()
+    faces, problems = _after_crash(store).recover()
     assert problems == []
     [face] = faces
-    assert face.token == TOKEN
+    assert face.token != TOKEN  # The recovering editor owns it now.
+    assert _snapshots(store.root) == [face.token]
     assert face.document.path is None
     assert face.document.needs_save
     assert face.document.manifest == document.manifest
@@ -35,7 +48,7 @@ def test_saved_face_recovers_attached_and_undo_returns_to_disk(store, tmp_path):
     folder = document.save(tmp_path / "saved")
     document.set_rotation("play", 12, label="Rotate")
     store.write(TOKEN, document)
-    [face], _ = store.recover()
+    [face], _ = _after_crash(store).recover()
     recovered = face.document
     assert recovered.path == folder
     assert recovered.manifest["controlRotations"]["play"] == 12
@@ -55,7 +68,7 @@ def test_changed_folder_recovers_untitled_so_save_cannot_overwrite_it(store, tmp
     newer = FaceDocument.open(folder)
     newer.set_value(("name",), "Edited elsewhere")
     newer.save()
-    [face], _ = store.recover()
+    [face], _ = _after_crash(store).recover()
     assert face.document.path is None
     assert face.document.manifest["controlRotations"]["play"] == 12
 
@@ -65,18 +78,48 @@ def test_rewrite_replaces_and_remove_deletes_the_snapshot(store):
     store.write(TOKEN, document)
     document.set_value(("name",), "Second")
     store.write(TOKEN, document)
-    [face], _ = store.recover()
-    assert face.document.manifest["name"] == "Second"
-    assert sorted(path.name for path in store.root.iterdir()) == [TOKEN]
+    assert _snapshots(store.root) == [TOKEN]
     store.remove(TOKEN)
-    assert store.recover() == ([], [])
+    assert _after_crash(store).recover() == ([], [])
+
+
+def test_rewrite_keeps_only_the_latest_snapshot(store):
+    document = FaceDocument.from_template(TEMPLATE)
+    store.write(TOKEN, document)
+    document.set_value(("name",), "Second")
+    store.write(TOKEN, document)
+    [face], _ = _after_crash(store).recover()
+    assert face.document.manifest["name"] == "Second"
+
+
+def test_a_running_editors_snapshots_are_never_recovered_by_another(store):
+    store.write(TOKEN, FaceDocument.from_template(TEMPLATE))
+    other = AutosaveStore(store.root)
+    try:
+        assert other.recover() == ([], [])
+        assert _snapshots(store.root) == [TOKEN]
+    finally:
+        other.close()
+
+
+def test_only_one_editor_claims_a_crashed_snapshot(store):
+    store.write(TOKEN, FaceDocument.from_template(TEMPLATE))
+    first = _after_crash(store)
+    second = AutosaveStore(store.root)
+    try:
+        claimed, _ = first.recover()
+        assert len(claimed) == 1
+        assert second.recover() == ([], [])  # It is first's live work now.
+    finally:
+        first.close()
+        second.close()
 
 
 def test_unreadable_snapshot_is_reported_and_kept(store):
     document = FaceDocument.from_template(TEMPLATE)
     store.write(TOKEN, document)
     (store.root / TOKEN / "face.json").write_text("{not json")
-    faces, problems = store.recover()
+    faces, problems = _after_crash(store).recover()
     assert faces == []
     assert len(problems) == 1 and problems[0].startswith(TOKEN)
     assert (store.root / TOKEN).is_dir()
@@ -105,11 +148,13 @@ def test_an_interrupted_rewrite_still_recovers_a_complete_snapshot(store, stage,
     with pytest.raises(FaceError):
         store.write(TOKEN, document)
     monkeypatch.undo()
-    [face], problems = store.recover()
+    next_editor = _after_crash(store)
+    [face], problems = next_editor.recover()
     assert problems == []
-    assert face.token == TOKEN
     assert face.document.manifest["name"] == "Second"
-    store.remove(TOKEN)
+    assert _snapshots(store.root) == [face.token]
+    next_editor.remove(face.token)
+    next_editor.close()
     assert list(store.root.iterdir()) == []
 
 
@@ -118,10 +163,25 @@ def test_an_incomplete_new_snapshot_falls_back_to_the_previous_one(store):
     document.set_value(("name",), "Kept")
     store.write(TOKEN, document)
     (store.root / f"{TOKEN}~new").mkdir()  # A write that never finished.
-    [face], _ = store.recover()
+    [face], _ = _after_crash(store).recover()
     assert face.document.manifest["name"] == "Kept"
 
 
 def test_tokens_are_checked(store):
     with pytest.raises(FaceError):
         store.write("../escape", FaceDocument.from_template(TEMPLATE))
+
+
+def test_recovery_works_through_a_symlinked_state_folder(tmp_path):
+    real = tmp_path / "real"
+    real.mkdir()
+    link = tmp_path / "linked"
+    link.symlink_to(real)
+    store = AutosaveStore(link / "autosave")
+    store.write(TOKEN, FaceDocument.from_template(TEMPLATE))
+    next_editor = _after_crash(store)
+    try:
+        faces, problems = next_editor.recover()
+        assert problems == [] and len(faces) == 1
+    finally:
+        next_editor.close()

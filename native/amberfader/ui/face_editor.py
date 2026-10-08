@@ -468,8 +468,10 @@ class FaceEditorWindow(QMainWindow):
         )
         self._about_action = self._action(f"About {APP_NAME}", self._about, name="about")
         self._about_action.setMenuRole(QAction.MenuRole.AboutRole)
+        # Inside the player, ⌘Q belongs to the player.
         self._quit_action = self._action(
-            "Quit", QApplication.quit, QKeySequence.StandardKey.Quit, name="quit",
+            "Quit", QApplication.quit,
+            QKeySequence("Ctrl+Q") if self._standalone else None, name="quit",
         )
         self._quit_action.setMenuRole(QAction.MenuRole.QuitRole)
 

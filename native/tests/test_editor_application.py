@@ -130,15 +130,21 @@ def test_unsaved_work_is_autosaved_and_recovered_after_a_crash(make_editor, save
     window._changed()
     editor.autosave_now()
     assert (editor._autosave.root / window.autosave_token).is_dir()
+    # While this editor runs, another one leaves its work alone.
+    bystander = make_editor()
+    bystander.start([])
+    assert bystander.windows() == []
 
     # A second process after a crash: the window returns, attached to its folder.
+    editor._autosave.close()  # The crashed editor's session ends.
     recovered = make_editor()
     recovered.start([])
     [again] = recovered.windows()
     assert again.document.path == saved_face
     assert again.document.manifest["controlRotations"]["play"] == 21
     assert again._undo_action.text() == "Undo Recover Changes"
-    assert again.autosave_token == window.autosave_token
+    assert (recovered._autosave.root / again.autosave_token).is_dir()
+    assert not (recovered._autosave.root / window.autosave_token).exists()
     assert recovered._gallery is None
 
     # Discarding the recovered work removes its snapshot.
@@ -178,6 +184,7 @@ def test_a_recovered_face_is_not_opened_twice_from_the_command_line(make_editor,
     window.document.set_rotation("play", 4)
     window._changed()
     editor.autosave_now()
+    editor._autosave.close()
     recovered = make_editor()
     recovered.start([FaceDocument.open(saved_face)])
     [again] = recovered.windows()
@@ -222,3 +229,20 @@ def test_continuous_editing_does_not_postpone_the_autosave(make_editor, saved_fa
     window._changed()
     assert editor._autosave_timer.isActive()
     assert editor._autosave_timer.remainingTime() < first_deadline
+
+
+def test_the_editor_inside_the_player_leaves_quit_to_the_player(qapp, make_editor):
+    from PySide6.QtGui import QKeySequence
+
+    from amberfader.ui.face_editor import FaceEditorWindow
+
+    embedded = FaceEditorWindow()
+    try:
+        assert embedded._quit_action.shortcut().isEmpty()
+        assert embedded._about_action not in embedded.menuBar().actions()[-1].menu().actions()
+    finally:
+        embedded.deleteLater()
+    editor = make_editor()
+    editor.start([FaceDocument.from_template(BUILTIN_DIRECTORY / "viridian")])
+    [standalone] = editor.windows()
+    assert standalone._quit_action.shortcut() == QKeySequence("Ctrl+Q")

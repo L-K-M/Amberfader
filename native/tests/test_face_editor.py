@@ -1014,3 +1014,19 @@ def test_dropping_a_face_folder_opens_it(editor, tmp_path):
     editor._canvas.dropEvent(event)
     assert event.isAccepted()
     assert editor.document.path == folder
+
+
+def test_undo_reaches_the_document_from_a_focused_number_field(editor, qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    original = editor.document.manifest["controls"]["play"]
+    editor._canvas.setFocus()
+    QTest.keyClick(editor._canvas, Qt.Key.Key_Right)
+    assert editor.document.manifest["controls"]["play"][0] == original[0] + 1
+    field = editor._inspector.element._rect_fields[1]
+    editor.activateWindow()
+    field.setFocus()
+    qapp.processEvents()
+    QTest.keyClick(qapp.focusWidget(), Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert editor.document.manifest["controls"]["play"] == original

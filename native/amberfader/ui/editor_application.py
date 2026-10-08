@@ -74,6 +74,7 @@ class FaceEditorApplication(QObject):
         self._state = app.applicationState()
         app.applicationStateChanged.connect(self._state_changed)
         app.installEventFilter(self)
+        app.aboutToQuit.connect(self._autosave.close)
         if MACOS:
             app.setQuitOnLastWindowClosed(False)
             self._menu_bar = self._default_menu_bar()
