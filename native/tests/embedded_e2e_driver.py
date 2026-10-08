@@ -135,9 +135,11 @@ def main() -> int:
 
     def browser_hidden():
         # Qt keeps the view shown for rendering without mapping its window.
-        return runtime.host.window.testAttribute(
+        browser = runtime.host.window
+        handle = browser.windowHandle()
+        return browser.testAttribute(
             Qt.WidgetAttribute.WA_DontShowOnScreen,
-        )
+        ) and handle is not None and not handle.isExposed()
 
     def continue_playing(name):
         main_world(PROMPT_SCRIPT)
