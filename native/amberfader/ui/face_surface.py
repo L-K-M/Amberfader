@@ -1066,8 +1066,15 @@ class RotatedControl(QGraphicsView):
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
         widget.hide()
+        self._original_no_system_background = widget.testAttribute(
+            Qt.WidgetAttribute.WA_NoSystemBackground,
+        )
         widget.setParent(None)
         widget.setGeometry(0, 0, widget.width(), widget.height())
+        # Proxy rendering fills a top-level widget's rectangle before its
+        # paintEvent, covering transparent sprite or curved-control corners.
+        # Let the control paint its own surface while it is hosted here.
+        widget.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
         self._proxy: QGraphicsProxyWidget = self._scene.addWidget(widget)
         widget.show()
         self.setFocusPolicy(widget.focusPolicy())
@@ -1100,6 +1107,9 @@ class RotatedControl(QGraphicsView):
         self._proxy.setWidget(None)
         widget.setParent(parent)
         widget.setStyleSheet("")
+        widget.setAttribute(
+            Qt.WidgetAttribute.WA_NoSystemBackground, self._original_no_system_background,
+        )
         widget.show()
         self.hide()
         self.deleteLater()
