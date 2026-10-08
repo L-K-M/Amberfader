@@ -271,3 +271,32 @@ def test_a_malformed_session_counts_as_abandoned(store):
         assert (len(faces), problems) == (1, [])
     finally:
         later.close()
+
+
+def test_a_dead_claim_holding_the_newest_copy_wins_over_the_snapshot(store):
+    import shutil
+
+    document = FaceDocument.from_template(TEMPLATE)
+    document.set_value(("name",), "Older")
+    store.write(TOKEN, document)
+    document.set_value(("name",), "Newer")
+    store.write("eeee", document)
+    # A recoverer claimed the complete ~new copy, then crashed.
+    shutil.copytree(store.root / "eeee", store.root / f"{TOKEN}~claim-deadbeef")
+    store.remove("eeee")
+    later = _after_crash(store)
+    try:
+        [face], _ = later.recover()
+        assert face.document.manifest["name"] == "Newer"
+    finally:
+        later.close()
+
+
+def test_the_lock_sweep_keeps_live_sessions(store):
+    store.write(TOKEN, FaceDocument.from_template(TEMPLATE))  # Holds store's session.
+    other = AutosaveStore(store.root)
+    try:
+        other.recover()
+        assert (store.root / f".session-{store._session}.lock").is_file()
+    finally:
+        other.close()

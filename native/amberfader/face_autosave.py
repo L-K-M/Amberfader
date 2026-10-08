@@ -24,6 +24,7 @@ import fcntl
 import json
 import os
 import shutil
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
@@ -50,6 +51,8 @@ SUFFIXES = ("", NEW_SUFFIX, OLD_SUFFIX)
 CLAIM_PREFIX = "~claim-"
 LOCK_PREFIX = ".session-"
 TOKEN_LOCK_PREFIX = ".token-"
+SESSION_LOCK_ATTEMPTS = 5
+SESSION_LOCK_RETRY_SECONDS = 0.01
 LOCK_SUFFIX = ".lock"
 
 
@@ -117,10 +120,14 @@ class AutosaveStore:
         if self._lock is not None:
             return
         self._root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        handle = _lock_file(self._lock_path(self._session))
-        if handle is None:
-            raise OSError("Autosave session is already in use")
-        self._lock = handle
+        for _attempt in range(SESSION_LOCK_ATTEMPTS):
+            handle = _lock_file(self._lock_path(self._session))
+            if handle is not None:
+                self._lock = handle
+                return
+            # Only another editor's lock sweep holds a new session briefly.
+            time.sleep(SESSION_LOCK_RETRY_SECONDS)
+        raise OSError("Autosave session is in use")
 
     def close(self) -> None:
         """Release the session at a clean exit."""
@@ -221,9 +228,10 @@ class AutosaveStore:
             claimer = claim.name.removeprefix(f"{token}{CLAIM_PREFIX}")
             if self._live(claimer):
                 return None  # Another running editor is recovering it.
-        # A complete ~new is the newest copy; ~old only backs up an interrupted rename.
+        # A complete ~new is the newest copy, and a dead claim holds the best
+        # copy its claimer found; ~old only backs up an interrupted rename.
         ordered = (
-            self._root / f"{token}{NEW_SUFFIX}", self._root / token, *claims,
+            self._root / f"{token}{NEW_SUFFIX}", *claims, self._root / token,
             self._root / f"{token}{OLD_SUFFIX}",
         )
         candidates = [path for path in ordered if (path / INFO_FILE).is_file()]
@@ -274,9 +282,24 @@ class AutosaveStore:
         return session == self._session or _session_alive(self._lock_path(session))
 
     def _remove_dead_locks(self) -> None:
-        for lock in self._root.glob(f"{LOCK_PREFIX}*{LOCK_SUFFIX}"):
-            if lock != self._lock_path(self._session) and not _session_alive(lock):
-                lock.unlink(missing_ok=True)
+        """Delete lock files of ended sessions.
+
+        Each is unlinked while we hold its lock, so an editor that is just
+        taking it either finds it busy or sees the unlink and retries.
+        """
+        for path in self._root.glob(f"{LOCK_PREFIX}*{LOCK_SUFFIX}"):
+            if path == self._lock_path(self._session):
+                continue
+            try:
+                with path.open("r") as handle:
+                    try:
+                        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except BlockingIOError:
+                        continue  # A running editor's session.
+                    if os.stat(path).st_ino == os.fstat(handle.fileno()).st_ino:
+                        path.unlink()
+            except OSError:
+                continue
 
     @staticmethod
     def _info(snapshot: Path) -> dict:
