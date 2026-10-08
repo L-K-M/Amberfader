@@ -142,10 +142,15 @@ def test_player_editor_lists_faces_installed_after_startup(player, qapp):
         BUILTIN_DIRECTORY / "viridian", face_id="late-face", name="Late Face",
     )
     document.save(library.ensure_directory() / "late-face")
+    from amberfader.ui.face_gallery import GallerySource
+
     window.open_face_editor()
-    installed = window._face_editor._faces_panel._tree.topLevelItem(0)
-    assert [installed.child(index).text(0) for index in range(installed.childCount())] == [
+    editor = window._face_editor
+    editor._workspace.show_gallery(GallerySource.INSTALLED, editor)
+    gallery = editor._workspace._gallery
+    assert [gallery._grid.item(index).text() for index in range(gallery._grid.count())] == [
         "Late Face",
     ]
     assert "late-face" in {face.id for face in library.faces}
+    gallery.close()
     assert sent == []

@@ -29,72 +29,124 @@ flatpak run --command=amberfader-face-editor ch.lkmc.amberfader
 Flatpak file access follows its sandbox permissions. Choose an accessible folder
 or grant access to the destination when starting the editor.
 
+## The editor window
+
+```
+┌──────────────────────────── toolbar ────────────────────────────┐
+│ [◧] [+ ▾]               [100% ▾] [#] [⬚]                   [◨] │
+├─────────────┬─────────────────────────────────┬─────────────────┤
+│ Elements    │              canvas             │ Element | Face  │
+│ (sidebar)   │                                 │ inspector       │
+├─────────────┴─────────────────────────────────┴─────────────────┤
+│ messages                         ⚠ why the face cannot be saved │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Each face opens in its own window with its own undo history, selection and
+zoom. The **sidebar** lists the face's elements by group (Playback, Screen,
+Sliders, Window); **+** adds a missing element and **−** removes the selected
+one. The **inspector** has two panes: **Element** edits the selected element's
+position, size, rotation, shape, screen text and button artwork; **Face** edits
+the name, ID, author, size, fonts, background, window mask and colors.
+Sections collapse with their disclosure arrows. The toolbar shows or hides the
+sidebar and inspector, adds elements, sets the zoom, and turns on **Snap to
+Grid** and **Guides** (element outlines and selection handles). Right-click the
+toolbar to show icons, text, or both.
+
+The status bar names the first problem that prevents saving, for example
+“Play / Pause overlaps Next Track”. Click it to select that element. **Save**
+stays available and explains the problem if you try.
+
 ## Create and edit
 
-The **Faces** panel lists the player's faces when the editor opens. Double-click
-a face, or select it and click **Edit face**. Installed faces, from your faces
-folder, open in place: **Save** updates the installed face, and the player uses
-the change the next time it loads that face. Built-in faces open as an unsaved
-copy. Filter the list by name; **View → Faces** shows or hides the panel.
+The editor opens with the **Face Gallery**. Choose a built-in face as a
+template and click **Create** (or press Return), or switch to **Installed** to
+open one of the player's faces for editing in place. Search with ⌘F. The
+gallery returns with **File → New Face…** (⌘N), **File → Open Installed Face…**
+(⇧⌘O) and **Window → Face Gallery**. **File → Open…** (⌘O) opens any face folder;
+**Open Recent** lists the faces you opened or saved.
 
-Choose a bundled face as your starting template. The editor creates a custom
-copy with its own ID and name; it never saves over the bundled artwork. You can
-also use **Face editor…** in the player's menu or **Edit a copy…** in the face
-picker to start with that face. Until you change a copy, you can open another
-face or close the editor without being asked to save it.
+A template becomes an untitled copy with its own ID and name; the editor never
+saves over the bundled artwork. Installed faces open in place: **Save** updates
+the installed face, and the player uses the change the next time it loads that
+face. You can also use **Face editor…** in the player's menu or **Edit a copy…**
+in the face picker to start with that face. Until you change a copy, opening
+another face reuses its window without asking to save it.
 
-Select a control on the canvas or in the control list. Drag it to move it, resize
-it with its handles, or adjust its exact position and size in the inspector.
-Use the round rotation handle to turn it; hold Shift to snap to 15-degree angles.
-Arrow keys move the selected control by one pixel, or ten pixels with Shift.
-The inspector also edits its angle, shape, and screen typography. The canvas
-shows your current background, sprites, cover aperture, labels, and sliders.
-Use zoom and **Snap to 8 px** for placement; hold Option on macOS or Alt on Linux
-to bypass the grid during a gesture. Undo or redo to compare edits. A move,
-resize, or rotation gesture is one undo step.
+Select an element on the canvas or in the sidebar. Drag it to move it (Shift
+keeps it on one axis), resize it with its corner handles, or rotate it with the
+round handle (Shift snaps to 15°). Arrow keys move the selection by one pixel,
+or ten with Shift; holding a key is one undo step. Delete removes the selected
+element. Hold Space and drag, or scroll, to pan; pinch or ⌘-scroll to zoom.
+Hold Option (Alt on Linux) to bypass **Snap to Grid** during a drag. Escape
+cancels a drag in progress. Right-click an element for its commands.
+
+Inspector fields work like other Mac inspectors: type a value and press Return
+or Tab to apply it, or Escape to restore the previous value. Arrow keys step a
+number, and Shift-arrow steps by 10. Color wells open the system color panel;
+the face updates while you pick, and the whole pick is one undo step.
+
+Undo and Redo name what they revert, such as **Undo Move** or **Undo Change
+Accent Color**. While you type in a field, ⌘Z first undoes the typing, then
+earlier changes to the face. A move, resize, or rotation gesture is one undo
+step.
 
 The face's drag region is editable too. Keep it clear of playback controls so
 the player can distinguish a window drag from a control press. Screen labels,
 buttons, artwork, and sliders must fit inside the canvas. Version 1/2 layouts
-also require controls to avoid each other and the drag region.
-The editor shows validation problems while you arrange controls and blocks
-invalid saves. A draft preview can show overlapping controls while you work.
-Bounded draft coordinates also allow temporary placement outside the face;
-saving still requires every control to fit inside the canvas.
+also require controls to avoid each other and the drag region. A draft preview
+can show overlapping controls, or controls partly outside the face, while you
+work; saving still requires a valid layout.
 
-Use the properties panels to adjust the name, ID, author, description, palette,
-font, slider style, and cover glass. Per-screen font, size, alignment, and bold
-overrides use the same rendering as the player and picker. You can also specify
-a font family, italic text, and a text color. Font families depend on what is
-installed on your computer. Reset an override to use the face defaults.
+Per-screen font, size, alignment, bold and italic overrides use the same
+rendering as the player and picker. You can also specify a font family and a
+text color. Font families depend on what is installed on your computer.
+**Use Face Defaults** removes an element's text overrides.
+
+## Windows, quitting and recovery
+
+On macOS the editor keeps running after you close its last window: the menu bar
+still offers **New Face…** and **Open…**, and clicking the Dock icon shows the
+gallery. Faces can be opened from Finder with **Open With** or by dropping a
+face folder on the Dock icon. If an open face is already in a window, that
+window comes forward. On Linux the editor quits with its last window.
+
+Closing a window or quitting asks before discarding unsaved changes. The editor
+also keeps a recovery copy of unsaved work in its application data folder,
+separate from your face folders. If it quits unexpectedly, the next launch
+reopens that work as unsaved. A recovered face stays attached to its folder only
+if the folder has not changed since; **Undo Recover Changes** shows the saved
+version. With macOS **Close windows when quitting an application** turned off,
+faces that were open at quit reopen at the next launch.
 
 ## Import Audion faces
 
-Choose **File → Import Audion face…**, then **Browse folder…** or **Browse ZIP…**.
+Choose **File → Import Audion Face…**, then **Browse folder…** or **Browse ZIP…**.
 You can select a single converted Audion face folder, a collection of folders,
 or a supported ZIP archive. Select a face in the list to preview its conversion;
 the filter finds faces by name. The dialog shows the original credits and any
 features that could not be converted. Review these notes before choosing
 **Import editable copy**.
 
-The import creates an unsaved Amberfader document. It reads the source without
+The import opens an unsaved Amberfader document. It reads the source without
 changing or extracting files into it, and keeps the converted images inside
 the document. Importing does not install the face or change the player. Use
 **Save As** to create a portable face folder, then install it through the player.
-Original source credits remain visible in the Face panel and are included in
+Original source credits remain visible in the Face inspector and are included in
 the saved manifest.
 
 ### Import a whole collection
 
-Choose **File → Import all Audion faces from ZIP…** and select a collection ZIP,
+Choose **File → Import Audion Collection…** and select a collection ZIP,
 such as `Faces - 2021-01-05.zip` from [Panic's
 downloads](https://download.panic.com/audion-viewer/) (856 faces). The editor
 converts every face and installs it in your faces folder. A progress window
 names each face; **Stop** ends the import and keeps the faces installed so far.
 The summary counts installed faces and lists any that could not be converted.
 
-Imported faces appear under **Installed** in the Faces panel, ready to edit, and
-in the player's **Faces** window. Importing the same ZIP again skips the faces
+Imported faces appear under **Installed** in the Face Gallery, ready to edit,
+and in the player's **Faces** window. The gallery opens with the first of them
+selected. Importing the same ZIP again skips the faces
 it already installed. The open document is not changed. In testing, Panic's
 856-face collection took about a minute and used about 260 MiB of disk space.
 Up to 1024 installed faces load.
@@ -109,16 +161,17 @@ to 8192 immediate entries. ZIP members must use stored or deflate compression.
 Archives are read in place and are never extracted.
 
 Imported version 3 faces can omit elements that the original design did not
-contain. Use **Add element…** to add a playback button, screen label, artwork
-aperture, or slider. Use **Remove element** to remove the selected control;
+contain. Use **Element → Add Element** (or **+** in the toolbar or sidebar) to
+add a playback button, screen label, artwork aperture, or slider. Use
+**Remove Element** or Delete to remove the selected control;
 the window drag region remains required. Adding and removing elements can be
 undone. Version 3 preserves small canvas dimensions and overlapping controls
 used by these designs. Existing version 1 and 2 faces retain their layout rules;
 removing a control upgrades that document to version 3.
 
-Button artwork may already contain its labels. The Face panel's **Draw labels
-over button artwork** option lets you keep the original artwork without drawing
-another label over it. Imported sliders may use a popup control when their
+Button artwork may already contain its labels. Turn off **Labels on button art**
+in the Face inspector to keep the original artwork without drawing another
+label over it. Imported sliders may use a popup control when their
 original shape cannot be represented by a straight track.
 
 On Flatpak, choose the containing folder so the native file picker can grant
@@ -129,9 +182,13 @@ current face intact.
 
 ## Backgrounds and sprites
 
-Import a PNG background or a button-state sprite through the inspector, or drop
-a PNG on the canvas and choose how to use it. Imported bytes become part of the
-document immediately, so moving or deleting the original image does not break
+Import a PNG background through the Face inspector or **Face → Import
+Background…**, and button artwork through the Element inspector's **Artwork**
+list or **Element → Import Artwork…**. You can also drop a PNG on the canvas:
+dropped on a button, it becomes that button's normal artwork; anywhere else, it
+becomes the background. The canvas names the target while you drag. **Remove**
+in the Artwork list removes one state's artwork; removing Normal removes them
+all. Imported bytes become part of the document immediately, so moving or deleting the original image does not break
 your face. Names are generated inside the exported face folder, with no absolute
 paths or external references.
 
@@ -145,7 +202,8 @@ button. Supply unrotated sprites to avoid applying an angle twice.
 
 Version 3 can include a separate window mask. Its alpha channel clips the
 complete face, including controls. Import a matching 1x or 2x PNG through the
-Background panel, or remove the mask to use the background's own transparency.
+Face inspector's Background section, or remove the mask to use the background's
+own transparency.
 If you change the canvas size, supply a matching mask or remove the old one.
 
 The existing face limits apply: a 64 KiB manifest, 4 MiB per PNG, 16 MiB of
@@ -179,11 +237,12 @@ and validation feedback to check the actual rotated footprint.
 
 ## Save and install
 
-**Save As** writes an ordinary folder containing `face.json` and only its
-declared PNG assets. Choose a new or empty folder outside your working face
-folder. After saving, **Save** updates that working folder. **Export copy…**
-writes another portable copy without moving the working document or marking
-unsaved work as saved.
+**Save As…** (⇧⌘S) names a new folder in the save panel and writes
+`face.json` and only its declared PNG assets into it. The folder must be new or
+empty and outside your working face folder. After saving, **Save** (⌘S) updates
+that folder, and **Revert to Saved** discards changes since. **Export Copy…**
+(⇧⌘E) writes another portable copy without moving the working document or
+marking unsaved work as saved. **Show in Finder** reveals the saved folder.
 
 Save validates the complete staged snapshot before publishing it. Existing
 folders and unrelated files are protected: if a working folder changes outside

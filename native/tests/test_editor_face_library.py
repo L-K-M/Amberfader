@@ -46,24 +46,26 @@ def editor(qapp, library, installed):
     qapp.processEvents()
 
 
-def _faces(editor, group: int) -> list[str]:
-    item = editor._faces_panel._tree.topLevelItem(group)
-    return [item.child(index).text(0) for index in range(item.childCount())]
+def _gallery(editor, source=None):
+    from amberfader.ui.face_gallery import GallerySource
+
+    editor._workspace.show_gallery(source or GallerySource.INSTALLED, editor)
+    return editor._workspace._gallery
 
 
-def _item(editor, name: str):
-    tree = editor._faces_panel._tree
-    for group in range(tree.topLevelItemCount()):
-        item = tree.topLevelItem(group)
-        for index in range(item.childCount()):
-            if item.child(index).text(0) == name:
-                return item.child(index)
-    raise AssertionError(f"{name} is not listed")
+def _faces(gallery, *, shown_only=True) -> list[str]:
+    grid = gallery._grid
+    return [
+        grid.item(index).text() for index in range(grid.count())
+        if not (shown_only and grid.item(index).isHidden())
+    ]
 
 
-def _edit(editor, name: str) -> None:
-    editor._faces_panel._tree.setCurrentItem(_item(editor, name))
-    editor._faces_panel._edit.click()
+def _choose(gallery, name: str) -> None:
+    grid = gallery._grid
+    item = next(grid.item(i) for i in range(grid.count()) if grid.item(i).text() == name)
+    grid.setCurrentItem(item)
+    gallery._primary.click()
 
 
 def _audion_zip(tmp_path, names=("Chromatic Orb", "Amber Orb")):
@@ -110,38 +112,46 @@ def messages(monkeypatch):
     return shown
 
 
-def test_editor_opens_with_installed_and_builtin_faces_listed(editor):
-    from PySide6.QtWidgets import QDockWidget
+def test_gallery_lists_installed_and_builtin_faces(editor):
+    from amberfader.ui.face_gallery import GallerySource
 
-    dock = editor.findChild(QDockWidget, "facesDock")
-    assert dock is not None and dock.isVisible()
-    tree = editor._faces_panel._tree
+    gallery = _gallery(editor, GallerySource.BUILT_IN)
+    assert gallery.isVisible()
     bundled = sum((folder / "face.json").is_file() for folder in BUILTIN_DIRECTORY.iterdir())
-    assert tree.topLevelItem(0).text(0) == "Installed (1)"
-    assert tree.topLevelItem(1).text(0) == f"Built-in ({bundled})"
-    assert _faces(editor, 0) == ["My Viridian"]
-    assert "Amber Classic" in _faces(editor, 1)
-    view_menu = editor.menuBar().actions()[2].menu()
-    assert dock.toggleViewAction() in view_menu.actions()
+    assert gallery._sources.item(0).text() == f"Built-in  {bundled}"
+    assert gallery._sources.item(1).text() == "Installed  1"
+    assert "Amber Classic" in _faces(gallery)
+    assert gallery._primary.text() == "Create"
+    gallery.show_source(GallerySource.INSTALLED)
+    assert _faces(gallery) == ["My Viridian"]
+    assert gallery._primary.text() == "Open"
+    window_menu = editor.menuBar().actions()[5].menu()
+    assert window_menu.title() == "&Window"
+    assert editor._gallery_action in window_menu.actions()
 
 
 def test_installed_face_is_edited_in_place_and_relisted(editor, installed, library):
-    _edit(editor, "My Viridian")
+    gallery = _gallery(editor)
+    _choose(gallery, "My Viridian")
     assert editor.document.path == installed.source
     assert editor.document.manifest["id"] == "my-viridian"
     assert not editor.document.dirty
+    assert not gallery.isVisible()
 
-    editor._metadata["name"].setText("Viridian Night")
-    editor._edit_metadata("name")
+    field = editor._inspector.face._metadata["name"]
+    field.setText("Viridian Night")
+    field.editingFinished.emit()
     assert editor.save()
     assert library.load("my-viridian").info.name == "Viridian Night"
-    assert _faces(editor, 0) == ["Viridian Night"]
-    assert editor._faces_panel._tree.currentItem().text(0) == "Viridian Night"
+    assert _faces(gallery) == ["Viridian Night"]
+    assert gallery.selected_source() == installed.source
 
 
 def test_builtin_face_opens_as_an_unsaved_copy(editor):
+    from amberfader.ui.face_gallery import GallerySource
+
     before = (BUILTIN_DIRECTORY / "viridian" / "face.json").read_bytes()
-    _edit(editor, "Viridian")
+    _choose(_gallery(editor, GallerySource.BUILT_IN), "Viridian")
     assert editor.document.path is None
     assert editor.document.manifest["id"].startswith("viridian-custom-")
     assert (BUILTIN_DIRECTORY / "viridian" / "face.json").read_bytes() == before
@@ -153,25 +163,43 @@ def test_cancelled_switch_keeps_unsaved_work(editor, monkeypatch):
     editor.document.set_rotation("play", 12)
     original = editor.document
     monkeypatch.setattr(QMessageBox, "warning", lambda *args: QMessageBox.StandardButton.Cancel)
-    _edit(editor, "My Viridian")
+    gallery = _gallery(editor)
+    _choose(gallery, "My Viridian")
     assert editor.document is original
     assert editor.document.manifest["controlRotations"]["play"] == 12
+    assert gallery.isVisible()
 
 
-def test_filter_hides_faces_by_name(editor):
-    editor._faces_panel._filter.setText("viridian")
-    shown = [
-        item.text(0) for group in range(2)
-        for item in [editor._faces_panel._tree.topLevelItem(group)]
-        for item in [item.child(index) for index in range(item.childCount())]
-        if not item.isHidden()
-    ]
-    assert shown == ["My Viridian", "Viridian"]
+def test_search_filters_faces_and_explains_empty_results(editor):
+    from amberfader.ui.face_gallery import GallerySource
+
+    gallery = _gallery(editor, GallerySource.BUILT_IN)
+    gallery._search.setText("viridian")
+    assert _faces(gallery) == ["Viridian"]
+    gallery._search.setText("no such face")
+    assert _faces(gallery) == []
+    assert gallery._content.currentWidget() is gallery._empty
+    assert "no such face" in gallery._empty.text()
+    assert gallery.selected_source() is None
+    assert not gallery._primary.isEnabled()
+
+
+def test_empty_installed_library_explains_where_faces_come_from(qapp, tmp_path):
+    from amberfader.ui.face_editor import FaceEditorWindow
+
+    window = FaceEditorWindow(library=FaceLibrary(tmp_path / "none", tmp_path / "a.json"))
+    try:
+        gallery = _gallery(window)
+        assert _faces(gallery) == []
+        assert gallery._empty.text().startswith("No Installed Faces")
+    finally:
+        window.hide()
+        window.deleteLater()
 
 
 def test_file_menu_offers_importing_a_whole_audion_zip(editor):
     file_menu = editor.menuBar().actions()[0].menu()
-    assert "Import all Audion faces from ZIP…" in [action.text() for action in file_menu.actions()]
+    assert "Import Audion Collection…" in [action.text() for action in file_menu.actions()]
 
 
 def test_audion_zip_import_installs_and_lists_every_face(
@@ -181,19 +209,21 @@ def test_audion_zip_import_installs_and_lists_every_face(
     document = editor.document
     assert editor.import_audion_archive(archive)
     assert editor.document is document
-    assert _faces(editor, 0) == ["Amber Orb", "Chromatic Orb", "My Viridian"]
-    assert editor._faces_panel._tree.currentItem().text(0) == "Amber Orb"
+    gallery = editor._workspace._gallery
+    assert gallery.isVisible()
+    assert _faces(gallery) == ["Amber Orb", "Chromatic Orb", "My Viridian"]
+    assert gallery._grid.currentItem().text() == "Amber Orb"
     assert messages[-1][0].splitlines()[0] == "Installed 2 of 2 Audion faces."
     imported = [face for face in library.faces if face.id.startswith("audion-")]
     assert sorted(face.name for face in imported) == ["Amber Orb", "Chromatic Orb"]
 
-    editor._faces_panel._edit.click()
+    gallery._primary.click()
     assert editor.document.path in {face.source for face in imported}
     assert editor.document.manifest["sourceCredit"] == "Original Fixture by Test Artist"
 
     assert editor.import_audion_archive(archive)
     assert "2 were already installed." in messages[-1][0]
-    assert len(_faces(editor, 0)) == 3
+    assert len(_faces(gallery)) == 3
 
 
 def test_audion_zip_import_can_stop_early(editor, library, tmp_path, messages, monkeypatch):
@@ -210,17 +240,17 @@ def test_audion_zip_import_can_stop_early(editor, library, tmp_path, messages, m
     text = messages[-1][0]
     assert text.startswith("Installed 1 of 2 Audion faces.")
     assert "Import stopped." in text
-    assert len(_faces(editor, 0)) == 2
+    assert len(_faces(editor._workspace._gallery)) == 2
 
 
-def test_audion_zip_import_reports_unreadable_archives(editor, tmp_path, messages):
+def test_audion_zip_import_reports_unreadable_archives(editor, library, tmp_path, messages):
     archive = tmp_path / "Broken.zip"
     archive.write_text("not a ZIP")
     document = editor.document
     assert not editor.import_audion_archive(archive)
-    assert messages[-1][0] == "Could not import Audion faces"
+    assert messages[-1][0] == "The Audion collection could not be imported."
     assert editor.document is document
-    assert _faces(editor, 0) == ["My Viridian"]
+    assert [face.name for face in library.faces if face.id == "my-viridian"] == ["My Viridian"]
 
 
 def test_failed_faces_are_listed_in_the_details(editor, tmp_path, messages):
@@ -238,29 +268,29 @@ def test_failed_rescan_after_save_keeps_the_list_and_reports_it(
 ):
     from amberfader.face_library import FaceError
 
-    _edit(editor, "My Viridian")
-    editor._metadata["name"].setText("Viridian Night")
-    editor._edit_metadata("name")
+    gallery = _gallery(editor)
+    _choose(gallery, "My Viridian")
+    field = editor._inspector.face._metadata["name"]
+    field.setText("Viridian Night")
+    field.editingFinished.emit()
 
     def broken_refresh():
         raise FaceError("Bundled faces are unavailable. Reinstall Amberfader.")
 
     monkeypatch.setattr(library, "refresh", broken_refresh)
     assert editor.save()
-    assert _faces(editor, 0) == ["My Viridian"]
-    assert "Reinstall Amberfader" in editor._faces_panel._problems.text()
+    assert _faces(gallery) == ["My Viridian"]
+    assert gallery._problem_list == ("Bundled faces are unavailable. Reinstall Amberfader.",)
+    assert gallery._problems.text() == "1 face folder could not be loaded"
 
 
-def test_filter_hides_empty_groups_and_never_edits_a_hidden_face(editor):
-    panel = editor._faces_panel
-    panel._tree.setCurrentItem(_item(editor, "My Viridian"))
-    assert panel._edit.isEnabled()
-    panel._filter.setText("amber")
-    assert panel._tree.topLevelItem(0).isHidden()
-    assert not panel._tree.topLevelItem(1).isHidden()
-    assert panel._tree.currentItem() is None
-    assert not panel._edit.isEnabled()
-    assert not panel.select(_item(editor, "My Viridian").data(0, 256))
+def test_search_never_opens_a_hidden_face(editor):
+    gallery = _gallery(editor)
+    assert gallery.selected_source() is not None
+    gallery._search.setText("amber")
+    assert gallery.selected_source() is None
+    gallery._primary.click()
+    assert editor.document.path is None
 
 
 def test_progress_names_each_face_before_it_is_imported(editor, tmp_path, messages, monkeypatch):

@@ -13,6 +13,8 @@ def editor(qapp):
     from amberfader.ui.face_editor import FaceEditorWindow
 
     window = FaceEditorWindow()
+    # Pointer tests need a canvas near actual size; the offscreen screen is small.
+    window.resize(1440, 900)
     window.show()
     qapp.processEvents()
     yield window
@@ -20,6 +22,12 @@ def editor(qapp):
     window.hide()
     window.deleteLater()
     qapp.processEvents()
+
+
+def _commit(field, text):
+    """Type a value and press Return, as a user commits an inspector field."""
+    field.setText(text)
+    field.editingFinished.emit()
 
 
 def _drag(qapp, canvas, start, finish, *, release=True, modifiers=None):
@@ -37,11 +45,12 @@ def _drag(qapp, canvas, start, finish, *, release=True, modifiers=None):
 
 
 def test_editor_lists_semantic_controls_and_previews_without_player_commands(editor):
-    names = {editor._layers.item(index).data(256) for index in range(editor._layers.count())}
+    names = set(editor._sidebar.element_names())
     assert names == {*editor.document.manifest["controls"], "drag"}
     assert editor._canvas.selected == "play"
     assert editor._save_action.isEnabled()
-    assert "Ready to save" in editor._validation.text()
+    assert editor.validation_problem is None
+    assert not editor._issue.isVisible()
     assert editor._canvas._item.face.info.id.startswith("amber-classic-custom-")
     assert editor._canvas._item.artwork.background.size().width() > 0
 
@@ -122,7 +131,7 @@ def test_snap_move_and_keyboard_nudges_use_face_coordinates(editor, qapp):
     from PySide6.QtCore import QPointF, QRectF, Qt
     from PySide6.QtTest import QTest
 
-    editor._snap.setChecked(True)
+    editor._snap_action.setChecked(True)
     canvas, document = editor._canvas, editor.document
     original = document.manifest["controls"]["play"]
     start = QRectF(*original).center()
@@ -136,14 +145,15 @@ def test_snap_move_and_keyboard_nudges_use_face_coordinates(editor, qapp):
 
 
 def test_inspector_rotation_typography_and_reset_update_preview(editor):
-    editor._rotation.setValue(-30)
+    inspector = editor._inspector.element
+    inspector._rotation.setValue(-30)
     assert editor.document.manifest["controlRotations"]["play"] == -30
     assert editor._canvas._item.face.control_rotations["play"] == -30
     editor._canvas.select("title")
-    editor._text_font.setCurrentText("mono")
-    editor._text_size.setValue(19)
-    editor._text_align.setCurrentText("center")
-    editor._text_bold.setChecked(False)
+    inspector._text_font.setCurrentIndex(inspector._text_font.findData("mono"))
+    inspector._text_size.setValue(19)
+    inspector._text_align.button("center").click()
+    inspector._text_style.button("bold").click()
     assert editor.document.manifest["readoutStyles"]["title"] == {
         "font": "mono",
         "size": 19,
@@ -151,22 +161,38 @@ def test_inspector_rotation_typography_and_reset_update_preview(editor):
         "bold": False,
     }
     assert editor._canvas._item.face.readout_styles["title"]["align"] == "center"
-    editor._reset_readout()
+    assert editor._undo_action.text() == "Undo Change Text Style"
+    inspector._reset_text.click()
     assert "title" not in editor.document.manifest.get("readoutStyles", {})
     editor._canvas.select("drag")
-    assert not editor._rotation.isEnabled()
+    assert not inspector._rotation.isEnabled()
 
 
-def test_invalid_geometry_remains_visible_but_blocks_save_and_recovers_on_undo(editor):
+def test_invalid_geometry_remains_visible_but_blocks_save_and_recovers_on_undo(
+    editor, tmp_path, monkeypatch,
+):
+    errors = []
+    monkeypatch.setattr(editor, "_show_error", lambda title, error: errors.append(str(error)))
     original = editor.document.manifest["controls"]["play"]
-    editor._rect_fields[0].setValue(1000)
-    assert "Cannot save yet" in editor._validation.text()
-    assert not editor._save_action.isEnabled()
-    assert not editor._save_as_action.isEnabled()
+    editor._inspector.element._rect_fields[0].setValue(1000)
+    assert editor.validation_problem == "play must fit inside the face"
+    assert editor._issue.text() == "Can't save: Play / Pause must fit inside the face"
     assert editor._canvas._item.face.controls["play"][0] == 1000
+    # Save stays available and explains why it cannot write the face.
+    assert editor._save_action.isEnabled()
+    assert not editor._save_to(tmp_path / "invalid")
+    assert errors == ["play must fit inside the face"]
     editor._undo()
     assert editor.document.manifest["controls"]["play"] == original
-    assert editor._save_action.isEnabled()
+    assert editor.validation_problem is None
+
+
+def test_issue_button_selects_the_element_it_names(editor):
+    editor._canvas.select("title")
+    editor.document.set_rect("play", [1000, 0, 60, 48])
+    editor._changed()
+    editor._issue.click()
+    assert editor._canvas.selected == "play"
 
 
 def test_save_as_writes_portable_pack_and_open_preserves_it(editor, tmp_path):
@@ -215,51 +241,73 @@ def test_open_builtin_clones_instead_of_editing_installed_assets(editor, monkeyp
     assert editor.document.manifest["id"].startswith("viridian-custom-")
 
 
-def test_close_prompt_includes_uncommitted_metadata_text(editor, monkeypatch):
+def test_close_prompt_names_the_face_and_includes_uncommitted_metadata_text(
+    editor, monkeypatch,
+):
     from PySide6.QtWidgets import QMessageBox
 
-    editor._metadata["name"].setText("A name still being typed")
-    monkeypatch.setattr(QMessageBox, "warning", lambda *args: QMessageBox.StandardButton.Cancel)
+    editor._inspector.face._metadata["name"].setText("A name still being typed")
+    prompts = []
+
+    def cancel(parent, title, text, *args):
+        prompts.append(text)
+        return QMessageBox.StandardButton.Cancel
+
+    monkeypatch.setattr(QMessageBox, "warning", cancel)
     assert not editor._confirm_discard()
     assert editor.document.manifest["name"] == "A name still being typed"
+    assert prompts == [
+        "Do you want to save the changes you made to “A name still being typed”?",
+    ]
 
 
 def test_save_shortcut_commits_metadata_without_requiring_focus_change(editor, tmp_path):
     destination = tmp_path / "saved"
     assert editor._save_to(destination)
-    editor._metadata["name"].setText("Shortcut saved")
+    editor._inspector.face._metadata["name"].setText("Shortcut saved")
     assert editor.save()
     assert load_face(destination).info.name == "Shortcut saved"
 
 
-def test_png_drop_imports_selected_button_normal_sprite(editor, qapp, tmp_path):
+def _drop_png(editor, filename, scene_point):
     from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
-    from PySide6.QtGui import QDropEvent, QImage
+    from PySide6.QtGui import QDropEvent
 
-    image = QImage(60, 48, QImage.Format.Format_ARGB32)
-    image.fill(Qt.GlobalColor.magenta)
-    filename = tmp_path / "replacement.png"
-    assert image.save(str(filename))
-    original = editor.document.assets
     mime = QMimeData()
     mime.setUrls([QUrl.fromLocalFile(str(filename))])
     event = QDropEvent(
-        QPointF(12, 12),
+        QPointF(editor._canvas.mapFromScene(scene_point)),
         Qt.DropAction.CopyAction,
         mime,
         Qt.MouseButton.LeftButton,
         Qt.KeyboardModifier.NoModifier,
     )
     editor._canvas.dropEvent(event)
-    assert event.isAccepted()
-    name = editor.document.manifest["buttons"]["play"]["normal"]
+    return event
+
+
+def test_png_drop_on_a_button_imports_its_normal_sprite(editor, qapp, tmp_path):
+    from PySide6.QtCore import QRectF, Qt
+    from PySide6.QtGui import QImage
+
+    image = QImage(60, 48, QImage.Format.Format_ARGB32)
+    image.fill(Qt.GlobalColor.magenta)
+    filename = tmp_path / "replacement.png"
+    assert image.save(str(filename))
+    original = editor.document.assets
+    editor._canvas.select("title")
+    target = QRectF(*editor.document.manifest["controls"]["next"]).center()
+    assert _drop_png(editor, filename, target).isAccepted()
+    name = editor.document.manifest["buttons"]["next"]["normal"]
     assert editor.document.assets[name] == filename.read_bytes()
+    assert editor._canvas.selected == "next"
+    assert editor._undo_action.text() == "Undo Import Artwork"
     editor._undo()
     assert editor.document.assets == original
 
 
 def test_png_drop_on_readout_changes_background_not_control(editor, tmp_path):
-    from PySide6.QtCore import Qt
+    from PySide6.QtCore import QRectF, Qt
     from PySide6.QtGui import QImage
 
     width, height = editor.document.manifest["size"]
@@ -267,8 +315,8 @@ def test_png_drop_on_readout_changes_background_not_control(editor, tmp_path):
     image.fill(Qt.GlobalColor.darkCyan)
     filename = tmp_path / "background.png"
     assert image.save(str(filename))
-    editor._canvas.select("title")
-    editor._drop_image(str(filename), "title")
+    target = QRectF(*editor.document.manifest["controls"]["title"]).center()
+    assert _drop_png(editor, filename, target).isAccepted()
     manifest = editor.document.manifest
     assert editor.document.assets[manifest["background"]] == filename.read_bytes()
     assert "title" not in manifest.get("buttons", {})
@@ -306,7 +354,7 @@ def test_export_keeps_working_path_and_unsaved_changes(editor, tmp_path, monkeyp
     working = tmp_path / "working"
     exported = tmp_path / "exported"
     assert editor._save_to(working)
-    editor._metadata["name"].setText("Unsaved exported copy")
+    editor._inspector.face._metadata["name"].setText("Unsaved exported copy")
     monkeypatch.setattr(editor, "_destination_folder", lambda caption: exported)
     assert editor.export()
     assert editor.document.path == working
@@ -375,7 +423,7 @@ def test_resizing_rotated_control_preserves_opposite_corner(editor, qapp):
 
     from amberfader.ui.face_editor_canvas import _control_transform
 
-    editor._rotation.setValue(30)
+    editor._inspector.element._rotation.setValue(30)
     original = editor.document.manifest["controls"]["play"]
     region = QRectF(*original)
     transform = _control_transform(region, 30)
@@ -397,18 +445,16 @@ def test_resizing_rotated_control_preserves_opposite_corner(editor, qapp):
 
 def test_background_size_draft_updates_canvas_and_blocks_save(editor):
     width = editor.document.manifest["size"][0]
-    editor._face_size[0].setValue(width + 20)
+    editor._inspector.face._face_size[0].setValue(width + 20)
     assert editor._canvas._item.face.size[0] == width + 20
-    assert "Cannot save yet" in editor._validation.text()
-    assert not editor._save_action.isEnabled()
+    assert editor.validation_problem == "Background must match the face size at 1x or 2x"
 
 
 def test_undo_metadata_updates_focused_field_so_save_does_not_reapply_edit(editor, tmp_path):
     original = editor.document.manifest["name"]
-    field = editor._metadata["name"]
+    field = editor._inspector.face._metadata["name"]
     field.setFocus()
-    field.setText("Undo this name")
-    editor._edit_metadata("name")
+    _commit(field, "Undo this name")
     assert editor.document.manifest["name"] == "Undo this name"
     editor._undo()
     assert field.text() == original
@@ -444,8 +490,7 @@ def test_undo_active_drag_reverts_only_drag_and_redo_restores_it(editor, qapp):
     from PySide6.QtCore import QPointF, QRectF, Qt
     from PySide6.QtTest import QTest
 
-    editor._metadata["name"].setText("Previously committed edit")
-    editor._edit_metadata("name")
+    _commit(editor._inspector.face._metadata["name"], "Previously committed edit")
     original = editor.document.manifest["controls"]["play"]
     start = QRectF(*original).center()
     _drag(qapp, editor._canvas, start, start + QPointF(18, 9), release=False)
@@ -484,8 +529,7 @@ def test_new_active_drag_disables_redo_and_cannot_reapply_abandoned_edit(editor,
     from PySide6.QtCore import QPointF, QRectF
 
     original_name = editor.document.manifest["name"]
-    editor._metadata["name"].setText("Abandoned name")
-    editor._edit_metadata("name")
+    _commit(editor._inspector.face._metadata["name"], "Abandoned name")
     editor._undo()
     assert editor.document.can_redo
     original = editor.document.manifest["controls"]["play"]
@@ -524,34 +568,33 @@ def test_saving_active_drag_finishes_it_before_saved_checkpoint(editor, qapp, tm
 @pytest.mark.parametrize("index", [0, 1])
 def test_negative_position_draft_renders_at_same_geometry_as_selection(editor, index):
     original = editor.document.manifest["controls"]["play"]
-    editor._rect_fields[index].setValue(-12)
+    editor._inspector.element._rect_fields[index].setValue(-12)
     draft = editor.document.manifest["controls"]["play"]
     assert draft[index] == -12
-    assert "Cannot save yet" in editor._validation.text()
-    assert not editor._save_action.isEnabled()
+    assert editor._issue.text() == "Can't save: Play / Pause must fit inside the face"
     assert editor._canvas._item.face.controls["play"] == tuple(draft)
     assert editor._canvas._geometry("play")[0].getRect() == tuple(draft)
     editor._undo()
     assert editor.document.manifest["controls"]["play"] == original
-    assert editor._save_action.isEnabled()
+    assert editor.validation_problem is None
 
 
 def test_oversized_draft_control_is_rendered_and_expands_scrollable_scene(editor):
-    editor._rect_fields[2].setValue(1500)
+    editor._inspector.element._rect_fields[2].setValue(1500)
     draft = editor.document.manifest["controls"]["play"]
     assert editor._canvas._item.face.controls["play"] == tuple(draft)
     assert editor._canvas._item.boundingRect().right() >= draft[0] + draft[2]
     assert editor._canvas.sceneRect().right() > draft[0] + draft[2]
-    assert not editor._save_action.isEnabled()
+    assert editor.validation_problem is not None
 
 
 def test_negative_draft_control_expands_item_bounds_without_changing_face_size(editor):
     face_size = editor._canvas._item.face_rect().size()
-    editor._rect_fields[0].setValue(-120)
+    editor._inspector.element._rect_fields[0].setValue(-120)
     assert editor._canvas._item.boundingRect().left() <= -120
     assert editor._canvas.sceneRect().left() < -120
     assert editor._canvas._item.face_rect().size() == face_size
-    assert not editor._save_action.isEnabled()
+    assert editor.validation_problem is not None
 
 
 def test_nudges_stop_at_shared_draft_bounds_and_keep_preview_current(editor, qapp):
@@ -560,41 +603,46 @@ def test_nudges_stop_at_shared_draft_bounds_and_keep_preview_current(editor, qap
 
     from amberfader.face_library import MAX_DRAFT_GEOMETRY
 
-    editor._rect_fields[0].setValue(MAX_DRAFT_GEOMETRY)
+    editor._inspector.element._rect_fields[0].setValue(MAX_DRAFT_GEOMETRY)
     QTest.keyClick(editor._canvas, Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier)
     draft = editor.document.manifest["controls"]["play"]
     assert draft[0] == MAX_DRAFT_GEOMETRY
     assert editor._canvas._item.face.controls["play"] == tuple(draft)
-    editor._rect_fields[1].setValue(-MAX_DRAFT_GEOMETRY)
+    editor._inspector.element._rect_fields[1].setValue(-MAX_DRAFT_GEOMETRY)
     QTest.keyClick(editor._canvas, Qt.Key.Key_Up, Qt.KeyboardModifier.ShiftModifier)
     draft = editor.document.manifest["controls"]["play"]
     assert draft[1] == -MAX_DRAFT_GEOMETRY
     assert editor._canvas._item.face.controls["play"] == tuple(draft)
-    assert editor._rect_fields[0].maximum() == editor._rect_fields[2].maximum()
+    fields = editor._inspector.element._rect_fields
+    assert fields[0].maximum() == fields[2].maximum()
 
 
-def test_undo_other_element_preserves_focused_uncommitted_metadata(editor, qapp):
+def test_undo_while_typing_undoes_the_typing_first_then_the_document(editor, qapp):
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
-    from PySide6.QtWidgets import QToolBar
+
+    from amberfader.ui.face_inspector import InspectorPane
 
     original_x = editor.document.manifest["controls"]["play"][0]
-    editor._rect_fields[0].setValue(original_x + 1)
-    editor._inspector.setCurrentIndex(1)
-    field = editor._metadata["name"]
+    editor._inspector.element._rect_fields[0].setValue(original_x + 1)
+    editor._inspector.show_pane(InspectorPane.FACE)
+    field = editor._inspector.face._metadata["name"]
     field.setFocus()
-    QTest.keyClicks(field, " still being typed")
-    pending = field.text()
-    assert field.hasFocus()
-    toolbar = editor.findChild(QToolBar)
-    undo_button = toolbar.widgetForAction(editor._undo_action)
-    undo_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-    QTest.mouseClick(undo_button, Qt.MouseButton.LeftButton)
     qapp.processEvents()
+    committed = field.text()
+    QTest.keyClicks(field, " still being typed")
+    editor._update_edit_actions()
+    assert editor._undo_action.text() == "Undo Typing"
+    editor._undo_action.trigger()
+    assert field.text() == committed
+    assert editor.document.manifest["controls"]["play"][0] == original_x + 1
+    assert editor._undo_action.text() == "Undo Move"
+    editor._undo_action.trigger()
     assert editor.document.manifest["controls"]["play"][0] == original_x
-    assert field.text() == pending
-    editor._flush_inspector()
-    assert editor.document.manifest["name"] == pending
+    assert field.hasFocus()
+    # With nothing left to undo, the field releases ⌘Z to the menu.
+    QTest.keyClick(field, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert editor.document.manifest["controls"]["play"][0] == original_x
 
 
 @pytest.mark.parametrize("button_name", ["RightButton", "MiddleButton"])
@@ -628,18 +676,19 @@ def test_replacing_document_with_focused_metadata_keeps_incoming_identity_and_hi
     from PySide6.QtTest import QTest
     from PySide6.QtWidgets import QMessageBox
 
-    editor._inspector.setCurrentIndex(1)
-    editor._metadata["name"].setFocus()
-    QTest.keyClicks(editor._metadata["name"], " from the old document")
+    from amberfader.ui.face_inspector import InspectorPane
+
+    editor._inspector.show_pane(InspectorPane.FACE)
+    editor._inspector.face._metadata["name"].setFocus()
+    QTest.keyClicks(editor._inspector.face._metadata["name"], " from the old document")
     monkeypatch.setattr(QMessageBox, "warning", lambda *args: QMessageBox.StandardButton.Discard)
     assert editor.new_from_template(BUILTIN_DIRECTORY / "viridian")
     qapp.processEvents()
     assert editor.document.manifest["name"] == "Viridian Custom"
-    assert editor._metadata["name"].text() == "Viridian Custom"
+    assert editor._inspector.face._metadata["name"].text() == "Viridian Custom"
     assert editor._canvas.selected == "play"
-    assert [field.value() for field in editor._rect_fields] == editor.document.manifest["controls"][
-        "play"
-    ]
+    fields = editor._inspector.element._rect_fields
+    assert [field.value() for field in fields] == editor.document.manifest["controls"]["play"]
     assert not editor.document.can_undo
 
 
@@ -659,7 +708,7 @@ def test_save_in_close_prompt_preserves_active_drag_and_pending_metadata(
     _drag(qapp, editor._canvas, start, start + QPointF(1, 0), release=False)
     moved = editor.document.manifest["controls"]["play"]
     assert moved != original
-    editor._metadata["name"].setText("Pending name at close")
+    editor._inspector.face._metadata["name"].setText("Pending name at close")
     prompts = []
 
     def save_choice(*args):
@@ -681,8 +730,7 @@ def test_cancel_in_close_prompt_preserves_current_active_drag(editor, qapp, monk
     from PySide6.QtCore import QPointF, QRectF
     from PySide6.QtWidgets import QMessageBox
 
-    editor._metadata["name"].setText("An earlier committed edit")
-    editor._edit_metadata("name")
+    _commit(editor._inspector.face._metadata["name"], "An earlier committed edit")
     original = editor.document.manifest["controls"]["play"]
     start = QRectF(*original).center()
     _drag(qapp, editor._canvas, start, start + QPointF(1, 0), release=False)
@@ -711,7 +759,7 @@ def test_save_during_active_drag_keeps_numeric_inspector_text_not_yet_committed(
     original = editor.document.manifest["controls"]["play"]
     start = QRectF(*original).center()
     _drag(qapp, editor._canvas, start, start + QPointF(1, 0), release=False)
-    field = editor._rect_fields[0]
+    field = editor._inspector.element._rect_fields[0]
     field.setFocus()
     field.lineEdit().selectAll()
     QTest.keyClicks(field.lineEdit(), str(original[0] + 3))
@@ -721,3 +769,264 @@ def test_save_during_active_drag_keeps_numeric_inspector_text_not_yet_committed(
     assert load_face(destination).controls["play"][0] == original[0] + 3
     assert editor.document.manifest["controls"]["play"][0] == original[0] + 3
     assert editor._canvas._gesture is None
+
+
+def test_shift_constrains_a_move_to_one_axis(editor, qapp):
+    from PySide6.QtCore import QEvent, QPointF, QRectF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtTest import QTest
+
+    canvas = editor._canvas
+    original = editor.document.manifest["controls"]["play"]
+    start = canvas.mapFromScene(QRectF(*original).center())
+    finish = canvas.mapFromScene(QRectF(*original).center() + QPointF(30, 6))
+    QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    move = QMouseEvent(
+        QEvent.Type.MouseMove, QPointF(finish), QPointF(canvas.viewport().mapToGlobal(finish)),
+        Qt.MouseButton.NoButton, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.ShiftModifier,
+    )
+    canvas.mouseMoveEvent(move)
+    QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=finish)
+    moved = editor.document.manifest["controls"]["play"]
+    assert moved[1] == original[1]
+    assert abs(moved[0] - original[0] - 30) <= 1
+
+
+def test_held_arrow_key_is_one_undo_step(editor):
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+
+    original = editor.document.manifest["controls"]["play"]
+    for repeat in (False, True, True, True):
+        event = QKeyEvent(
+            QEvent.Type.KeyPress, Qt.Key.Key_Right, Qt.KeyboardModifier.NoModifier,
+            "", repeat,
+        )
+        editor._canvas.keyPressEvent(event)
+    assert editor.document.manifest["controls"]["play"][0] == original[0] + 4
+    assert editor._undo_action.text() == "Undo Move"
+    editor._undo()
+    assert editor.document.manifest["controls"]["play"] == original
+    assert not editor.document.can_undo
+
+
+def test_delete_key_removes_the_selected_element_with_a_named_undo(editor, qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    editor._canvas.setFocus()
+    editor._canvas.select("like")
+    QTest.keyClick(editor._canvas, Qt.Key.Key_Backspace)
+    assert "like" not in editor.document.manifest["controls"]
+    assert "like" not in editor._sidebar.element_names()
+    assert editor._undo_action.text() == "Undo Remove Like"
+    editor._undo()
+    assert "like" in editor.document.manifest["controls"]
+    editor._canvas.select("drag")
+    QTest.keyClick(editor._canvas, Qt.Key.Key_Delete)
+    assert editor._canvas.selected == "drag"  # The drag region is required.
+
+
+def test_space_drag_pans_and_releasing_space_restores_editing(editor):
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtGui import QKeyEvent
+    from PySide6.QtWidgets import QGraphicsView
+
+    canvas = editor._canvas
+    press = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier)
+    canvas.keyPressEvent(press)
+    assert canvas.dragMode() == QGraphicsView.DragMode.ScrollHandDrag
+    release = QKeyEvent(
+        QEvent.Type.KeyRelease, Qt.Key.Key_Space, Qt.KeyboardModifier.NoModifier,
+    )
+    canvas.keyReleaseEvent(release)
+    assert canvas.dragMode() == QGraphicsView.DragMode.NoDrag
+
+
+def test_context_menu_targets_the_element_under_the_pointer(editor):
+    from PySide6.QtCore import QPoint, QRectF
+    from PySide6.QtGui import QContextMenuEvent
+
+    requests = []
+    editor._canvas.contextMenuRequested.disconnect()
+    editor._canvas.contextMenuRequested.connect(lambda name, _pos: requests.append(name))
+    center = editor._canvas.mapFromScene(
+        QRectF(*editor.document.manifest["controls"]["next"]).center(),
+    )
+    editor._canvas.contextMenuEvent(
+        QContextMenuEvent(QContextMenuEvent.Reason.Mouse, center, QPoint(0, 0)),
+    )
+    editor._canvas.contextMenuEvent(
+        QContextMenuEvent(QContextMenuEvent.Reason.Mouse, QPoint(2, 2), QPoint(0, 0)),
+    )
+    assert requests == ["next", ""]
+    assert editor._canvas.selected == "next"
+
+
+def test_dragging_a_png_highlights_what_it_will_replace(editor, tmp_path):
+    from PySide6.QtCore import QMimeData, QRectF, Qt, QUrl
+    from PySide6.QtGui import QDragMoveEvent
+
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(tmp_path / "art.png"))])
+
+    def move_over(name):
+        point = editor._canvas.mapFromScene(
+            QRectF(*editor.document.manifest["controls"][name]).center(),
+        )
+        event = QDragMoveEvent(
+            point, Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        editor._canvas.dragMoveEvent(event)
+        return event
+
+    assert move_over("play").isAccepted()
+    assert editor._canvas._drop_target == "play"
+    move_over("title")
+    assert editor._canvas._drop_target == ""  # Screen text takes no artwork: background.
+    editor._canvas.dragLeaveEvent(None)
+    assert editor._canvas._drop_target is None
+
+
+def test_zoom_steps_through_standard_percentages(editor):
+    editor._canvas.set_zoom(1)
+    editor._zoom_in_action.trigger()
+    assert editor._canvas.zoom == pytest.approx(1.25)
+    assert editor._zoom_button_action.text() == "125%"
+    editor._zoom_out_action.trigger()
+    editor._zoom_out_action.trigger()
+    assert editor._canvas.zoom == pytest.approx(0.75)
+
+
+def test_edit_commands_follow_keyboard_focus(editor, qapp):
+    from amberfader.ui.face_inspector import InspectorPane
+
+    editor._canvas.setFocus()
+    qapp.processEvents()
+    editor._update_edit_actions()
+    assert editor._delete_action.isEnabled()
+    assert not editor._copy_action.isEnabled()
+    assert not editor._select_all_action.isEnabled()
+
+    editor._inspector.show_pane(InspectorPane.FACE)
+    field = editor._inspector.face._metadata["name"]
+    field.setFocus()
+    qapp.processEvents()
+    field.selectAll()
+    assert editor._cut_action.isEnabled() and editor._copy_action.isEnabled()
+    assert editor._select_all_action.isEnabled()
+    editor._delete_action.trigger()
+    assert field.text() == ""
+    assert editor.document.manifest["name"] != ""  # Deleting text is not a document edit.
+
+
+def test_zoomed_canvas_pans_with_scrolling_and_fitting_is_stable(editor, qapp):
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+
+    canvas = editor._canvas
+    canvas.set_zoom(3)
+    before = canvas.horizontalScrollBar().value()
+    event = QWheelEvent(
+        QPointF(20, 20), QPointF(canvas.viewport().mapToGlobal(QPoint(20, 20))),
+        QPoint(-60, 0), QPoint(-120, 0), Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier, Qt.ScrollPhase.NoScrollPhase, False,
+    )
+    canvas.wheelEvent(event)
+    assert canvas.horizontalScrollBar().value() != before
+    # Hiding a panel refits once; the view never toggles scroll bars and refits again.
+    canvas.fit_face()
+    zooms = []
+    canvas.zoomChanged.connect(zooms.append)
+    editor._toggle_sidebar()
+    qapp.processEvents()
+    editor._toggle_inspector()
+    qapp.processEvents()
+    assert 1 <= len(zooms) <= 4
+    assert not canvas.horizontalScrollBar().isVisible()
+
+
+def test_revert_to_saved_reloads_the_folder_after_confirmation(editor, tmp_path, monkeypatch):
+    destination = tmp_path / "revert"
+    assert editor._save_to(destination)
+    assert not editor._revert_action.isEnabled()
+    editor.document.set_rotation("play", 20, label="Rotate")
+    editor._changed()
+    assert editor._revert_action.isEnabled()
+    monkeypatch.setattr(editor, "_confirm_revert", lambda: False)
+    assert not editor.revert()
+    assert editor.document.manifest["controlRotations"]["play"] == 20
+    monkeypatch.setattr(editor, "_confirm_revert", lambda: True)
+    assert editor.revert()
+    assert editor.document.path == destination
+    assert "play" not in editor.document.manifest.get("controlRotations", {})
+    assert not editor.document.dirty and not editor.isWindowModified()
+
+
+def test_show_in_finder_reveals_the_saved_folder(editor, tmp_path, monkeypatch):
+    from amberfader import desktop
+
+    revealed = []
+    monkeypatch.setattr(desktop, "reveal", lambda path: revealed.append(path) or True)
+    assert not editor._reveal_action.isEnabled()
+    assert editor._save_to(tmp_path / "shown")
+    assert editor._reveal_action.isEnabled()
+    editor._reveal_action.trigger()
+    assert revealed == [tmp_path / "shown"]
+
+
+def test_artwork_list_imports_and_removes_one_state(editor, tmp_path, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QImage
+
+    image = QImage(88, 44, QImage.Format.Format_ARGB32)
+    image.fill(Qt.GlobalColor.cyan)
+    path = tmp_path / "hover.png"
+    assert image.save(str(path))
+    monkeypatch.setattr(editor, "_choose_png", lambda caption: path)
+    inspector = editor._inspector.element
+    states = inspector._states
+    hover = next(row for row in range(states.count())
+                 if states.item(row).data(Qt.ItemDataRole.UserRole) == "hover")
+    states.setCurrentRow(hover)
+    inspector._import_artwork.click()
+    name = editor.document.manifest["buttons"]["play"]["hover"]
+    assert editor.document.assets[name] == path.read_bytes()
+    assert inspector.artwork_state == "hover"  # The selection survives the refresh.
+    assert editor._undo_action.text() == "Undo Import Artwork"
+    inspector._remove_artwork.click()
+    assert "hover" not in editor.document.manifest["buttons"]["play"]
+    assert editor._undo_action.text() == "Undo Remove Artwork"
+
+
+def test_dropping_a_face_folder_opens_it(editor, tmp_path):
+    from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
+    from PySide6.QtGui import QDropEvent
+
+    folder = FaceDocument.from_template(BUILTIN_DIRECTORY / "viridian").save(tmp_path / "drop")
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(folder))])
+    event = QDropEvent(
+        QPointF(10, 10), Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
+    )
+    editor._canvas.dropEvent(event)
+    assert event.isAccepted()
+    assert editor.document.path == folder
+
+
+def test_undo_reaches_the_document_from_a_focused_number_field(editor, qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    original = editor.document.manifest["controls"]["play"]
+    editor._canvas.setFocus()
+    QTest.keyClick(editor._canvas, Qt.Key.Key_Right)
+    assert editor.document.manifest["controls"]["play"][0] == original[0] + 1
+    field = editor._inspector.element._rect_fields[1]
+    editor.activateWindow()
+    field.setFocus()
+    qapp.processEvents()
+    QTest.keyClick(qapp.focusWidget(), Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert editor.document.manifest["controls"]["play"] == original
