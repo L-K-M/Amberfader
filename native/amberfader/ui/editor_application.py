@@ -341,7 +341,9 @@ class FaceEditorApplication(QObject):
     # ----------------------------------------------------------- autosave
     def _edited_window(self, window: FaceEditorWindow) -> None:
         self._edited.add(window)
-        self._autosave_timer.start()
+        # Not restarted per edit: a long drag or color pick still autosaves.
+        if not self._autosave_timer.isActive():
+            self._autosave_timer.start()
 
     def autosave_now(self) -> None:
         for window in list(self._edited):

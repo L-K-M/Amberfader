@@ -206,3 +206,19 @@ def test_quitting_remembers_open_faces_for_window_restoration(
     restored.start([])
     assert [window.document.path for window in restored.windows()] == [saved_face]
     assert restored._gallery is None
+
+
+def test_continuous_editing_does_not_postpone_the_autosave(make_editor, saved_face):
+    import time
+
+    editor = make_editor()
+    editor.start([FaceDocument.open(saved_face)])
+    [window] = editor.windows()
+    window.document.set_rotation("play", 1)
+    window._changed()
+    first_deadline = editor._autosave_timer.remainingTime()
+    time.sleep(0.05)
+    window.document.set_rotation("play", 2)
+    window._changed()
+    assert editor._autosave_timer.isActive()
+    assert editor._autosave_timer.remainingTime() < first_deadline
