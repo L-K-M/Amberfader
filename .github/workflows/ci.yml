@@ -188,8 +188,11 @@ jobs:
           retention-days: 7
 
   embedded:
-    name: Page bridge end to end in Qt WebEngine
-    runs-on: ubuntu-24.04
+    name: Page bridge end to end in Qt WebEngine (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -210,6 +213,7 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
       - name: Qt WebEngine runtime libraries
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -221,7 +225,7 @@ jobs:
       - name: Sync project environment
         run: uv sync
 
-      - name: Bridge end to end against the scripted test page (Qt offscreen)
+      - name: Bridge end to end against the scripted test page
         env:
           QT_QPA_PLATFORM: offscreen
           AMBERFADER_REQUIRE_EMBEDDED: "1"

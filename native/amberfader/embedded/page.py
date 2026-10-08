@@ -254,11 +254,14 @@ class BrowserWindow(QMainWindow):
     """Shows the page for sign-in and browsing. Closing it only hides it:
     playback continues until the player window quits Amberfader.
 
+    While concealed, the window stays shown only to Qt, off screen. Hiding
+    the view suspends Chromium's rendering callbacks, which can stall the
+    site's idle prompt and its dismissal until you reveal the window.
+
     The page always lays out at least MIN_LAYOUT_WIDTH wide:
 
     - A page that loads behind a hidden window would lay out 0 px wide, so
-      the window shows off screen while it loads and hides again after.
-      The page then keeps that size while hidden.
+      the window shows off screen from its first load, even while concealed.
     - A narrower window zooms the page out. Your own zoom, for example
       Ctrl+wheel, applies up to that limit and returns in a wider window.
     """
@@ -292,7 +295,6 @@ class BrowserWindow(QMainWindow):
         page.zoomFactorChanged.connect(self._zoom_changed)
         page.loadStarted.connect(self._load_started)
         page.loadFinished.connect(self._load_finished)
-        page.renderProcessTerminated.connect(self._renderer_exited)
         self.resize(1100, 800)
 
     def reveal(self) -> None:
@@ -302,10 +304,7 @@ class BrowserWindow(QMainWindow):
         self.activateWindow()
 
     def conceal(self) -> None:
-        if self.view.page().isLoading():
-            self._start_offscreen_layout()
-        else:
-            self.hide()
+        self._start_offscreen_layout()
 
     def _show_origin(self, url: QUrl) -> None:
         self._origin.setText(origin_of(url.toString()) or url.scheme() or "")
@@ -318,23 +317,18 @@ class BrowserWindow(QMainWindow):
         super().resizeEvent(event)
         self._fit_zoom()
 
-    # ---- layout size while hidden -----------------------------------------
+    # ---- rendering while concealed ----------------------------------------
 
     def _load_started(self) -> None:
         if not self.isVisible():
             self._start_offscreen_layout()
 
     def _load_finished(self, _ok: bool) -> None:
-        # A newer load may still be running; it ends the layout instead.
+        # A newer load may still be running; fit its zoom when it finishes.
         if self.view.page().isLoading():
             return
         # A new renderer starts at the default zoom.
         self._fit_zoom()
-        self._end_offscreen_layout()
-
-    def _renderer_exited(self, *_args: object) -> None:
-        # No load finishes after this; the next load lays out again.
-        self._end_offscreen_layout()
 
     def _start_offscreen_layout(self) -> None:
         if self._offscreen():

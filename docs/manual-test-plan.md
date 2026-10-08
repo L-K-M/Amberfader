@@ -79,10 +79,13 @@ Change a selector only with evidence from a live page:
       non-Premium account. Record any audio or video ad and the page's
       behavior. Turn it off, reload, and confirm the page still plays.
 - [ ] With **Continue playing automatically** on, leave music playing for
-      several hours without touching the page. If YouTube Music shows
+      several hours with the YouTube Music window hidden, without pressing
+      **Show YT**. Repeat after closing that window and after a hidden reload.
+      If YouTube Music shows
       "Video paused. Continue watching?", Amberfader closes it and playback
       resumes. Capture the prompt's markup (see Selector evidence) the first
-      time it appears.
+      time it appears. Turn the option off, reload, and confirm the next prompt
+      waits for your input.
 
 ## Soak
 

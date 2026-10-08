@@ -19,19 +19,26 @@ from pathlib import Path
 
 TIMEOUT_S = 30.0
 # A stand-in for YouTube Music's "Continue watching?" prompt. Clicking its
-# container closes it, as continue-playing expects of the real one.
+# container closes it, as continue-playing expects of the real one. Opening
+# and dismissing use rendering callbacks to expose hidden-page suspension.
 PROMPT_SCRIPT = """(() => {
   window.__amberfaderPromptClosed = false;
+  window.__amberfaderPromptOpened = false;
   const container = document.createElement('ytmusic-popup-container');
   const prompt = document.createElement('ytmusic-you-there-renderer');
   prompt.textContent = 'Video paused. Continue watching?';
   container.appendChild(prompt);
   container.addEventListener('click', () => {
-    prompt.remove();
-    window.__amberfaderPromptClosed = true;
+    requestAnimationFrame(() => {
+      prompt.remove();
+      window.__amberfaderPromptClosed = true;
+    });
   });
   document.body.appendChild(container);
-  document.dispatchEvent(new CustomEvent('yt-popup-opened'));
+  requestAnimationFrame(() => {
+    window.__amberfaderPromptOpened = true;
+    document.dispatchEvent(new CustomEvent('yt-popup-opened'));
+  });
 })()"""
 AD_RESPONSE = (
     "JSON.stringify(JSON.parse('{\"adPlacements\":[1],"
@@ -41,6 +48,7 @@ AD_RESPONSE = (
 
 def main() -> int:
     from PySide6 import QtWebEngineWidgets  # noqa: F401
+    from PySide6.QtCore import Qt
     from PySide6.QtWebEngineCore import QWebEngineScript
     from PySide6.QtWidgets import QApplication
 
@@ -126,7 +134,17 @@ def main() -> int:
         return runtime.host.page.zoomFactor()
 
     def browser_hidden():
-        return pump(lambda: not runtime.host.window.isVisible(), timeout=5)
+        # Qt keeps the view shown for rendering without mapping its window.
+        return runtime.host.window.testAttribute(
+            Qt.WidgetAttribute.WA_DontShowOnScreen,
+        )
+
+    def continue_playing(name):
+        main_world(PROMPT_SCRIPT)
+        check(f"{name}: prompt dismissed", pump(
+            lambda: main_world("window.__amberfaderPromptClosed") is True, timeout=5,
+        ))
+        check(f"{name}: browser stays hidden", browser_hidden())
 
     def report():
         runtime.shutdown()
@@ -159,6 +177,7 @@ def main() -> int:
         # behind it would otherwise lay out 0 px wide.
         check("hidden start lays out at desktop width", desktop_layout())
         check("hidden start stays hidden", browser_hidden())
+        continue_playing("continue playing after hidden start")
 
         _, ok, _ = call("player.play")
         check("play ok", ok)
@@ -187,7 +206,7 @@ def main() -> int:
         check("observed liked", pump(lambda: states()[-1].get("liked") is True))
 
         _, ok, _ = call("browser.showPlayer")
-        check("show window", ok and runtime.host.window.isVisible())
+        check("show window", ok and runtime.host.window.isVisible() and not browser_hidden())
 
         # A narrow window zooms the page out, and zooming in stops at the
         # desktop width. A wide window returns to the zoom you chose.
@@ -206,7 +225,7 @@ def main() -> int:
         browser.resize(1100, 800)
 
         _, ok, _ = call("browser.hidePlayer")
-        check("hide window", ok and not runtime.host.window.isVisible())
+        check("hide window", ok and browser_hidden())
 
         # Page scripts run in the main world and must not reach the bridge.
         check("bridge isolated from page scripts", main_world(
@@ -217,10 +236,11 @@ def main() -> int:
         # Both built-in features are on by default.
         check("ad filter strips player ads in the main world",
               main_world(AD_RESPONSE) == '{"playerResponse":{"keep":2},"keep":3}')
-        main_world(PROMPT_SCRIPT)
-        check("continue playing closes the prompt", pump(
-            lambda: main_world("window.__amberfaderPromptClosed") is True, timeout=5,
-        ))
+        continue_playing("continue playing after hiding")
+
+        call("browser.showPlayer")
+        browser.close()
+        continue_playing("continue playing after closing the browser")
 
         # A reload is a new document: new binding, old token rejected.
         runtime.host.load()
@@ -231,6 +251,7 @@ def main() -> int:
         ))
         _, ok, _ = call("player.pause")
         check("command after reload", ok)
+        continue_playing("continue playing after hidden reload")
 
         session = next(m["sessionId"] for m in messages if "sessionId" in m)
         runtime.upstream.send({
@@ -277,6 +298,7 @@ def main() -> int:
         check("hidden reload lays out at desktop width", pump(desktop_layout, timeout=5))
         check("hidden reload stays hidden", browser_hidden())
         check("hidden reload keeps the fitted zoom", abs(zoom() - 600 / MIN_LAYOUT_WIDTH) < 1e-3)
+        continue_playing("continue playing after renderer recovery")
 
         # The menu switches turn both features off from the next load.
         options = {action.text(): action for action in window._playback_menu.actions()}
@@ -293,6 +315,9 @@ def main() -> int:
             "JSON.parse('{\"adPlacements\":[1]}').adPlacements.length",
         ) == 1)
         main_world(PROMPT_SCRIPT)
+        check("prompt opens when continue playing is off", pump(
+            lambda: main_world("window.__amberfaderPromptOpened") is True, timeout=5,
+        ))
         pump(lambda: False, timeout=1)
         check("prompt left open when continue playing is off",
               main_world("window.__amberfaderPromptClosed") is False)
