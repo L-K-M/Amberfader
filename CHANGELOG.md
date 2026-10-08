@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Rotated face controls preserve transparent corners in the player, matching
+  the face editor preview.
 - The heart stayed **♡?** (unknown) when YouTube Music hid its Like button:
   in a window narrower than 936 px or zoomed in, after closing the window
   before the first page finished loading, with `--background`, or after a
