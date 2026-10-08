@@ -5,11 +5,11 @@ description = "Compact classic-style player for YouTube Music with its own embed
 readme = "README.md"
 license = { text = "Unlicense" }
 requires-python = ">=3.11"
-# PySide6-Addons carries Qt WebEngine (Chromium), which hosts YouTube Music.
+# Before 6.12, Addons bundles WebEngine and its wheels support macOS 13.
 dependencies = [
     "jsonschema>=4.23,<5",
-    "PySide6-Essentials>=6.8,<7",
-    "PySide6-Addons>=6.8,<7",
+    "PySide6-Essentials>=6.8,<6.12",
+    "PySide6-Addons>=6.8,<6.12",
 ]
 
 [project.scripts]
