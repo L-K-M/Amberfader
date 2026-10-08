@@ -49,6 +49,7 @@ SUFFIXES = ("", NEW_SUFFIX, OLD_SUFFIX)
 # If it crashes before finishing, the claim is recovered like any snapshot.
 CLAIM_PREFIX = "~claim-"
 LOCK_PREFIX = ".session-"
+TOKEN_LOCK_PREFIX = ".token-"
 LOCK_SUFFIX = ".lock"
 
 
@@ -64,10 +65,8 @@ def _valid_token(token: str) -> bool:
 
 def _session_alive(lock_path: Path) -> bool:
     """Whether a running editor still holds this session lock."""
-    if not lock_path.is_file():
-        return False
     try:
-        with lock_path.open("a") as handle:
+        with lock_path.open("r") as handle:
             try:
                 fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
@@ -76,6 +75,28 @@ def _session_alive(lock_path: Path) -> bool:
     except OSError:
         return False
     return False
+
+
+def _lock_file(path: Path) -> IO[str] | None:
+    """Exclusively lock `path`, creating it; None if another process holds it.
+
+    A sweep may unlink the file between our open and our lock. Locking an
+    unlinked inode would protect nothing, so check the path still names it.
+    """
+    for _attempt in range(3):
+        handle = path.open("a")
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            handle.close()
+            return None
+        try:
+            if os.stat(path).st_ino == os.fstat(handle.fileno()).st_ino:
+                return handle
+        except FileNotFoundError:
+            pass
+        handle.close()
+    raise OSError(f"Cannot lock {path.name}")
 
 
 class AutosaveStore:
@@ -96,12 +117,9 @@ class AutosaveStore:
         if self._lock is not None:
             return
         self._root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        handle = self._lock_path(self._session).open("a")
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            handle.close()
-            raise
+        handle = _lock_file(self._lock_path(self._session))
+        if handle is None:
+            raise OSError("Autosave session is already in use")
         self._lock = handle
 
     def close(self) -> None:
@@ -157,6 +175,9 @@ class AutosaveStore:
         """
         try:
             entries = sorted(self._root.iterdir()) if self._root.is_dir() else []
+            if entries:
+                # Claims made from here on are attributable to a live editor.
+                self._hold_session()
         except OSError as exc:
             return [], [f"Cannot read autosaves: {exc}"]
         tokens = []
@@ -180,23 +201,37 @@ class AutosaveStore:
         return faces, problems
 
     def _recover_token(self, token: str, problems: list[str]) -> RecoveredFace | None:
+        # One editor at a time works on a token; the next finds it recovered.
+        token_lock = self._root / f"{TOKEN_LOCK_PREFIX}{token}{LOCK_SUFFIX}"
+        try:
+            handle = _lock_file(token_lock)
+        except OSError:
+            return None
+        if handle is None:
+            return None
+        try:
+            return self._recover_locked(token, problems)
+        finally:
+            token_lock.unlink(missing_ok=True)
+            handle.close()
+
+    def _recover_locked(self, token: str, problems: list[str]) -> RecoveredFace | None:
         claims = sorted(self._root.glob(f"{token}{CLAIM_PREFIX}*"))
         for claim in claims:
             claimer = claim.name.removeprefix(f"{token}{CLAIM_PREFIX}")
-            if claimer == self._session or _session_alive(self._lock_path(claimer)):
+            if self._live(claimer):
                 return None  # Another running editor is recovering it.
-        candidates = [
-            path for path in (*(self._root / f"{token}{suffix}" for suffix in SUFFIXES), *claims)
-            if (path / INFO_FILE).is_file()
-        ]
+        # A complete ~new is the newest copy; ~old only backs up an interrupted rename.
+        ordered = (
+            self._root / f"{token}{NEW_SUFFIX}", self._root / token, *claims,
+            self._root / f"{token}{OLD_SUFFIX}",
+        )
+        candidates = [path for path in ordered if (path / INFO_FILE).is_file()]
         failure: Exception | None = None
         for candidate in candidates:
             try:
                 info = self._info(candidate)
-                session = info.get("session")
-                if isinstance(session, str) and (
-                    session == self._session or _session_alive(self._lock_path(session))
-                ):
+                if self._live(info.get("session")):
                     return None  # A running editor's live work.
             except (FaceError, OSError, ValueError, RecursionError) as exc:
                 failure = failure or exc
@@ -231,6 +266,12 @@ class AutosaveStore:
         # On failure it stays on disk under its claim name.
         with contextlib.suppress(OSError):
             os.rename(claimed, candidate)
+
+    def _live(self, session: object) -> bool:
+        """Whether a session belongs to a running editor, this one included."""
+        if not isinstance(session, str) or not _valid_token(session):
+            return False  # Not written by an editor: treat as abandoned.
+        return session == self._session or _session_alive(self._lock_path(session))
 
     def _remove_dead_locks(self) -> None:
         for lock in self._root.glob(f"{LOCK_PREFIX}*{LOCK_SUFFIX}"):

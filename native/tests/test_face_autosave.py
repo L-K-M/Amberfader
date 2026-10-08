@@ -226,3 +226,48 @@ def test_checking_a_dead_session_creates_no_lock_file(store):
     missing = store.root / ".session-0000.lock"
     assert not _session_alive(missing)
     assert not missing.exists()
+
+
+def test_a_complete_new_copy_wins_over_the_older_snapshot(store):
+    import shutil
+
+    document = FaceDocument.from_template(TEMPLATE)
+    document.set_value(("name",), "Older")
+    store.write(TOKEN, document)
+    document.set_value(("name",), "Newer")
+    store.write("eeee", document)
+    # A crash after the new copy was complete, before the swap.
+    shutil.copytree(store.root / "eeee", store.root / f"{TOKEN}~new")
+    store.remove("eeee")
+    [face], _ = _after_crash(store).recover()
+    assert face.document.manifest["name"] == "Newer"
+
+
+def test_a_snapshot_another_editor_is_recovering_is_skipped(store):
+    from amberfader.face_autosave import _lock_file
+
+    store.write(TOKEN, FaceDocument.from_template(TEMPLATE))
+    later = _after_crash(store)
+    held = _lock_file(store.root / f".token-{TOKEN}.lock")
+    try:
+        assert later.recover() == ([], [])
+        assert (store.root / TOKEN).is_dir()
+    finally:
+        held.close()
+        later.close()
+
+
+def test_a_malformed_session_counts_as_abandoned(store):
+    import json
+
+    store.write(TOKEN, FaceDocument.from_template(TEMPLATE))
+    info_path = store.root / TOKEN / "autosave.json"
+    info = json.loads(info_path.read_text())
+    info["session"] = "../../outside"
+    info_path.write_text(json.dumps(info))
+    later = _after_crash(store)
+    try:
+        faces, problems = later.recover()
+        assert (len(faces), problems) == (1, [])
+    finally:
+        later.close()
