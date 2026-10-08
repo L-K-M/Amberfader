@@ -30,7 +30,7 @@ PROMPT_SCRIPT = """(() => {
   container.appendChild(prompt);
   container.addEventListener('click', () => {
     requestAnimationFrame(() => {
-      prompt.remove();
+      container.remove();
       window.__amberfaderPromptClosed = true;
     });
   });

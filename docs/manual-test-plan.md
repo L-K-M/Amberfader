@@ -89,6 +89,8 @@ Change a selector only with evidence from a live page:
 
 ## Soak
 
+- [ ] Compare CPU use while playing with the YouTube Music window hidden and
+      visible. Record the difference in `docs/compatibility.md`.
 - [ ] 8-hour continuous listening with the player open. Record the combined
       RSS of Amberfader and its QtWebEngine processes at start and end (the
       command is in the gate), skip counts and any reattaches. Numbers go into

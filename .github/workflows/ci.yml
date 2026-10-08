@@ -229,7 +229,6 @@ jobs:
 
       - name: Bridge end to end against the scripted test page
         env:
-          QT_QPA_PLATFORM: offscreen
           AMBERFADER_REQUIRE_EMBEDDED: "1"
         run: uv run pytest native/tests/test_embedded_e2e.py -q -rs
 
