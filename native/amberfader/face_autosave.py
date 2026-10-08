@@ -45,7 +45,9 @@ TOKEN_CHARACTERS = frozenset("0123456789abcdef")
 NEW_SUFFIX = "~new"
 OLD_SUFFIX = "~old"
 SUFFIXES = ("", NEW_SUFFIX, OLD_SUFFIX)
-CLAIM_SUFFIX = "~claim"
+# A recovering editor renames a snapshot to <token>~claim-<its session>.
+# If it crashes before finishing, the claim is recovered like any snapshot.
+CLAIM_PREFIX = "~claim-"
 LOCK_PREFIX = ".session-"
 LOCK_SUFFIX = ".lock"
 
@@ -62,6 +64,8 @@ def _valid_token(token: str) -> bool:
 
 def _session_alive(lock_path: Path) -> bool:
     """Whether a running editor still holds this session lock."""
+    if not lock_path.is_file():
+        return False
     try:
         with lock_path.open("a") as handle:
             try:
@@ -139,8 +143,10 @@ class AutosaveStore:
 
     def remove(self, token: str) -> None:
         if _valid_token(token):
-            for suffix in (*SUFFIXES, CLAIM_SUFFIX):
+            for suffix in SUFFIXES:
                 shutil.rmtree(self._root / f"{token}{suffix}", ignore_errors=True)
+            for claim in self._root.glob(f"{token}{CLAIM_PREFIX}*"):
+                shutil.rmtree(claim, ignore_errors=True)
 
     def recover(self) -> tuple[list[RecoveredFace], list[str]]:
         """Claim the work of editors that ended unexpectedly.
@@ -156,9 +162,11 @@ class AutosaveStore:
         tokens = []
         for entry in entries:
             token = entry.name.split("~", 1)[0]
+            known = entry.name in {f"{token}{suffix}" for suffix in SUFFIXES} or (
+                entry.name.startswith(f"{token}{CLAIM_PREFIX}")
+            )
             if (
-                entry.is_dir() and not entry.is_symlink() and _valid_token(token)
-                and entry.name in {f"{token}{suffix}" for suffix in SUFFIXES}
+                entry.is_dir() and not entry.is_symlink() and _valid_token(token) and known
                 and token not in tokens
             ):
                 tokens.append(token)
@@ -172,9 +180,14 @@ class AutosaveStore:
         return faces, problems
 
     def _recover_token(self, token: str, problems: list[str]) -> RecoveredFace | None:
+        claims = sorted(self._root.glob(f"{token}{CLAIM_PREFIX}*"))
+        for claim in claims:
+            claimer = claim.name.removeprefix(f"{token}{CLAIM_PREFIX}")
+            if claimer == self._session or _session_alive(self._lock_path(claimer)):
+                return None  # Another running editor is recovering it.
         candidates = [
-            self._root / f"{token}{suffix}" for suffix in SUFFIXES
-            if (self._root / f"{token}{suffix}" / INFO_FILE).is_file()
+            path for path in (*(self._root / f"{token}{suffix}" for suffix in SUFFIXES), *claims)
+            if (path / INFO_FILE).is_file()
         ]
         failure: Exception | None = None
         for candidate in candidates:
@@ -188,7 +201,7 @@ class AutosaveStore:
             except (FaceError, OSError, ValueError, RecursionError) as exc:
                 failure = failure or exc
                 continue
-            claimed = self._root / f"{token}{CLAIM_SUFFIX}"
+            claimed = self._root / f"{token}{CLAIM_PREFIX}{self._session}"
             try:
                 os.rename(candidate, claimed)
             except OSError:

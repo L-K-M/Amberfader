@@ -185,3 +185,44 @@ def test_recovery_works_through_a_symlinked_state_folder(tmp_path):
         assert problems == [] and len(faces) == 1
     finally:
         next_editor.close()
+
+
+def test_a_claim_left_by_an_editor_that_crashed_while_recovering_is_recovered(store):
+    store.write(TOKEN, FaceDocument.from_template(TEMPLATE))
+    store.close()
+    # The claimer died between its rename and rewriting the snapshot.
+    (store.root / TOKEN).rename(store.root / f"{TOKEN}~claim-deadbeef")
+    later = AutosaveStore(store.root)
+    try:
+        [face], problems = later.recover()
+        assert problems == []
+        assert _snapshots(store.root) == [face.token]
+        locks = [path.name for path in store.root.glob(".session-*.lock")]
+        assert locks == [f".session-{later._session}.lock"]  # The dead one is gone.
+    finally:
+        later.close()
+
+
+def test_a_claim_in_progress_by_a_running_editor_is_left_alone(store):
+    store.write(TOKEN, FaceDocument.from_template(TEMPLATE))
+    store.close()
+    claimer = AutosaveStore(store.root)
+    other = AutosaveStore(store.root)
+    try:
+        claimer.write("ffff", FaceDocument.from_template(TEMPLATE))  # Holds its session.
+        session = claimer._session
+        (store.root / TOKEN).rename(store.root / f"{TOKEN}~claim-{session}")
+        assert other.recover() == ([], [])
+        assert (store.root / f"{TOKEN}~claim-{session}").is_dir()
+        assert (store.root / "ffff").is_dir()
+    finally:
+        claimer.close()
+        other.close()
+
+
+def test_checking_a_dead_session_creates_no_lock_file(store):
+    from amberfader.face_autosave import _session_alive
+
+    missing = store.root / ".session-0000.lock"
+    assert not _session_alive(missing)
+    assert not missing.exists()
