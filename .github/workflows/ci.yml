@@ -144,7 +144,9 @@ jobs:
           native/tests/test_face_focus_rings.py native/tests/test_face_readout_styles.py
           native/tests/test_faces_v3.py native/tests/test_audion_import.py
           native/tests/test_audion_import_ui.py native/tests/test_audion_face_rendering.py
-          native/tests/test_audion_popup_keyboard.py
+          native/tests/test_audion_popup_keyboard.py native/tests/test_editor_application.py
+          native/tests/test_editor_widgets.py native/tests/test_face_autosave.py
+          native/tests/test_editor_face_library.py native/tests/test_editor_native_menu.py
 
   macos:
     name: macOS app build and self-test

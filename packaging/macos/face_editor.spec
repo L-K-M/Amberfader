@@ -50,5 +50,22 @@ app = BUNDLE(
         "LSMinimumSystemVersion": "13.0",
         "LSApplicationCategoryType": "public.app-category.graphics-design",
         "NSHighResolutionCapable": True,
+        # Faces are plain folders with a face.json. Finder offers the editor
+        # for them (Open With, a drop on the Dock icon) without becoming the
+        # default app for every folder or JSON file.
+        "CFBundleDocumentTypes": [
+            {
+                "CFBundleTypeName": "Amberfader Face Folder",
+                "CFBundleTypeRole": "Editor",
+                "LSHandlerRank": "Alternate",
+                "LSItemContentTypes": ["public.folder"],
+            },
+            {
+                "CFBundleTypeName": "Amberfader Face Manifest",
+                "CFBundleTypeRole": "Editor",
+                "LSHandlerRank": "Alternate",
+                "LSItemContentTypes": ["public.json"],
+            },
+        ],
     },
 )
