@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > LLM disclosure: This codebase was written with substantial help from large language models: AI coding agents working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
 
-**Latest release:** v<!-- version -->0.2.0<!-- /version --> · [Download](https://github.com/L-K-M/Amberfader/releases/latest)
+**Latest release:** v<!-- version -->0.3.0<!-- /version --> · [Download](https://github.com/L-K-M/Amberfader/releases/latest)
 
 A compact classic-style player for YouTube Music, inspired by the small
 focused interfaces of Audion and classic Winamp. Amberfader plays YouTube

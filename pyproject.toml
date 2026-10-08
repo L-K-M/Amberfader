@@ -1,6 +1,6 @@
 [project]
 name = "amberfader"
-version = "0.2.0"
+version = "0.3.0"
 description = "Compact classic-style player for YouTube Music with its own embedded browser"
 readme = "README.md"
 license = { text = "Unlicense" }
