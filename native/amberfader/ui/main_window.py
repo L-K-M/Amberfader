@@ -55,7 +55,7 @@ if TYPE_CHECKING:
     from .faces_window import FacesWindow
 
 ARTWORK_CACHE_BYTES = 20 * 1024 * 1024
-MAX_ARTWORK_DIMENSION = 256
+MAX_ARTWORK_DIMENSION = 768
 MAX_ARTWORK_CACHE_ENTRIES = 80
 
 
@@ -454,10 +454,14 @@ class MainWindow(QMainWindow):
                     Qt.AspectRatioMode.KeepAspectRatioByExpanding if label is self._art
                     else Qt.AspectRatioMode.KeepAspectRatio
                 )
-                label.setPixmap(self._cover.scaled(
-                    label.size(), mode,
+                # Scale to device pixels: a 1x pixmap looks soft on a 2x display.
+                ratio = label.devicePixelRatioF()
+                pixmap = self._cover.scaled(
+                    label.size() * ratio, mode,
                     Qt.TransformationMode.SmoothTransformation,
-                ))
+                )
+                pixmap.setDevicePixelRatio(ratio)
+                label.setPixmap(pixmap)
 
     @staticmethod
     def _artwork_key(data: dict) -> tuple[str, str] | None:

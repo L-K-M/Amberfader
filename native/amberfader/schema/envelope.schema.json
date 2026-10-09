@@ -374,9 +374,9 @@
                   "artworkId": { "type": "string", "minLength": 1 },
                   "occurrenceId": { "type": ["string", "null"] },
                   "mime": { "enum": ["image/jpeg", "image/png", "image/webp"] },
-                  "width": { "type": "integer", "minimum": 1, "maximum": 256 },
-                  "height": { "type": "integer", "minimum": 1, "maximum": 256 },
-                  "dataBase64": { "type": "string", "maxLength": 87382 }
+                  "width": { "type": "integer", "minimum": 1, "maximum": 768 },
+                  "height": { "type": "integer", "minimum": 1, "maximum": 768 },
+                  "dataBase64": { "type": "string", "maxLength": 174764 }
                 }
               }
             }

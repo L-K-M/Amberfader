@@ -7,8 +7,8 @@
     "artworkId": "artwork-id-example",
     "occurrenceId": null,
     "mime": "image/png",
-    "width": 300,
-    "height": 300,
+    "width": 1024,
+    "height": 1024,
     "dataBase64": "iVBORw0KGgo="
   }
 }

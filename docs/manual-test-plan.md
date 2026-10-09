@@ -30,6 +30,8 @@ Change a selector only with evidence from a live page:
       playback event.
 - [ ] The player shows artwork, title, artist and album for the playing track.
       If the cover is absent, record the page image's origin.
+- [ ] On a Retina display, the cover is sharp in the player and in Cover view
+      for a song and for a music video, not an enlarged 60 px thumbnail.
 - [ ] Pause playback, quit and relaunch. The same cover returns without a site
       playback event.
 - [ ] While paused, change the player image's source or let its srcset image

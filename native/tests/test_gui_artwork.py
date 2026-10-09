@@ -127,6 +127,35 @@ def test_cover_view_preserves_image_edges_while_round_aperture_crops(window, qap
             assert rendered.pixelColor(round(x * ratio), round(y * ratio)).name() == color
 
 
+def test_high_resolution_cover_is_accepted(window):
+    asset = _asset()
+    asset.update(width=768, height=768, dataBase64=base64.b64encode(png(768, 768)).decode())
+    window.apply_state(_track_state())
+    window.apply_asset(asset)
+    assert window._cover.size().width() == 768
+
+
+def test_covers_render_at_the_display_pixel_ratio(window, qapp, monkeypatch):
+    """A 1x pixmap on a 2x display is upscaled by the painter and looks soft."""
+    window.apply_state(_track_state())
+    window.apply_asset(_asset())
+    window.open_cover()
+    # QLabel.pixmap() answers at the widget's real ratio (1 offscreen), so
+    # capture what the window hands each label.
+    rendered = {}
+    for label in (window._art, window._cover_label):
+        monkeypatch.setattr(label, "devicePixelRatioF", lambda: 2.0)
+        monkeypatch.setattr(
+            label, "setPixmap", lambda pixmap, key=label: rendered.update({key: pixmap}),
+        )
+    window._render_cover()
+
+    assert len(rendered) == 2
+    for label, pixmap in rendered.items():
+        assert pixmap.devicePixelRatio() == 2.0
+        assert pixmap.size() == label.size() * 2
+
+
 @pytest.mark.parametrize("field", ["occurrenceId", "artworkId"])
 def test_missing_asset_identity_is_ignored(window, field):
     window.apply_state(_track_state())
@@ -139,7 +168,7 @@ def test_missing_asset_identity_is_ignored(window, field):
 @pytest.mark.parametrize("encoded", [
     "not valid base64",
     base64.b64encode(b"not an image").decode(),
-    base64.b64encode(png(257, 64)).decode(),
+    base64.b64encode(png(main_window.MAX_ARTWORK_DIMENSION + 1, 64)).decode(),
 ])
 def test_invalid_or_oversized_asset_cannot_replace_current_cover(window, encoded):
     window.apply_state(_track_state())
