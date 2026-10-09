@@ -22,7 +22,7 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QAction, QImageReader, QKeySequence, QPixmap, QShortcut
+from PySide6.QtGui import QAction, QImage, QImageReader, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -103,8 +103,14 @@ class MainWindow(QMainWindow):
 
         self._art = CoverLabel(self._surface)
         self._art.setObjectName("art")
-        self._placeholder = QPixmap()
-        self._placeholder.loadFromData(QByteArray(placeholder_png()))
+        # Enlarge the 16 px pixel-art placeholder once without smoothing, so
+        # large cover apertures show crisp bars instead of a blur.
+        self._placeholder = QPixmap.fromImage(
+            QImage.fromData(QByteArray(placeholder_png())).scaled(
+                MAX_ARTWORK_DIMENSION, MAX_ARTWORK_DIMENSION,
+                Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.FastTransformation,
+            ),
+        )
         self._cover = self._placeholder
         self._artwork_cache: OrderedDict[tuple[str, str], tuple[QPixmap, int]] = OrderedDict()
         self._artwork_cache_bytes = 0

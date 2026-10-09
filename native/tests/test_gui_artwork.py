@@ -156,6 +156,18 @@ def test_covers_render_at_the_display_pixel_ratio(window, qapp, monkeypatch):
         assert pixmap.size() == label.size() * 2
 
 
+def test_placeholder_stays_crisp_in_large_cover_apertures(window):
+    """The 16 px pixel-art placeholder is enlarged without smoothing, so a
+    400 px aperture shows hard-edged bars rather than a blur."""
+    image = window._placeholder.toImage()
+    assert image.width() == image.height() == main_window.MAX_ARTWORK_DIMENSION
+    cell = image.width() // 16
+    # Row 8 of the 16 px source: field at column 6, the tall bar from column 7.
+    y = 8 * cell + cell // 2
+    assert image.pixelColor(7 * cell - 1, y).name() == "#2f2314"
+    assert image.pixelColor(7 * cell, y).name() == "#f5cf8a"
+
+
 @pytest.mark.parametrize("field", ["occurrenceId", "artworkId"])
 def test_missing_asset_identity_is_ignored(window, field):
     window.apply_state(_track_state())
