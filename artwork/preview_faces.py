@@ -36,13 +36,16 @@ FOOTER_HEIGHT = 96
 
 
 def _sample_cover() -> bytes:
-    cover = QImage(256, 256, QImage.Format.Format_ARGB32)
+    # Drawn on a 256-unit grid at the 768 px asset limit, so large cover
+    # apertures preview as sharply as a real high-resolution cover.
+    cover = QImage(768, 768, QImage.Format.Format_ARGB32)
     painter = QPainter(cover)
+    painter.scale(3, 3)
     gradient = QLinearGradient(0, 0, 256, 256)
     gradient.setColorAt(0, QColor("#301f4b"))
     gradient.setColorAt(0.5, QColor("#6b4369"))
     gradient.setColorAt(1, QColor("#dd9567"))
-    painter.fillRect(cover.rect(), gradient)
+    painter.fillRect(QRectF(0, 0, 256, 256), gradient)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     for radius in (38, 66, 96, 132):
         painter.setPen(QPen(QColor("#efcbb0"), 1.4))
