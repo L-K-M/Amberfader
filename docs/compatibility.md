@@ -73,6 +73,27 @@ Signed-out session in QtWebEngine 6.11.2, Linux container:
   after a reload in a new renderer behind the hidden window. Liking itself
   needs a signed-in session and is not verified here.
 
+## Live observations (2026-10-09)
+
+Signed-out session in QtWebEngine 6.11.2, Linux container. Signed out,
+this session offered videos, artists and episodes but no catalog songs, so
+a song's player-bar cover was not observed here.
+
+- Search-row images are 60×60 with Google image-server size options:
+  `lh3.googleusercontent.com/…=w60-h60-p-l90-rj`,
+  `yt3.googleusercontent.com/…=w60-c-h60-k-c0x00ffffff-no-l90-rj` and
+  `yt3.ggpht.com/…=w60-h60-l90-rj`.
+- Fetched without cookies, each of those hosts returned the image at
+  768×768 when the `w`/`h` options were changed to 768, keeping the other
+  options. One `lh3` cover returned 544, 768 and 1200 px the same way.
+- While a video played, the player bar showed
+  `i.ytimg.com/vi/<id>/hqdefault.jpg?sqp=…&rs=…`, a 400×225 crop.
+  `i.ytimg.com/vi/<id>/maxresdefault.jpg` returned 1280×720 without the
+  signed parameters.
+- Amberfader now requests these larger versions and falls back to the
+  page's own image. A song's sharper cover in a signed-in session still
+  needs the artwork checks in `docs/manual-test-plan.md`.
+
 ## Platforms
 
 | Platform | Install type | Status |

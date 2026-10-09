@@ -50,8 +50,8 @@ Node 22+ (`.nvmrc`), Python 3.11+ via uv (`uv sync`). `uv.lock` and
   user agent or disable Chromium's sandbox outside tests. Artwork hosts are
   added only for origins observed live.
 - **Bounds:** 256 KiB transport messages, 500-char queries, 30 search results
-  per batch, 5 s control / 15 s search deadlines, 2 MiB artwork input, 256 px /
-  64 KiB thumbnails, 20 MiB artwork cache.
+  per batch, 5 s control / 15 s search deadlines, 2 MiB artwork input, 768 px /
+  128 KiB thumbnails, 20 MiB artwork cache.
 - **Truthful states:** explicit `play`/`pause` (no toggle-retry), report
   completion only after an observed outcome, `pending_outcome` on timeout,
   unknown states rendered as unknown, no blind fallback clicks.
