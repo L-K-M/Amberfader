@@ -78,6 +78,22 @@ def test_plate_wider_than_drag_region_is_rejected(exporter, monkeypatch):
         _export(module, monkeypatch)
 
 
+@pytest.mark.parametrize("face_id", ["nightglass", "inner-sleeve", "instant-print", "j-card"])
+def test_painted_faces_export_exactly_the_shipped_pack(exporter, monkeypatch, face_id):
+    """Cover faces are painted in code; the shipped PNGs must be its output."""
+    module, original, _ = exporter
+    directory = original.parent / face_id
+    shutil.copytree(BUILTIN_DIRECTORY / face_id, directory)
+    shipped = {path.name: path.read_bytes() for path in directory.iterdir()}
+    for path in directory.glob("*.png"):
+        path.unlink()
+    monkeypatch.setattr(sys, "argv", ["render_faces.py", "--face", face_id])
+
+    module.main()
+
+    assert {path.name: path.read_bytes() for path in directory.iterdir()} == shipped
+
+
 @pytest.mark.parametrize("face_id", ["aureole", "viridian"])
 def test_export_preserves_supplied_lens_layout_and_sprite_sizes(exporter, monkeypatch, face_id):
     module, original, _ = exporter

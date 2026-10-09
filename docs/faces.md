@@ -34,6 +34,10 @@ choose **Cover view** from the menu, for a larger artwork window.
 | Vane | A dark aerodynamic fin with ice blue glass |
 | Aureole | A gold oval display in a silver and navy shell |
 | Viridian | A green round lens framed by a silver crescent |
+| Nightglass | A quiet dark slab: a near-frameless cover above a smoked-glass strip |
+| Inner Sleeve | A record jacket with its kraft inner sleeve pulled out beside it |
+| Instant Print | A taped-up instant photo with the controls on its white chin |
+| J-Card | An unfolded cobalt cassette insert with tape hubs down the spine |
 
 The four experimental sculptural faces place the player controls in curved
 instruments and characters, with transparent gaps between parts of the shell.
@@ -51,6 +55,13 @@ ports inside their original bezels. Buttons follow the rim without separate
 rectangular backings; the empty metal regions let you drag the window.
 
 ![Two lens player faces rendered with sample metadata](faces-lens-preview.png)
+
+Nightglass, Inner Sleeve, Instant Print and J-Card are cover-first: the cover is
+384 to 412 pixels on each side and fills about half the window. The controls sit
+around it on a glass strip, a record sleeve, a photo's chin or a cassette insert.
+Covers arrive at up to 768 pixels, so they stay sharp on 2x displays.
+
+![Four cover-first player faces rendered with sample metadata](faces-cover-preview.png)
 
 These are original designs inspired by [Audion Faces](https://panic.com/blog/facing-forward/),
 SoundJam MP, and late-1990s desktop players. They do not contain those apps'
@@ -264,11 +275,16 @@ versions can add presentation features without giving plugins player access.
 
 ## Artwork source and verification
 
-The eighteen original artworks were generated with OpenAI’s built-in image
-generator. The source PNGs live in [`artwork/generated`](../artwork/generated);
+The materials for the first eighteen faces were generated with OpenAI’s
+built-in image generator. The source PNGs live in [`artwork/generated`](../artwork/generated);
 the exact generation and edit prompts are recorded in
 [`artwork/face-prompts.json`](../artwork/face-prompts.json). The sources are
 inspiration-based originals, not converted Audion or Winamp assets.
+
+Nightglass, Inner Sleeve, Instant Print and J-Card have no generated material.
+Each is painted in code by [`artwork/procedural`](../artwork/procedural)`/<id>.py`,
+including its paper, board, glass, ink and button surfaces. Their images contain
+no text, so a re-export reproduces the shipped PNGs exactly, and a test checks this.
 
 [`artwork/render_faces.py`](../artwork/render_faces.py) exports the saved materials
 into 2x PNG backgrounds with precise alpha silhouettes, opaque readout wells,
@@ -291,6 +307,9 @@ QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
   --output docs/faces-utilitarian-preview.png
 QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
   --face aureole --face viridian --output docs/faces-lens-preview.png
+QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
+  --face nightglass --face inner-sleeve --face instant-print --face j-card \
+  --output docs/faces-cover-preview.png
 ```
 
 The preview script renders the actual player widgets with synthetic metadata,

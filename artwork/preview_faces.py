@@ -25,6 +25,7 @@ FACE_ORDER = (
     "orbit-99", "manta-ray", "jellyfish-fm", "boom-bot",
     "tangent", "keystone", "switchback", "vane",
     "aureole", "viridian",
+    "nightglass", "inner-sleeve", "instant-print", "j-card",
 )
 PREVIEW_DIRECTORY = ROOT / "build" / "face-previews"
 MARGIN = 48
