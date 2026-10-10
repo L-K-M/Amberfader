@@ -143,6 +143,16 @@ my-face/
   `radius`; `capsule` uses half the shorter dimension.
 - `coverGlass` (version 2): optional boolean, default false. Adds a faint glass
   reflection over the cover while leaving the background's bezel visible.
+- `coverBackdrop` (version 2): optional boolean, default false. Makes the cover
+  the backdrop. The player draws the album art, then the background again over
+  it inside the `art` aperture: transparent background pixels there show the
+  cover, translucent ones tint it and opaque ones hide it. Controls and the drag
+  region may then overlap `art`; other overlaps are still errors. The aperture
+  counts as opaque for the window shape, because the cover always fills it.
+  `art` cannot rotate. Presses on the cover move the window, so Cover view opens
+  from the menu, or with Tab to the cover and Enter. For light text, a white
+  cover is the worst case: keep text at 4.5:1 contrast over it. Older Amberfader
+  versions reject packs that use this field.
 - `readoutStyles` (version 2): optional entries for `title`, `artists`, `time`,
   `playback` and `status`. Each entry can set `align` (`left`, `center`, `right`),
   `font` (`sans`, `mono`, `serif`), `size` (10–36 logical pixels) and `bold`.
@@ -166,7 +176,7 @@ my-face/
 
 | Name | Host-owned behavior |
 | --- | --- |
-| `art` | Album artwork; opens Cover view |
+| `art` | Album artwork; opens Cover view (on a cover backdrop: from the menu or Enter) |
 | `title`, `artists` | Current metadata, elided to fit; full text in tooltips |
 | `time`, `playback` | Reported position/duration and playback state |
 | `previous`, `play`, `next` | Existing playback command path |
@@ -179,8 +189,10 @@ my-face/
 | `minimize`, `close` | Desktop window controls; closing leaves music playing |
 
 In version 1/2, every control must fit inside the canvas, avoid other controls
-and `drag`, and sit on an opaque part of the background. Buttons need at least 22×22 logical
-pixels; labels and drag regions need 64×18; sliders need 80×18. Artwork must be
+and `drag`, and sit on an opaque part of the background. With `coverBackdrop`,
+controls and `drag` may overlap `art`, and the `art` aperture counts as opaque.
+Buttons need at least 22×22 logical pixels;
+labels and drag regions need 64×18; sliders need 80×18. Artwork must be
 square and at least 64×64, except version 2 elliptical apertures, which can be
 oval and need at least 48×48. The entire control rectangle must still fit on
 the opaque shell. Leave enough room for translated desktop fonts and long track
@@ -260,9 +272,10 @@ preview reports these limitations before you accept the copy.
 - Image filenames use letters, digits, underscores and hyphens plus `.png`.
   No nested paths, remote URLs, or symlinks outside the pack.
 - Unsupported fields, out-of-bounds controls and invalid images are rejected.
-  Version 1/2 also rejects overlapping controls and transparent control regions;
-  version 3 requires controls to intersect the visible shell. The face browser
-  shows errors.
+  Version 1/2 also rejects overlapping controls and transparent control regions,
+  except that `coverBackdrop` lets controls and `drag` sit on `art`, whose
+  aperture counts as opaque; version 3 requires controls to intersect the
+  visible shell. The face browser shows errors.
 
 Discovery reads metadata and PNG headers, not full image payloads. Selected
 faces and installation snapshots are loaded and validated again before use.

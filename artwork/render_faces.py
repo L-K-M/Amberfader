@@ -9,7 +9,8 @@ needed to rebuild the shipped 2x PNGs.
 Faces with a module in artwork/procedural/<id>.py are painted entirely in code
 instead: the module's render_background(face, kit) returns the 2x background,
 and its render_button(face, control, state, kit) returns one button surface.
-`kit` is PROCEDURAL_KIT, the exporter's shared drawing helpers.
+`kit` is PROCEDURAL_KIT, the exporter's shared drawing helpers. A face with
+coverBackdrop paints the glass laid over its cover into background.png.
 
 Run: QT_QPA_PLATFORM=offscreen uv run python artwork/render_faces.py
 Repeat --face ID to re-export only those packs.
@@ -663,6 +664,18 @@ def _encode_png(image: QImage) -> bytes:
 
 
 def _translucent_regions(face: dict, image: QImage) -> list[str]:
+    if face.get("coverBackdrop"):
+        # The cover always fills a backdrop's aperture, so its glass may be
+        # clear. This mirrors face_surface._backdrop_hit_source.
+        image = image.copy()
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.scale(SCALE, SCALE)
+        painter.fillPath(_control_path(
+            QRectF(*face["controls"]["art"]),
+            face.get("controlShapes", {}).get("art", "rectangle"), face.get("radius", 4),
+        ), Qt.GlobalColor.black)
+        painter.end()
     rgba = image.convertToFormat(QImage.Format.Format_RGBA8888)
     data = bytes(rgba.constBits())
     stride = image.width() * 4

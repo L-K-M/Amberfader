@@ -17,6 +17,7 @@ from PySide6.QtCore import (
     QElapsedTimer,
     QIODevice,
     QPoint,
+    QRectF,
     QSignalBlocker,
     Qt,
     QTimer,
@@ -376,6 +377,13 @@ class MainWindow(QMainWindow):
             face.control_shapes.get("art", "rectangle"), face.radius * effective_scale,
             face.cover_glass,
         )
+        window = QRectF()
+        if face.cover_backdrop:
+            # Map the background over the cover as the surface paints it. Use
+            # the computed size: the surface is not resized yet on startup.
+            x, y = (round(value * effective_scale) for value in face.controls["art"][:2])
+            window = QRectF(-x, -y, *size)
+        self._art.set_backdrop(artwork.background if face.cover_backdrop else None, window)
         self._face_id = face.info.id
         self._render_cover()
         if self._search is not None:

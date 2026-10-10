@@ -43,13 +43,15 @@ PALETTE_KEYS = frozenset({
 })
 SIMPLE_FIELDS = frozenset({
     "id", "name", "author", "description", "size", "drag", "font", "timeSize", "radius",
-    "coverGlass", "sliderStyle", "sourceCredit", "spriteLabels",
+    "coverGlass", "coverBackdrop", "sliderStyle", "sourceCredit", "spriteLabels",
 })
 OPTIONAL_FIELDS = frozenset({
-    "font", "timeSize", "radius", "coverGlass", "sliderStyle", "sourceCredit", "spriteLabels",
+    "font", "timeSize", "radius", "coverGlass", "coverBackdrop", "sliderStyle", "sourceCredit",
+    "spriteLabels",
 })
 VERSION_TWO_FIELDS = frozenset({
-    "coverGlass", "sliderStyle", "controlShapes", "controlRotations", "readoutStyles",
+    "coverGlass", "coverBackdrop", "sliderStyle", "controlShapes", "controlRotations",
+    "readoutStyles",
 })
 BUTTON_STATES = frozenset({"normal", "hover", "pressed", "disabled"})
 IMPORT_BUTTON_STATES = BUTTON_STATES | {
@@ -347,6 +349,8 @@ class FaceDocument:
                 data.get(group, {}).pop(path[-1], None)
             if path[-1] == "time":
                 data.pop("timeDigits", None)
+            if path[-1] == "art":
+                data.pop("coverBackdrop", None)  # A backdrop needs its cover.
             imported_field = True
         data["formatVersion"] = (
             max(version, IMPORT_FACE_FORMAT_VERSION) if imported_field else version

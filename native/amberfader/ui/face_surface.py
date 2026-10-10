@@ -150,8 +150,14 @@ def control_path(rect: QRectF, shape: str, radius: float) -> QPainterPath:
 
 def draw_cover(
     painter: QPainter, pixmap: QPixmap, rect: QRectF, shape: str, radius: float, glass: bool,
+    overlay: tuple[QPixmap, QRectF] | None = None,
 ) -> None:
-    """Fill a physical aperture without stretching or drawing over its bezel."""
+    """Fill a physical aperture without stretching or drawing over its bezel.
+
+    `overlay` is an image and its target rect in this painter's coordinates,
+    drawn over the cover inside the aperture: a cover backdrop's face
+    background, mapped exactly as the face itself paints it.
+    """
     if pixmap.isNull() or rect.isEmpty():
         return
     path = control_path(rect, shape, radius)
@@ -171,6 +177,8 @@ def draw_cover(
     )
     painter.setClipPath(path, Qt.ClipOperation.IntersectClip)
     painter.drawPixmap(rect, pixmap, source)
+    if overlay is not None:
+        painter.drawPixmap(overlay[1], overlay[0], QRectF(overlay[0].rect()))
     if glass:
         reflection = QLinearGradient(rect.topLeft(), rect.bottomRight())
         reflection.setColorAt(0, QColor(255, 255, 255, 55))
@@ -554,15 +562,33 @@ def prepare_face_preview(face: Face) -> FaceArtwork:
     }
     digits = tuple(DigitArtwork(digit.rect, tuple(decode(data) for data in digit.images))
                    for digit in face.time_digits)
-    hit_source = (
-        _assembled_hit_source(face, background, buttons)
-        if face.format_version >= 3 and alpha_mask is None else None
-    )
+    hit_source = None
+    if alpha_mask is None and face.format_version >= 3:
+        hit_source = _assembled_hit_source(face, background, buttons)
+    elif alpha_mask is None and face.cover_backdrop and "art" in face.controls:
+        # A draft can still lack the art its backdrop needs.
+        hit_source = _backdrop_hit_source(face, background)
     mask = _alpha_mask(alpha_mask or hit_source or background, face.size, face.format_version)
     return FaceArtwork(
         background=background, mask=mask, buttons=buttons, time_digits=digits,
         alpha_mask=alpha_mask, format_version=face.format_version, _hit_source=hit_source,
     )
+
+
+def _backdrop_hit_source(face: Face, background: QPixmap) -> QPixmap:
+    """Count a cover backdrop's aperture as opaque, however clear its glass.
+
+    The cover always fills its aperture, so the window keeps that shape.
+    """
+    source = background.copy()
+    painter = QPainter(source)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.scale(source.width() / face.size[0], source.height() / face.size[1])
+    painter.fillPath(control_path(
+        QRectF(*face.controls["art"]), face.control_shapes.get("art", "rectangle"), face.radius,
+    ), Qt.GlobalColor.black)
+    painter.end()
+    return source
 
 
 def _assembled_hit_source(face: Face, background: QPixmap, buttons) -> QPixmap:
@@ -699,6 +725,7 @@ def _draw_preview_control(painter, face, artwork, cover, labels, name, coordinat
         draw_cover(
             painter, cover, QRectF(rect), face.control_shapes.get("art", "rectangle"),
             face.radius, face.cover_glass,
+            (artwork.background, QRectF(0, 0, *face.size)) if face.cover_backdrop else None,
         )
         return
     if name in ("seek", "volume"):
@@ -919,10 +946,23 @@ class CoverLabel(KeyboardFocusRing, QLabel):
         self._shape = "rectangle"
         self._radius = 0.0
         self._glass = False
+        self._overlay: tuple[QPixmap, QRectF] | None = None
         self._pressed = False
 
     def set_shape(self, shape: str, radius: float, glass: bool) -> None:
         self._shape, self._radius, self._glass = shape, radius, glass
+        self.update()
+
+    def set_backdrop(self, background: QPixmap | None, window: QRectF) -> None:
+        """Lay the face background, mapped onto `window`, over the cover.
+
+        On a cover backdrop, pointer input passes through to the face, which
+        moves the window; the keyboard still opens Cover view. Clearing the
+        backdrop restores the pointer cursor, tooltip and click.
+        """
+        self._overlay = None if background is None else (background, window)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, background is not None)
+        self._pressed = False
         self.update()
 
     def _cover_path(self) -> QPainterPath:
@@ -932,6 +972,7 @@ class CoverLabel(KeyboardFocusRing, QLabel):
         painter = QPainter(self)
         draw_cover(
             painter, self.pixmap(), QRectF(self.rect()), self._shape, self._radius, self._glass,
+            self._overlay,
         )
         if self.focus_ring_visible():
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -1160,13 +1201,18 @@ class FaceSurface(QWidget):
         super().__init__(parent)
         self.setObjectName("faceSurface")
         self._background = QPixmap()
-        self._drag = QRect()
+        self._drag = QRegion()
         self._drag_offset: QPoint | None = None
         self._rotated: dict[str, RotatedControl] = {}
 
     def apply_face(self, face: Face, artwork: FaceArtwork, scale: float) -> None:
         self._background = artwork.background
-        self._drag = QRect(*(round(value * scale) for value in face.drag))
+        self._drag = QRegion(QRect(*(round(value * scale) for value in face.drag)))
+        if face.cover_backdrop and "art" in face.controls:
+            # Presses on a cover backdrop reach the face; let them move it.
+            self._drag = self._drag.united(
+                QRegion(QRect(*(round(value * scale) for value in face.controls["art"]))),
+            )
         if artwork.alpha_mask is None:
             if self.graphicsEffect() is not None:
                 self.setGraphicsEffect(None)

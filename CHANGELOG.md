@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A 384 to 412 px cover fills about half the window, and the controls sit
   around it on a smoked-glass strip, a record's inner sleeve, an instant
   photo's chin and an unfolded cassette insert.
+- Faces can use the album cover as their backdrop. The format 2 field
+  `coverBackdrop` draws the background over the cover, so clear or tinted
+  glass shows it, and lets controls and the drag region sit on it. Presses on
+  the cover move the window; Cover view opens from the menu or the keyboard.
+  The face editor turns it on with **Album art as backdrop**. Older versions
+  of Amberfader reject faces that use it.
 
 ### Changed
 

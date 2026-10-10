@@ -422,11 +422,13 @@ class FaceEditorCanvas(QGraphicsView):
         for name in reversed(names):
             if contains(name):
                 return name
-        if "art" in data["controls"] and contains("art"):
-            return "art"
-        if QRectF(*data["drag"]).contains(point):
+        on_art = "art" in data["controls"] and contains("art")
+        on_drag = QRectF(*data["drag"]).contains(point)
+        # The player hands presses on a cover backdrop to the face, which
+        # moves the window, so there the drag region lies above the cover.
+        if on_drag and (data.get("coverBackdrop", False) or not on_art):
             return "drag"
-        return None
+        return "art" if on_art else None
 
     def _handle_at(self, point: QPointF) -> tuple[_Gesture | None, int]:
         if not self._show_guides or self._document is None:

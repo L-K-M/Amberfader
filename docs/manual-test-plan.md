@@ -135,6 +135,14 @@ tests verify rendering and state preservation, not compositor integration.
   for reported state; recents, play-result, and **Start mix** must still work.
 - Click the cover. Change tracks and faces with Cover view open; check artwork
   updates and absent-artwork placeholders.
+- With a face that sets `coverBackdrop`, on X11, Wayland, Flatpak and macOS:
+  drag the window by the bare cover, by a readout on it and by a button's
+  transparent corner. Over the bare cover the pointer stays an arrow without
+  the cover tooltip, and a click never opens Cover view. Right-click the cover
+  for the face menu, and open Cover view from **☰**, from **View**, and with
+  Tab to the cover and Enter. Check that the window shape keeps the whole cover
+  where the glass is clear. Switch to another face; clicking its cover opens
+  Cover view again.
 - Restart the app and verify the saved face. Remove its user-pack folder and
   restart; expect Amber Classic and an explicit face error.
 - Install a local face folder through the native and Flatpak file choosers.
