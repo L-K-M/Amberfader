@@ -1,0 +1,130 @@
+{
+  "formatVersion": 2,
+  "id": "instant-print",
+  "name": "Instant Print",
+  "author": "Amberfader",
+  "description": "A freshly developed instant photo taped up by one corner, with the cover as the picture and the controls written and stuck on its wide white chin.",
+  "size": [460, 648],
+  "background": "background.png",
+  "drag": [30, 12, 290, 22],
+  "font": "sans",
+  "timeSize": 20,
+  "radius": 6,
+  "sliderStyle": "inset",
+  "coverGlass": true,
+  "palette": {
+    "window": "#f1eee6",
+    "panel": "#f8f6f0",
+    "display": "#cfc7b8",
+    "text": "#23201c",
+    "muted": "#625b50",
+    "readout": "#1c1a17",
+    "accent": "#b5402b",
+    "border": "#9f9686",
+    "buttonTop": "#fdfcf8",
+    "buttonBottom": "#e4ded2",
+    "danger": "#a8261c"
+  },
+  "readoutStyles": {
+    "title": {"font": "serif", "size": 17, "bold": true},
+    "artists": {"font": "serif", "size": 14},
+    "time": {"font": "mono", "align": "right"},
+    "playback": {"font": "sans", "size": 11, "align": "right"},
+    "status": {"font": "sans", "size": 11, "align": "right"}
+  },
+  "controlShapes": {
+    "art": "rectangle",
+    "previous": "ellipse",
+    "play": "ellipse",
+    "next": "ellipse",
+    "like": "ellipse",
+    "search": "capsule",
+    "show": "capsule",
+    "hide": "capsule",
+    "menu": "ellipse",
+    "minimize": "ellipse",
+    "close": "ellipse"
+  },
+  "controls": {
+    "art": [24, 48, 412, 412],
+    "seek": [24, 472, 412, 18],
+    "title": [24, 500, 262, 22],
+    "time": [294, 496, 142, 28],
+    "artists": [24, 529, 262, 18],
+    "playback": [294, 530, 142, 18],
+    "previous": [24, 560, 36, 36],
+    "play": [67, 556, 44, 44],
+    "next": [118, 560, 36, 36],
+    "like": [160, 560, 36, 36],
+    "search": [208, 565, 72, 26],
+    "show": [286, 565, 72, 26],
+    "hide": [364, 565, 72, 26],
+    "volume": [24, 608, 166, 18],
+    "status": [198, 608, 238, 18],
+    "menu": [352, 14, 24, 24],
+    "minimize": [382, 14, 24, 24],
+    "close": [412, 14, 24, 24]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
+  }
+}

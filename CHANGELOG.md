@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and installs every face in an Audion collection ZIP, with progress and a
   Stop button. Importing the same ZIP again skips installed faces.
 - The player's **Faces** window has a filter box to find a face by name.
+- Four cover-first faces: Nightglass, Inner Sleeve, Instant Print and J-Card.
+  A 384 to 412 px cover fills about half the window, and the controls sit
+  around it on a smoked-glass strip, a record's inner sleeve, an instant
+  photo's chin and an unfolded cassette insert.
 
 ### Changed
 
@@ -35,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folder) keeps listing them fast: about 0.4 s for 900 faces instead of 4.6 s.
 - A YouTube Music window narrower than 1024 px zooms the page out instead
   of switching to a narrower layout. Your own zoom applies up to that width.
+- Covers are fetched at up to 768 px instead of the player bar's 60 px
+  thumbnail, falling back to the thumbnail if the larger image fails. The
+  player draws them at the display's pixel density instead of enlarging a
+  1x image on 2x displays.
 
 ### Fixed
 
@@ -45,6 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before the first page finished loading, with `--background`, or after a
   reload while the window was hidden. Pages that load behind the hidden
   window now get its full size.
+- The empty-cover placeholder stays crisp in large cover apertures instead of
+  blurring.
 
 ## [0.2.0] - 2026-10-06
 

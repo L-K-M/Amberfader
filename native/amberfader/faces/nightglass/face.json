@@ -1,0 +1,129 @@
+{
+  "formatVersion": 2,
+  "id": "nightglass",
+  "name": "Nightglass",
+  "author": "Amberfader",
+  "description": "A quiet dark slab for all-day listening, with the cover filling almost the whole width above a smoked-glass strip of track details and controls.",
+  "size": [408, 640],
+  "background": "background.png",
+  "drag": [16, 7, 150, 20],
+  "font": "sans",
+  "timeSize": 20,
+  "radius": 8,
+  "sliderStyle": "inset",
+  "palette": {
+    "window": "#16171a",
+    "panel": "#1e2024",
+    "display": "#101114",
+    "text": "#ece9e3",
+    "muted": "#a19d95",
+    "readout": "#f4f1ea",
+    "accent": "#d9a86c",
+    "border": "#3a3c42",
+    "buttonTop": "#2c2e33",
+    "buttonBottom": "#1b1c20",
+    "danger": "#e0695a"
+  },
+  "readoutStyles": {
+    "title": {"font": "sans", "size": 16, "bold": true},
+    "artists": {"font": "sans", "size": 13},
+    "time": {"font": "mono"},
+    "playback": {"font": "sans", "size": 11, "align": "right"},
+    "status": {"font": "sans", "size": 11, "align": "right"}
+  },
+  "controlShapes": {
+    "art": "rounded",
+    "previous": "capsule",
+    "play": "capsule",
+    "next": "capsule",
+    "like": "ellipse",
+    "search": "capsule",
+    "show": "capsule",
+    "hide": "capsule",
+    "menu": "capsule",
+    "minimize": "capsule",
+    "close": "capsule"
+  },
+  "controls": {
+    "search": [176, 5, 110, 24],
+    "menu": [294, 5, 30, 24],
+    "minimize": [330, 5, 30, 24],
+    "close": [366, 5, 30, 24],
+    "art": [12, 36, 384, 384],
+    "title": [26, 436, 356, 22],
+    "artists": [26, 464, 356, 18],
+    "seek": [22, 490, 364, 18],
+    "time": [26, 514, 180, 24],
+    "playback": [270, 520, 112, 18],
+    "previous": [22, 550, 44, 32],
+    "play": [72, 545, 60, 42],
+    "next": [138, 550, 44, 32],
+    "like": [190, 550, 32, 32],
+    "volume": [232, 557, 154, 18],
+    "show": [22, 594, 80, 26],
+    "hide": [108, 594, 68, 26],
+    "status": [184, 598, 198, 18]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "like-normal.png",
+      "hover": "like-hover.png",
+      "pressed": "like-pressed.png",
+      "disabled": "like-disabled.png"
+    },
+    "search": {
+      "normal": "search-normal.png",
+      "hover": "search-hover.png",
+      "pressed": "search-pressed.png",
+      "disabled": "search-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "hide-normal.png",
+      "hover": "hide-hover.png",
+      "pressed": "hide-pressed.png",
+      "disabled": "hide-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
+  }
+}

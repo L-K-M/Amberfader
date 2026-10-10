@@ -78,6 +78,48 @@ def test_plate_wider_than_drag_region_is_rejected(exporter, monkeypatch):
         _export(module, monkeypatch)
 
 
+# Raster rounding varies with the machine's CPU and libraries, so a re-export
+# elsewhere can differ slightly from the shipped pixels. A stale pack differs
+# by far more: a changed shape or colour moves whole regions.
+TOLERATED_LEVELS = 8
+TOLERATED_SHARE = 0.005
+
+
+def _changed_share(image, shipped):
+    """Share of pixels whose channels differ by more than TOLERATED_LEVELS,
+    and the largest channel difference."""
+    current = bytes(image.convertToFormat(QImage.Format.Format_RGBA8888).constBits())
+    original = bytes(shipped.convertToFormat(QImage.Format.Format_RGBA8888).constBits())
+    deltas = [abs(a - b) for a, b in zip(current, original, strict=True)]
+    changed = sum(
+        max(deltas[index:index + 4]) > TOLERATED_LEVELS for index in range(0, len(deltas), 4)
+    )
+    return changed / (len(deltas) // 4), max(deltas)
+
+
+@pytest.mark.parametrize("face_id", ["nightglass", "inner-sleeve", "instant-print", "j-card"])
+def test_painted_faces_export_the_shipped_pack(exporter, monkeypatch, face_id):
+    """Cover faces are painted in code; the shipped PNGs must be its output."""
+    module, original, _ = exporter
+    directory = original.parent / face_id
+    shutil.copytree(BUILTIN_DIRECTORY / face_id, directory)
+    manifest = (directory / "face.json").read_bytes()
+    shipped = {path.name: QImage(str(path)) for path in directory.glob("*.png")}
+    for path in directory.glob("*.png"):
+        path.unlink()
+    monkeypatch.setattr(sys, "argv", ["render_faces.py", "--face", face_id])
+
+    module.main()
+
+    assert (directory / "face.json").read_bytes() == manifest
+    exported = {path.name: QImage(str(path)) for path in directory.glob("*.png")}
+    assert exported.keys() == shipped.keys()
+    for name, image in exported.items():
+        assert image.size() == shipped[name].size(), name
+        share, largest = _changed_share(image, shipped[name])
+        assert share <= TOLERATED_SHARE, (name, f"{share:.4%} changed", f"largest {largest}")
+
+
 @pytest.mark.parametrize("face_id", ["aureole", "viridian"])
 def test_export_preserves_supplied_lens_layout_and_sprite_sizes(exporter, monkeypatch, face_id):
     module, original, _ = exporter

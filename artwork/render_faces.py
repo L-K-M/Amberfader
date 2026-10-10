@@ -6,6 +6,11 @@ window silhouettes, and paints clean readout wells and button state surfaces.
 Text and transport symbols remain host-owned. No generation or network call is
 needed to rebuild the shipped 2x PNGs.
 
+Faces with a module in artwork/procedural/<id>.py are painted entirely in code
+instead: the module's render_background(face, kit) returns the 2x background,
+and its render_button(face, control, state, kit) returns one button surface.
+`kit` is PROCEDURAL_KIT, the exporter's shared drawing helpers.
+
 Run: QT_QPA_PLATFORM=offscreen uv run python artwork/render_faces.py
 Repeat --face ID to re-export only those packs.
 """
@@ -13,8 +18,10 @@ Repeat --face ID to re-export only those packs.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 
 from PySide6.QtCore import QBuffer, QPointF, QRectF, Qt
 from PySide6.QtGui import (
@@ -37,6 +44,7 @@ MAX_DIMENSION = 2048
 MAX_FILE_BYTES = 4 * 1024 * 1024
 ROOT = Path(__file__).resolve().parent
 FACES_ROOT = ROOT.parent / "native" / "amberfader" / "faces"
+PROCEDURAL_ROOT = ROOT / "procedural"
 BUTTON_GROUPS = {
     "previous": "transport",
     "next": "transport",
@@ -412,7 +420,28 @@ def _render_lens_background(face: dict, source: QImage) -> QImage:
     return image
 
 
+_PROCEDURAL_MODULES: dict[str, ModuleType | None] = {}
+
+
+def _procedural(face_id: str) -> ModuleType | None:
+    """The face's painting module, or None for faces built from generated art."""
+    if face_id not in _PROCEDURAL_MODULES:
+        path = PROCEDURAL_ROOT / f"{face_id}.py"
+        module = None
+        if path.is_file():
+            spec = importlib.util.spec_from_file_location(
+                f"amberfader_procedural_{face_id.replace('-', '_')}", path,
+            )
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        _PROCEDURAL_MODULES[face_id] = module
+    return _PROCEDURAL_MODULES[face_id]
+
+
 def render_background(face: dict) -> QImage:
+    procedural = _procedural(face["id"])
+    if procedural is not None:
+        return procedural.render_background(face, PROCEDURAL_KIT)
     width, height = face["size"]
     source = QImage(str(ROOT / "generated" / f"{face['id']}.png"))
     if source.isNull():
@@ -571,6 +600,9 @@ def _sprite_family(face: dict, name: str) -> str:
 
 def render_button(face: dict, group: str, state: str, control: str | None = None) -> QImage:
     control = control or GROUP_REPRESENTATIVES[group]
+    procedural = _procedural(face["id"])
+    if procedural is not None:
+        return procedural.render_button(face, control, state, PROCEDURAL_KIT)
     if face["id"] in SHAPED_FACES:
         return _render_shaped_button(face, control, state)
     _, _, width, height = face["controls"][control]
@@ -609,6 +641,17 @@ def render_button(face: dict, group: str, state: str, control: str | None = None
         painter.drawRoundedRect(rect.adjusted(2, 2, -2, -2), max(0, radius - 2), max(0, radius - 2))
     painter.end()
     return image
+
+
+# The helpers procedural face modules may use; see the module docstring.
+PROCEDURAL_KIT = SimpleNamespace(
+    SCALE=SCALE,
+    BUTTON_GROUPS=BUTTON_GROUPS,
+    canvas=_canvas,
+    control_path=_control_path,
+    gradient=_gradient,
+    rounded=_rounded,
+)
 
 
 def _encode_png(image: QImage) -> bytes:
