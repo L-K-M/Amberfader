@@ -123,12 +123,12 @@ def _vline(painter: QPainter, x: float, y0: float, y1: float, pen: QPen) -> None
 # ---------------------------------------------------------------- textures
 
 # QImage, not QPixmap: cached pixmaps would outlive the QGuiApplication.
-_TILES: dict[tuple[int, int, int], QImage] = {}
+_TILES: dict[tuple[str, int, int, int], QImage] = {}
 
 
 def _noise_tile(size: int, amplitude: int, salt: int) -> QImage:
     """A grey tile, 128 +/- amplitude, neutral under SoftLight."""
-    key = (size, amplitude, salt)
+    key = ("noise", size, amplitude, salt)
     if key not in _TILES:
         rng = random.Random(SEED + salt)
         table = bytes(
@@ -142,7 +142,7 @@ def _noise_tile(size: int, amplitude: int, salt: int) -> QImage:
 
 def _speck_tile(size: int, max_alpha: int, salt: int) -> QImage:
     """Dark specks of random alpha: tooth that also shows on white stock."""
-    key = (size, -max_alpha, salt)
+    key = ("speck", size, max_alpha, salt)
     if key not in _TILES:
         rng = random.Random(SEED + salt)
         alphas = rng.randbytes(size * size).translate(
@@ -698,7 +698,7 @@ def _hub(painter: QPainter, w: int, h: int, state: str, supply: bool) -> None:
     groove = QColor("#b4bccc") if disabled else QColor("#9ca7bf" if pressed else "#bcc5d8")
     painter.setBrush(groove)
     painter.drawEllipse(_circle(centre, groove_outer))
-    bevel(groove_outer - 0.6, 1.2, True, 0 if disabled else 150)
+    bevel(groove_outer - 0.6, 1.2, True, 150)
     count = 8 if supply else 6
     tooth_width = (0.075 if supply else 0.085) * w
     for index in range(count):

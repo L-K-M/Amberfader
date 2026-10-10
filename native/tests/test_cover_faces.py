@@ -11,7 +11,8 @@ from amberfader.face_library import BUILTIN_DIRECTORY, load_face
 from amberfader.ui.face_surface import prepare_face
 
 COVER_IDS = ("nightglass", "inner-sleeve", "instant-print", "j-card")
-MIN_COVER_EDGE = 320
+# The docs promise covers of 384 to 412 px.
+MIN_COVER_EDGE = 384
 
 
 @pytest.mark.parametrize("face_id", COVER_IDS)

@@ -50,7 +50,7 @@ def _sample_cover() -> bytes:
     # apertures preview as sharply as a real high-resolution cover.
     cover = QImage(768, 768, QImage.Format.Format_ARGB32)
     painter = QPainter(cover)
-    painter.scale(3, 3)
+    painter.scale(cover.width() / 256, cover.height() / 256)
     gradient = QLinearGradient(0, 0, 256, 256)
     gradient.setColorAt(0, QColor("#301f4b"))
     gradient.setColorAt(0.5, QColor("#6b4369"))
@@ -217,10 +217,11 @@ def main() -> None:
     if selected_ids and options.output.resolve() == parser.get_default("output").resolve():
         parser.error("--face needs a separate --output path to preserve the full gallery")
     app = QApplication([])
-    # One window renders every face, reusing its buttons. Keep the virtual
-    # pointer away from it, or a button under the pointer in one face keeps
-    # its hover state in the faces after it.
-    QCursor.setPos(-10_000, -10_000)
+    if app.platformName() == "offscreen":
+        # One window renders every face, reusing its buttons. Keep the virtual
+        # pointer away from it, or a button under the pointer in one face keeps
+        # its hover state in the faces after it. A real pointer is left alone.
+        QCursor.setPos(-10_000, -10_000)
     PREVIEW_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
     with TemporaryDirectory() as directory:
