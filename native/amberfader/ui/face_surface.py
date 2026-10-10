@@ -662,7 +662,10 @@ def _draw_face_layers(painter, face, artwork, cover, labels) -> None:
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
     painter.drawPixmap(QRect(0, 0, *face.size), artwork.background)
-    for name, coordinates in face.controls.items():
+    # The player stacks the cover beneath every control; paint it first to
+    # match. The sort is stable, so other controls keep manifest order.
+    for name in sorted(face.controls, key=lambda name: name != "art"):
+        coordinates = face.controls[name]
         painter.save()
         rect = QRect(*coordinates)
         rotation = face.control_rotations.get(name, 0)
@@ -1209,6 +1212,10 @@ class FaceSurface(QWidget):
         if wrapper is not None:
             wrapper.detach(self)
         widget.hide()
+
+    def lower_control(self, name: str, widget: QWidget) -> None:
+        """Stack a control, or its rotation wrapper, beneath its siblings."""
+        (self._rotated.get(name) or widget).lower()
 
     def control_global_position(self, name: str, widget: QWidget, point: QPoint) -> QPoint:
         wrapper = self._rotated.get(name)

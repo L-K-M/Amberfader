@@ -367,6 +367,10 @@ class MainWindow(QMainWindow):
                 widget.setProperty("readoutColor", style.color)
                 widget.setProperty("minimumReadoutSize", 6 if face.format_version >= 3 else 10)
                 widget.setFont(readout_font(face, name, effective_scale))
+        # A new rotation wrapper starts on top, and detaching one re-parents
+        # the cover above its siblings. Without this, whether the cover hides
+        # controls placed on it would depend on the face-switch history.
+        self._surface.lower_control("art", self._art)
         self._time.set_time_digits(artwork.time_digits)
         self._art.set_shape(
             face.control_shapes.get("art", "rectangle"), face.radius * effective_scale,

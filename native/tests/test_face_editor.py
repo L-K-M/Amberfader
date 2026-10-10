@@ -98,6 +98,18 @@ def test_escape_cancels_an_active_gesture_without_recording_it(editor, qapp):
     assert editor._canvas._gesture is None
 
 
+def test_canvas_click_prefers_controls_over_selected_art(editor, qapp):
+    from PySide6.QtCore import QRectF
+
+    editor._canvas.select("art")
+    # A draft cover enlarged under the title, as the player stacks it.
+    editor.document.set_rect("art", [150, 40, 300, 300])
+    editor._changed()
+    title = QRectF(*editor.document.manifest["controls"]["title"]).center()
+    _drag(qapp, editor._canvas, title, title)
+    assert editor._canvas.selected == "title"
+
+
 def test_drag_resize_changes_bounds_and_undo_restores_them(editor, qapp):
     from PySide6.QtCore import QPointF
 
