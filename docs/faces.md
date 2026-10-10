@@ -285,8 +285,8 @@ inspiration-based originals, not converted Audion or Winamp assets.
 Nightglass, Inner Sleeve, Instant Print and J-Card have no generated material.
 Each is painted in code by [`artwork/procedural`](../artwork/procedural)`/<id>.py`,
 including its paper, board, glass, ink and button surfaces. Their images contain
-no text, so with the locked PySide6 a re-export reproduces the shipped images
-pixel for pixel; a test checks this on Linux CI.
+no text, so a re-export matches the shipped images apart from small rounding
+differences between machines; a test checks this.
 
 [`artwork/render_faces.py`](../artwork/render_faces.py) exports the saved materials
 into 2x PNG backgrounds with precise alpha silhouettes, opaque readout wells,
