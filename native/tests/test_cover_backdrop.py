@@ -179,7 +179,7 @@ def backdrop_window(qapp, tmp_path, request):
 
 
 def _at(window, point, face_width=640):
-    """A logical face point in surface pixels at the window's effective scale."""
+    """A face point in the surface's logical pixels at the window's effective scale."""
     scale = window._surface.width() / face_width
     return QPoint(round(point.x() * scale), round(point.y() * scale))
 
@@ -208,11 +208,17 @@ def test_backdrop_layers_background_over_cover(backdrop_window, qapp):
     painter.scale(grab.width() / face.size[0], grab.height() / face.size[1])
     draw_face_preview(painter, face, prepare_face(face), window._cover)
     painter.end()
-    smoked = round(255 * (1 - SMOKE.alphaF()))
+    # The grab and the preview are in device pixels; map face points with
+    # their scale, not the surface's logical size.
+    scale = grab.width() / face.size[0]
+    white, smoked = (255,) * 3, (round(255 * (1 - SMOKE.alphaF())),) * 3
     for point, expected in [
-        (CLEAR_POINT, (255, 255, 255)), (BAND_POINT, (smoked,) * 3), (SHELL_POINT, (64, 64, 64)),
+        (CLEAR_POINT, white), (BAND_POINT, smoked), (SHELL_POINT, (64, 64, 64)),
+        # Beside the band edge and the art's corner, a shifted or rescaled
+        # overlay shows the wrong part of the background.
+        (QPointF(100, 190), smoked), (QPointF(25, 40), white),
     ]:
-        pixel = _at(window, point)
+        pixel = QPoint(round(point.x() * scale), round(point.y() * scale))
         actual = grab.pixelColor(pixel).getRgb()[:3]
         assert _close(actual, expected, 2), (point, actual)
         assert _close(preview.pixelColor(pixel).getRgb()[:3], actual, 1), point
@@ -256,6 +262,40 @@ def test_bare_cover_moves_window(backdrop_window, qapp):
     assert window.pos() != before
     assert window._cover_window is None
     assert not sent
+
+
+def test_rotated_readout_on_backdrop_moves_window(qapp, tmp_path):
+    # A rotated readout lives in a graphics view. Offscreen Qt cannot start a
+    # system move, so the surface needs every move and the release of a press
+    # no control took, as it gets them through a flat label.
+    directory, data = backdrop_pack(tmp_path)
+    data["controlRotations"] = {"title": 5}
+    write_manifest(directory, data)
+    library = FaceLibrary(tmp_path / "installed", tmp_path / "preferences.json")
+    info = library.install(directory)
+    window = MainWindow(lambda method, params: None, faces=library)
+    window.select_face(info.id)
+    window.show()
+    qapp.processEvents()
+    try:
+        wrapper = window._surface._rotated["title"]
+        start = window._surface.mapTo(window, wrapper.geometry().center())
+        assert window.childAt(start) is wrapper.viewport()
+        before = window.pos()
+        handle = window.windowHandle()
+        QTest.mousePress(handle, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, start)
+        QTest.mouseMove(handle, start + QPoint(30, 20))
+        QTest.mouseRelease(
+            handle, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier,
+            start + QPoint(30, 20),
+        )
+        qapp.processEvents()
+        assert window.pos() != before
+        assert window._surface._drag_offset is None
+    finally:
+        window.close()
+        window.deleteLater()
+        qapp.processEvents()
 
 
 def test_controls_on_backdrop_keep_their_commands(backdrop_window, qapp):

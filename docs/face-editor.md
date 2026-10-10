@@ -94,8 +94,9 @@ step.
 The face's drag region is editable too. Keep it clear of playback controls so
 the player can distinguish a window drag from a control press. Screen labels,
 buttons, artwork, and sliders must fit inside the canvas. Version 1/2 layouts
-also require controls to avoid each other and the drag region, unless **Album
-art as backdrop** is on; then controls and the drag region may sit on the art.
+also require controls to avoid each other and the drag region. With **Album art
+as backdrop** on, controls and the drag region may sit on the art; other
+overlaps are still errors.
 A draft preview can show overlapping controls, or controls partly outside the
 face, while you work; saving still requires a valid layout.
 

@@ -54,6 +54,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Rotated face controls preserve transparent corners in the player, matching
   the face editor preview.
+- Imported faces with controls on the album cover: after a face with a
+  rotated cover, the cover could hide those controls, and previews painted it
+  over controls listed before it. In the face editor, a selected cover took
+  clicks meant for them. The cover now stays beneath every control.
 - The heart stayed **♡?** (unknown) when YouTube Music hid its Like button:
   in a window narrower than 936 px or zoomed in, after closing the window
   before the first page finished loading, with `--background`, or after a

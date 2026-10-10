@@ -146,9 +146,11 @@ my-face/
 - `coverBackdrop` (version 2): optional boolean, default false. Makes the cover
   the backdrop. The player draws the album art, then the background again over
   it inside the `art` aperture: transparent background pixels there show the
-  cover, translucent ones tint it and opaque ones hide it. Controls and the drag
-  region may then overlap `art`; other overlaps are still errors. The aperture
-  counts as opaque for the window shape, because the cover always fills it.
+  cover, translucent ones tint it and opaque ones hide it. In version 1/2,
+  controls and the drag region may then overlap `art`; other overlaps are still
+  errors. Version 3 allows every overlap anyway. Unless the face has an
+  `alphaMask`, the aperture counts as opaque for the window shape, because the
+  cover always fills it; an `alphaMask` sets the shape and masks the cover too.
   `art` cannot rotate. Presses on the cover move the window, so Cover view opens
   from the menu, or with Tab to the cover and Enter. For light text, a white
   cover is the worst case: keep text at 4.5:1 contrast over it. Older Amberfader

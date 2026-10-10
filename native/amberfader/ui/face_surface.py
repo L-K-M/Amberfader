@@ -1123,6 +1123,21 @@ class RotatedControl(QGraphicsView):
         widget.show()
         self.setFocusPolicy(widget.focusPolicy())
 
+    # A press no control takes, as on a readout, passes on to the face, but
+    # QGraphicsView keeps its moves and release. Pass those on too, as a flat
+    # label does, so the face can move the window and end the drag.
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        grabbed = self._scene.mouseGrabberItem() is not None
+        super().mouseMoveEvent(event)
+        if not grabbed:
+            event.ignore()
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        grabbed = self._scene.mouseGrabberItem() is not None
+        super().mouseReleaseEvent(event)
+        if not grabbed:
+            event.ignore()
+
     def apply_geometry(self, rect: Rect, rotation: float) -> None:
         x, y, width, height = rect
         polygon = QPolygonF([QPointF(px, py) for px, py in control_polygon(rect, rotation)])
