@@ -8,11 +8,11 @@ Faces change the native player's silhouette, layout, textures, fonts, buttons
 and palette. The same controls and state remain in place: switching faces
 does not interrupt playback, clear a search, cancel a request, or change a like.
 Search, recents and **Start mix** use the face's palette. Click the cover, or
-choose **Cover view** from the menu, for a larger artwork window.
+choose **Cover view** from the menu, to see the whole cover in its own window.
 
 ## Included faces
 
-![Eighteen player faces rendered with sample metadata](faces-preview.png)
+![Twenty-two player faces rendered with sample metadata](faces-preview.png)
 
 | Face | Character |
 | --- | --- |
@@ -59,7 +59,8 @@ rectangular backings; the empty metal regions let you drag the window.
 Nightglass, Inner Sleeve, Instant Print and J-Card are cover-first: the cover is
 384 to 412 pixels on each side and fills about half the window. The controls sit
 around it on a glass strip, a record sleeve, a photo's chin or a cassette insert.
-Covers arrive at up to 768 pixels, so they stay sharp on 2x displays.
+The player fetches covers at up to 768 pixels, about what these apertures need
+on a 2x display.
 
 ![Four cover-first player faces rendered with sample metadata](faces-cover-preview.png)
 
@@ -284,7 +285,8 @@ inspiration-based originals, not converted Audion or Winamp assets.
 Nightglass, Inner Sleeve, Instant Print and J-Card have no generated material.
 Each is painted in code by [`artwork/procedural`](../artwork/procedural)`/<id>.py`,
 including its paper, board, glass, ink and button surfaces. Their images contain
-no text, so a re-export reproduces the shipped PNGs exactly, and a test checks this.
+no text, so with the locked PySide6 a re-export reproduces the shipped images
+pixel for pixel; a test checks this on Linux CI.
 
 [`artwork/render_faces.py`](../artwork/render_faces.py) exports the saved materials
 into 2x PNG backgrounds with precise alpha silhouettes, opaque readout wells,

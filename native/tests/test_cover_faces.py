@@ -4,40 +4,14 @@ import pytest
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 
 from PySide6.QtCore import QRect
-from PySide6.QtGui import QColor, QImage, QRegion
+from PySide6.QtGui import QColor, QRegion
+from test_lens_faces import _minimum_contrast
 
 from amberfader.face_library import BUILTIN_DIRECTORY, load_face
 from amberfader.ui.face_surface import prepare_face
 
 COVER_IDS = ("nightglass", "inner-sleeve", "instant-print", "j-card")
 MIN_COVER_EDGE = 320
-LINEAR_CHANNELS = tuple(
-    value / 255 / 12.92 if value / 255 <= 0.04045
-    else ((value / 255 + 0.055) / 1.055) ** 2.4
-    for value in range(256)
-)
-
-
-def _luminance(red, green, blue):
-    return (
-        LINEAR_CHANNELS[red] * 0.2126
-        + LINEAR_CHANNELS[green] * 0.7152
-        + LINEAR_CHANNELS[blue] * 0.0722
-    )
-
-
-def _minimum_contrast(foreground, image):
-    foreground = _luminance(foreground.red(), foreground.green(), foreground.blue())
-    rgba = image.convertToFormat(QImage.Format.Format_RGBA8888)
-    pixels = bytes(rgba.constBits())
-    backgrounds = (
-        _luminance(red, green, blue)
-        for red, green, blue in zip(pixels[0::4], pixels[1::4], pixels[2::4], strict=True)
-    )
-    return min(
-        (max(foreground, background) + 0.05) / (min(foreground, background) + 0.05)
-        for background in backgrounds
-    )
 
 
 @pytest.mark.parametrize("face_id", COVER_IDS)

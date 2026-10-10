@@ -77,14 +77,6 @@ GRAIN = 10
 MOTTLE = 5
 TAPE_GRAIN = 7
 
-FAMILIES = {
-    "previous": "transport", "next": "transport", "like": "transport",
-    "play": "play",
-    "search": "utility", "show": "utility", "hide": "utility",
-    "menu": "chrome", "minimize": "chrome", "close": "chrome",
-}
-
-
 def _rgba(color: str, alpha: int) -> QColor:
     value = QColor(color)
     value.setAlpha(alpha)
@@ -100,10 +92,11 @@ def _hairline(
 
 # Noise tiles ----------------------------------------------------------------
 
-_TILES: dict[tuple, QPixmap] = {}
+# QImage, not QPixmap: cached pixmaps would outlive the QGuiApplication.
+_TILES: dict[tuple, QImage] = {}
 
 
-def _speckle(grey: bytes, size: int, amplitude: int) -> QPixmap:
+def _speckle(grey: bytes, size: int, amplitude: int) -> QImage:
     """Turn grey noise into signed specks: black below mid-grey, white above.
 
     SoftLight barely moves near-white paper, so the grain is painted with
@@ -119,10 +112,10 @@ def _speckle(grey: bytes, size: int, amplitude: int) -> QPixmap:
     # QImage borrows the buffer, so keep it referenced until the copy.
     buffer = bytes(data)
     image = QImage(buffer, size, size, size * 4, QImage.Format.Format_RGBA8888_Premultiplied)
-    return QPixmap.fromImage(image.copy())
+    return image.copy()
 
 
-def _grain_tile(amplitude: int, salt: int) -> QPixmap:
+def _grain_tile(amplitude: int, salt: int) -> QImage:
     """A 256 px tile of independent specks, one per device pixel."""
     key = ("grain", amplitude, salt)
     if key not in _TILES:
@@ -131,7 +124,7 @@ def _grain_tile(amplitude: int, salt: int) -> QPixmap:
     return _TILES[key]
 
 
-def _mottle_tile(amplitude: int, salt: int, cell: int = 4) -> QPixmap:
+def _mottle_tile(amplitude: int, salt: int, cell: int = 4) -> QImage:
     """A seamless low-frequency tile: coarse noise, bilinearly enlarged.
 
     The coarse field is tiled 3x3 before scaling and the centre cropped, so
@@ -161,7 +154,7 @@ def _mottle_tile(amplitude: int, salt: int, cell: int = 4) -> QPixmap:
 
 
 def _overlay(
-    painter: QPainter, path: QPainterPath, tile: QPixmap, opacity: float, scale: float,
+    painter: QPainter, path: QPainterPath, tile: QImage, opacity: float, scale: float,
 ) -> None:
     """Tile specks over path; scale 1/kit.SCALE puts one tile px per device px."""
     painter.save()
@@ -174,7 +167,7 @@ def _overlay(
             math.floor(bounds.x() / scale), math.floor(bounds.y() / scale),
             math.ceil(bounds.width() / scale) + 4, math.ceil(bounds.height() / scale) + 4,
         ),
-        tile,
+        QPixmap.fromImage(tile),
     )
     painter.restore()
 
@@ -480,7 +473,7 @@ def _paint_tape(painter: QPainter, kit) -> None:
     painter.drawTiledPixmap(
         QRectF(TAPE.left() / 0.5 - 16, TAPE.top() / 3 - 4, TAPE.width() / 0.5 + 32,
                TAPE.height() / 3 + 8),
-        _grain_tile(TAPE_GRAIN, 31),
+        QPixmap.fromImage(_grain_tile(TAPE_GRAIN, 31)),
     )
     painter.restore()
 
@@ -733,8 +726,8 @@ def _tab(painter: QPainter, kit, width: int, height: int, state: str) -> None:
         # that leaves cream paper between it and the tab's edge. It starts
         # near top centre, so the overshoot runs along the flat top edge.
         loop = _marker_loop(
-            rect.center(), rect.width() / 2 - 5.5, rect.height() / 2 - 4, 61,
-            squareness=3.0, count=36, lean=0.8, begin=80.0, widen=1.0, wobble=0.5,
+            rect.center(), rect.width() / 2 - 3, rect.height() / 2 - 2.5, 61,
+            squareness=3.0, count=36, lean=0.8, begin=80.0, widen=1.0, wobble=0.35,
         )
         _draw_marker(painter, loop, 1.4)
 
@@ -742,7 +735,7 @@ def _tab(painter: QPainter, kit, width: int, height: int, state: str) -> None:
 def render_button(face: dict, control: str, state: str, kit) -> QImage:
     width, height = face["controls"][control][2:]
     image, painter = kit.canvas(width, height)
-    family = FAMILIES[control]
+    family = kit.BUTTON_GROUPS[control]
     rect = QRectF(1, 1, width - 2, height - 2)
     if family == "chrome":
         _sticker(painter, kit, rect, state)

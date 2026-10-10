@@ -95,9 +95,6 @@ RIBBON_BEND_X = RIBBON_XS[0] + RIBBON_RADIUS
 
 CRACKS_PER_CREASE = 20
 
-TRANSPORT = frozenset({"previous", "next", "like"})
-UTILITY = frozenset({"search", "show", "hide"})
-
 
 def _rgba(color: str | QColor, alpha: int) -> QColor:
     value = QColor(color)
@@ -125,10 +122,11 @@ def _vline(painter: QPainter, x: float, y0: float, y1: float, pen: QPen) -> None
 
 # ---------------------------------------------------------------- textures
 
-_TILES: dict[tuple[int, int, int], QPixmap] = {}
+# QImage, not QPixmap: cached pixmaps would outlive the QGuiApplication.
+_TILES: dict[tuple[int, int, int], QImage] = {}
 
 
-def _noise_tile(size: int, amplitude: int, salt: int) -> QPixmap:
+def _noise_tile(size: int, amplitude: int, salt: int) -> QImage:
     """A grey tile, 128 +/- amplitude, neutral under SoftLight."""
     key = (size, amplitude, salt)
     if key not in _TILES:
@@ -138,13 +136,11 @@ def _noise_tile(size: int, amplitude: int, salt: int) -> QPixmap:
         )
         data = rng.randbytes(size * size).translate(table)
         image = QImage(data, size, size, size, QImage.Format.Format_Grayscale8).copy()
-        _TILES[key] = QPixmap.fromImage(
-            image.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
-        )
+        _TILES[key] = image.convertToFormat(QImage.Format.Format_ARGB32_Premultiplied)
     return _TILES[key]
 
 
-def _speck_tile(size: int, max_alpha: int, salt: int) -> QPixmap:
+def _speck_tile(size: int, max_alpha: int, salt: int) -> QImage:
     """Dark specks of random alpha: tooth that also shows on white stock."""
     key = (size, -max_alpha, salt)
     if key not in _TILES:
@@ -155,11 +151,11 @@ def _speck_tile(size: int, max_alpha: int, salt: int) -> QPixmap:
         # Premultiplied black: only the alpha byte is non-zero (BGRA order).
         data = b"".join(b"\0\0\0" + alphas[i:i + 1] for i in range(size * size))
         image = QImage(data, size, size, size * 4, QImage.Format.Format_ARGB32_Premultiplied)
-        _TILES[key] = QPixmap.fromImage(image.copy())
+        _TILES[key] = image.copy()
     return _TILES[key]
 
 
-def _tile(painter: QPainter, clip: QPainterPath, scale: int, tile: QPixmap,
+def _tile(painter: QPainter, clip: QPainterPath, scale: int, tile: QImage,
           mode: QPainter.CompositionMode, opacity: float) -> None:
     """Tile a device-pixel texture over clip."""
     painter.save()
@@ -173,7 +169,7 @@ def _tile(painter: QPainter, clip: QPainterPath, scale: int, tile: QPixmap,
             math.floor(bounds.x()) * scale, math.floor(bounds.y()) * scale,
             math.ceil(bounds.width() + 2) * scale, math.ceil(bounds.height() + 2) * scale,
         ),
-        tile,
+        QPixmap.fromImage(tile),
     )
     painter.restore()
 
@@ -193,7 +189,7 @@ def _mottle(painter: QPainter, clip: QPainterPath, opacity: float, salt: int) ->
     painter.setClipPath(clip, Qt.ClipOperation.IntersectClip)
     painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SoftLight)
     painter.setOpacity(opacity)
-    painter.drawPixmap(CARD, _noise_tile(24, 90, salt), QRectF(0, 0, 24, 24))
+    painter.drawPixmap(CARD, QPixmap.fromImage(_noise_tile(24, 90, salt)), QRectF(0, 0, 24, 24))
     painter.restore()
 
 
@@ -490,6 +486,8 @@ def _paint_creases(painter: QPainter, kit, rng: random.Random) -> None:
                 length = segments * 2.2
                 if all(y > end + 2 or y + length < start - 2 for start, end in taken):
                     break
+            else:
+                continue  # no clear slot left; skip rather than overlap
             taken.append((y, y + length))
             x = xc + rng.uniform(-1.0, 1.0)
             crack = QPainterPath(QPointF(x, y))
@@ -790,9 +788,10 @@ def _box_key(painter: QPainter, kit, w: int, h: int, state: str, tab: bool) -> N
 def render_button(face: dict, control: str, state: str, kit) -> QImage:
     _, _, width, height = face["controls"][control]
     image, painter = kit.canvas(width, height)
-    if control in TRANSPORT or control == "play":
-        _hub(painter, width, height, state, supply=control == "play")
+    group = kit.BUTTON_GROUPS[control]
+    if group in {"transport", "play"}:
+        _hub(painter, width, height, state, supply=group == "play")
     else:
-        _box_key(painter, kit, width, height, state, tab=control in UTILITY)
+        _box_key(painter, kit, width, height, state, tab=group == "utility")
     painter.end()
     return image

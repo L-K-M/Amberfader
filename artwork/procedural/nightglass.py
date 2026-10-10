@@ -1,9 +1,10 @@
 """Nightglass: a quiet dark slab, a near-frameless cover and a smoked-glass strip.
 
 Painted in code for artwork/render_faces.py (see PROCEDURAL_KIT there). Two
-materials only: a matte, finely grained slab and one smoked-glass strip that
-carries every readout and control below the cover. The cover is the only
-colour. Light comes from the top left throughout: highlights sit on upper
+materials only: a matte, finely grained slab and one smoked-glass strip below
+the cover that carries the readouts and the transport, volume, Show and Hide
+controls; Search and the window keys sit on the slab above the cover. The
+cover is the only colour. Light comes from the top left throughout: highlights sit on upper
 edges, contact shadows fall down and slightly right, recesses catch light on
 their lower lip.
 

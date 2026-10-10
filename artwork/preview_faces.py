@@ -12,7 +12,16 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from PySide6.QtCore import QBuffer, QRect, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QImage, QLinearGradient, QPainter, QPainterPath, QPen
+from PySide6.QtGui import (
+    QColor,
+    QCursor,
+    QFont,
+    QImage,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+)
 from PySide6.QtWidgets import QApplication
 
 from amberfader.face_library import Face, FaceLibrary
@@ -112,7 +121,7 @@ def _set_sample(window: MainWindow, state_name: str, cover: bytes) -> None:
         window._render_like()
         window.show_status("Waiting for the observed player outcome…", error=True)
     else:
-        window.show_status("Sample preview · Firefox remote")
+        window.show_status("Sample preview")
     # A contact sheet can outlast the transient status timer on a slower host.
     window._status_timer.stop()
 
@@ -143,7 +152,7 @@ def _contact_sheet(
     captions = {
         "sample": "Sample metadata",
         "long-metadata": "Long metadata and extended duration",
-        "offline": "Unknown playback and liked state · Disconnected from Firefox",
+        "offline": "Unknown playback and liked state · Disconnected from YouTube Music",
         "pending": "Pending playback and like commands · Awaiting an observed outcome",
     }
     painter.drawText(
@@ -179,7 +188,8 @@ def _contact_sheet(
     painter.setFont(font)
     painter.setPen(QColor("#bbc2ce"))
     painter.drawText(
-        MARGIN, height - 40, "One player. Choose your shell with Ctrl+, · Music stays in Firefox.",
+        MARGIN, height - 40,
+        "One player. Choose your shell with Ctrl+, · Playback continues while you switch.",
     )
     painter.end()
     return poster
@@ -207,6 +217,10 @@ def main() -> None:
     if selected_ids and options.output.resolve() == parser.get_default("output").resolve():
         parser.error("--face needs a separate --output path to preserve the full gallery")
     app = QApplication([])
+    # One window renders every face, reusing its buttons. Keep the virtual
+    # pointer away from it, or a button under the pointer in one face keeps
+    # its hover state in the faces after it.
+    QCursor.setPos(-10_000, -10_000)
     PREVIEW_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
     with TemporaryDirectory() as directory:

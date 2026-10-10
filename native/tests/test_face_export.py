@@ -80,18 +80,32 @@ def test_plate_wider_than_drag_region_is_rejected(exporter, monkeypatch):
 
 @pytest.mark.parametrize("face_id", ["nightglass", "inner-sleeve", "instant-print", "j-card"])
 def test_painted_faces_export_exactly_the_shipped_pack(exporter, monkeypatch, face_id):
-    """Cover faces are painted in code; the shipped PNGs must be its output."""
+    """Cover faces are painted in code; the shipped PNGs must be its output.
+
+    Pixels are compared, not PNG bytes: Qt deflates with the system zlib,
+    whose output differs between zlib builds for identical images.
+    """
     module, original, _ = exporter
     directory = original.parent / face_id
     shutil.copytree(BUILTIN_DIRECTORY / face_id, directory)
-    shipped = {path.name: path.read_bytes() for path in directory.iterdir()}
+    manifest = (directory / "face.json").read_bytes()
+    shipped = {
+        path.name: QImage(str(path)).convertToFormat(QImage.Format.Format_ARGB32)
+        for path in directory.glob("*.png")
+    }
     for path in directory.glob("*.png"):
         path.unlink()
     monkeypatch.setattr(sys, "argv", ["render_faces.py", "--face", face_id])
 
     module.main()
 
-    assert {path.name: path.read_bytes() for path in directory.iterdir()} == shipped
+    assert (directory / "face.json").read_bytes() == manifest
+    exported = {path.name: path for path in directory.glob("*.png")}
+    assert exported.keys() == shipped.keys()
+    for name, path in exported.items():
+        image = QImage(str(path)).convertToFormat(QImage.Format.Format_ARGB32)
+        assert image.size() == shipped[name].size(), name
+        assert image == shipped[name], name
 
 
 @pytest.mark.parametrize("face_id", ["aureole", "viridian"])

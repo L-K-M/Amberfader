@@ -8,8 +8,8 @@ needed to rebuild the shipped 2x PNGs.
 
 Faces with a module in artwork/procedural/<id>.py are painted entirely in code
 instead: the module's render_background(face, kit) returns the 2x background,
-and an optional render_button(face, control, state, kit) returns one button
-surface. `kit` is PROCEDURAL_KIT, the exporter's shared drawing helpers.
+and its render_button(face, control, state, kit) returns one button surface.
+`kit` is PROCEDURAL_KIT, the exporter's shared drawing helpers.
 
 Run: QT_QPA_PLATFORM=offscreen uv run python artwork/render_faces.py
 Repeat --face ID to re-export only those packs.
@@ -601,9 +601,9 @@ def _sprite_family(face: dict, name: str) -> str:
 def render_button(face: dict, group: str, state: str, control: str | None = None) -> QImage:
     control = control or GROUP_REPRESENTATIVES[group]
     procedural = _procedural(face["id"])
-    if procedural is not None and hasattr(procedural, "render_button"):
+    if procedural is not None:
         return procedural.render_button(face, control, state, PROCEDURAL_KIT)
-    if face["id"] in SHAPED_FACES or procedural is not None:
+    if face["id"] in SHAPED_FACES:
         return _render_shaped_button(face, control, state)
     _, _, width, height = face["controls"][control]
     image, painter = _canvas(width, height)
@@ -646,15 +646,11 @@ def render_button(face: dict, group: str, state: str, control: str | None = None
 # The helpers procedural face modules may use; see the module docstring.
 PROCEDURAL_KIT = SimpleNamespace(
     SCALE=SCALE,
-    READOUT_CONTROLS=READOUT_CONTROLS,
+    BUTTON_GROUPS=BUTTON_GROUPS,
     canvas=_canvas,
     control_path=_control_path,
     gradient=_gradient,
-    padded=_padded,
     rounded=_rounded,
-    shaped_button=_render_shaped_button,
-    surround=_surround,
-    well=_well,
 )
 
 

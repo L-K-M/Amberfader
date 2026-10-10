@@ -164,8 +164,8 @@ a jellyfish and a headphone robot with transparent gaps around their controls.
 Tangent, Keystone, Switchback and Vane add compact abstract instrument forms
 in steel, navy glass, graphite and lime.
 Aureole and Viridian add gold and green glass displays framed by silver curves.
-Nightglass, Inner Sleeve, Instant Print and J-Card turn this around: a large cover
-fills about half the window, and the controls sit around it.
+Nightglass, Inner Sleeve, Instant Print and J-Card put the cover first: it fills
+about half the window, and the controls sit around it.
 Click the cover for **Cover view**.
 
 Install additional JSON/PNG face plugins with **Install face folder…**.
