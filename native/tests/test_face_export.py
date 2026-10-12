@@ -97,7 +97,9 @@ def _changed_share(image, shipped):
     return changed / (len(deltas) // 4), max(deltas)
 
 
-@pytest.mark.parametrize("face_id", ["nightglass", "inner-sleeve", "instant-print", "j-card"])
+@pytest.mark.parametrize(
+    "face_id", ["nightglass", "inner-sleeve", "instant-print", "j-card", "lightbox"],
+)
 def test_painted_faces_export_the_shipped_pack(exporter, monkeypatch, face_id):
     """Cover faces are painted in code; the shipped PNGs must be its output."""
     module, original, _ = exporter

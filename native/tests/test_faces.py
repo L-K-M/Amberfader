@@ -27,6 +27,7 @@ BUNDLED_IDS = {
     "tangent", "keystone", "switchback", "vane",
     "aureole", "viridian",
     "nightglass", "inner-sleeve", "instant-print", "j-card",
+    "lightbox",
 }
 
 

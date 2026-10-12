@@ -103,10 +103,11 @@ face, while you work; saving still requires a valid layout.
 **Album art as backdrop**, in the Face inspector's Layout section, draws the
 album art behind the background inside the art frame. Paint the background
 transparent where the cover should show, or translucent to tint it; an opaque
-background hides it. In the player, presses on the cover move the window. On the
-canvas, a click selects a control first, then the drag region, then the art;
-pick a hidden element from the sidebar. Art on a backdrop cannot rotate, and
-removing the art turns the backdrop off.
+background hides it. In the player, presses on the cover, or anywhere else on
+the face that no control takes, move the window. On the canvas, a click selects
+a control first, then the drag region, then the art; pick a hidden element from
+the sidebar. Art on a backdrop cannot rotate, and removing the art turns the
+backdrop off.
 
 Per-screen font, size, alignment, bold and italic overrides use the same
 rendering as the player and picker. You can also specify a font family and a

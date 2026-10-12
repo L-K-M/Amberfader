@@ -156,7 +156,7 @@ record.
 
 ## Linux Faces
 
-In the native app, choose **☰ → Faces…** or press **Ctrl+,**. Twenty-two original
+In the native app, choose **☰ → Faces…** or press **Ctrl+,**. Twenty-three original
 faces change the player's shape, layout and textures while keeping
 artwork, likes, playback, search, recents and mixes. Your choice is saved locally.
 Four of them are experimental sculptural faces: an orbital instrument, a manta ray,
@@ -165,8 +165,9 @@ Tangent, Keystone, Switchback and Vane add compact abstract instrument forms
 in steel, navy glass, graphite and lime.
 Aureole and Viridian add gold and green glass displays framed by silver curves.
 Nightglass, Inner Sleeve, Instant Print and J-Card put the cover first: it fills
-about half the window, and the controls sit around it.
-Click the cover for **Cover view**.
+about half the window, and the controls sit around it. Lightbox makes the cover
+the backdrop, with the controls on smoked glass over it.
+Click the cover for **Cover view** (on Lightbox, choose **☰ → Cover view**).
 
 Install additional JSON/PNG face plugins with **Install face folder…**.
 See [Faces](docs/faces.md) for previews, installation paths and the versioned

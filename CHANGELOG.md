@@ -31,9 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Faces can use the album cover as their backdrop. The format 2 field
   `coverBackdrop` draws the background over the cover, so clear or tinted
   glass shows it, and lets controls and the drag region sit on it. Presses on
-  the cover move the window; Cover view opens from the menu or the keyboard.
+  the cover, or anywhere else no control takes, move the window; Cover view
+  opens from the menu or the keyboard.
   The face editor turns it on with **Album art as backdrop**. Older versions
   of Amberfader reject faces that use it.
+- The Lightbox face uses the cover as its backdrop: the cover fills the
+  window, and the track details and controls float on smoked glass over it.
 
 ### Changed
 

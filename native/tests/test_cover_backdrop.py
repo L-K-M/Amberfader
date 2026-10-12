@@ -8,20 +8,25 @@ import pytest
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 
 from PySide6.QtCore import QBuffer, QIODevice, QPoint, QPointF, QRect, QRectF, Qt
-from PySide6.QtGui import QColor, QImage, QPainter, QPixmap, QRegion
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter, QPixmap, QRegion
 from PySide6.QtTest import QTest
 from test_faces import make_pack, png
 from test_gui_features import _state
+from test_lens_faces import _luminance, _minimum_contrast
 
-from amberfader.face_library import FaceLibrary, load_face
+from amberfader.face_library import BUILTIN_DIRECTORY, FaceLibrary, load_face
 from amberfader.ui import face_surface
 from amberfader.ui.face_surface import (
+    FONT_FAMILIES,
+    PREVIEW_LABELS,
+    control_path,
     draw_cover,
     draw_face_preview,
+    like_font_size,
     prepare_face,
     prepare_face_preview,
 )
-from amberfader.ui.main_window import MainWindow
+from amberfader.ui.main_window import MAX_ARTWORK_DIMENSION, MainWindow
 
 RED = QColor("#ff0000")
 SHELL = QColor("#404040")
@@ -435,6 +440,25 @@ def test_bare_cover_moves_window(backdrop_window, qapp):
     assert not sent
 
 
+def test_shell_beside_backdrop_moves_window(backdrop_window, qapp):
+    # The cover is the backdrop, so the shell round it is too: a press that
+    # no control takes moves the window anywhere on the face, its frame
+    # included, not only on the cover and the grip.
+    window, _, sent = backdrop_window
+    surface = window._surface
+    point = _at(window, SHELL_POINT)
+    assert surface.childAt(point) is None
+    before = window.pos()
+    QTest.mousePress(surface, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point)
+    QTest.mouseMove(surface, point + QPoint(30, 20))
+    QTest.mouseRelease(
+        surface, Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, point + QPoint(30, 20),
+    )
+    qapp.processEvents()
+    assert window.pos() != before
+    assert not sent
+
+
 def test_rotated_readout_on_backdrop_moves_window(qapp, tmp_path):
     # A rotated readout lives in a graphics view. Offscreen Qt cannot start a
     # system move, so the surface needs every move and the release of a press
@@ -542,3 +566,137 @@ def test_full_canvas_drag_without_backdrop_keeps_cover_click(qapp, tmp_path):
         window.deleteLater()
         qapp.processEvents()
 
+
+def _lightbox_over(face, artwork, color):
+    """Lightbox at 2x as the player paints it over a flat cover of `color`."""
+    image = QImage(*(2 * value for value in face.size), QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    cover = QPixmap(MAX_ARTWORK_DIMENSION, MAX_ARTWORK_DIMENSION)
+    cover.fill(color)
+    window = QRectF(0, 0, *face.size)
+    painter = QPainter(image)
+    painter.scale(2, 2)
+    painter.drawPixmap(window, artwork.background, QRectF(artwork.background.rect()))
+    draw_cover(
+        painter, cover, QRectF(*face.controls["art"]), face.control_shapes["art"],
+        face.radius, face.cover_glass, (artwork.background, window),
+    )
+    painter.end()
+    return image
+
+
+def test_lightbox_readouts_read_on_any_cover(qapp):
+    """Readouts sit on smoked glass over the cover and must read on any cover.
+
+    Source-over compositing and luminance both rise monotonically with each
+    cover channel, so a pure white and a pure black cover bound every real
+    cover: the light text has its least contrast over white.
+    """
+    face = load_face(BUILTIN_DIRECTORY / "lightbox")
+    artwork = prepare_face(face)
+    for color in (QColor("#ffffff"), QColor("#000000")):
+        image = _lightbox_over(face, artwork, color)
+        for name in ("title", "artists", "time", "playback", "status"):
+            interior = QRect(*face.controls[name]).adjusted(1, 1, -1, -1)
+            rectangle = QRect(
+                2 * interior.x(), 2 * interior.y(), 2 * interior.width(), 2 * interior.height(),
+            )
+            tokens = ("muted", "danger") if name == "status" else ("readout",)
+            for token in tokens:
+                contrast = _minimum_contrast(QColor(face.palette[token]), image.copy(rectangle))
+                assert contrast >= 4.5, (color.name(), name, token, contrast)
+
+
+def _contrast(left, right):
+    lighter, darker = sorted(
+        (_luminance(color.red(), color.green(), color.blue()) for color in (left, right)),
+        reverse=True,
+    )
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def test_lightbox_keys_do_not_depend_on_the_cover(qapp):
+    # Key bodies are opaque inside their antialiased edge, so the cover never
+    # shows through a key and the 0.5-opacity disabled fallback never
+    # applies, and each label reads on the key alone across its whole text
+    # rect. Labels use text, and muted when disabled.
+    face = load_face(BUILTIN_DIRECTORY / "lightbox")
+    artwork = prepare_face(face)
+    tokens = {"normal": "text", "hover": "text", "pressed": "text", "disabled": "muted"}
+    for name, sprites in artwork.buttons.items():
+        assert sprites.keys() == tokens.keys(), name
+        _, _, width, height = face.controls[name]
+        # Sprites paint their body in a 1 px margin; skip its edge pixels.
+        body = control_path(
+            QRectF(1.5, 1.5, width - 3, height - 3), face.control_shapes.get(name, "rectangle"),
+            face.radius - 0.5,
+        )
+        font = QFont(FONT_FAMILIES[face.font])
+        font.setPixelSize(like_font_size(face) if name == "like" else 12)
+        label = QRectF(QFontMetrics(font).boundingRect(
+            QRect(0, 0, width, height), Qt.AlignmentFlag.AlignCenter, PREVIEW_LABELS[name],
+        ))
+        assert body.contains(label.center()), name
+        for state, sprite in sprites.items():
+            image = sprite.toImage().convertToFormat(QImage.Format.Format_RGBA8888)
+            scale = image.width() / width
+            data = bytes(image.constBits())
+            behind_label = []
+            for y in range(image.height()):
+                for x in range(image.width()):
+                    point = QPointF((x + 0.5) / scale, (y + 0.5) / scale)
+                    if not body.contains(point):
+                        continue
+                    index = 4 * (y * image.width() + x)
+                    assert data[index + 3] == 255, (name, state, x, y)
+                    if label.contains(point):
+                        behind_label.append(QColor(*data[index:index + 3]))
+            assert behind_label, (name, state)
+            foreground = QColor(face.palette[tokens[state]])
+            contrast = min(_contrast(foreground, color) for color in behind_label)
+            assert contrast >= 4.5, (name, state, contrast)
+
+
+def test_lightbox_disabled_controls_recede():
+    # The host draws disabled glyphs, slider fills and thumb cores in muted.
+    # Muted must sit clearly below text, or a disabled key reads like an
+    # enabled one, and below accent, or a disabled slider outshines an
+    # enabled one.
+    palette = load_face(BUILTIN_DIRECTORY / "lightbox").palette
+
+    def luminance(token):
+        color = QColor(palette[token])
+        return _luminance(color.red(), color.green(), color.blue())
+
+    assert (luminance("text") + 0.05) / (luminance("muted") + 0.05) >= 2
+    assert luminance("muted") < luminance("accent")
+
+
+def test_lightbox_disabled_keys_never_outshine_enabled_ones(qapp):
+    # Over a light cover the glass is mid-grey, so a disabled body darker
+    # than the enabled gel would read as a hole, the boldest key in the row.
+    # Its body must stand out from the glass no more than an enabled one's,
+    # on light covers and dark ones alike.
+    face = load_face(BUILTIN_DIRECTORY / "lightbox")
+    artwork = prepare_face(face)
+
+    def body(sprite):
+        image = sprite.toImage()
+        return image.pixelColor(image.width() // 2, image.height() // 2)
+
+    for color in (QColor("#ffffff"), QColor("#808080"), QColor("#000000")):
+        # Bare glass in the key row, between like and previous.
+        glass = _lightbox_over(face, artwork, color).pixelColor(2 * 100, 2 * 344)
+        for name, sprites in artwork.buttons.items():
+            enabled = _contrast(body(sprites["normal"]), glass)
+            disabled = _contrast(body(sprites["disabled"]), glass)
+            assert disabled <= enabled + 0.01, (color.name(), name, disabled, enabled)
+
+
+def test_lightbox_cover_renders_one_to_one_at_2x():
+    # Covers are fetched at up to MAX_ARTWORK_DIMENSION px; at 2x the
+    # aperture shows them pixel for pixel, never upscaled.
+    face = load_face(BUILTIN_DIRECTORY / "lightbox")
+    _, _, width, height = face.controls["art"]
+    assert width == height
+    assert width * 2 == MAX_ARTWORK_DIMENSION

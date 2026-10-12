@@ -1372,12 +1372,13 @@ class FaceSurface(QWidget):
 
     def apply_face(self, face: Face, artwork: FaceArtwork, scale: float) -> None:
         self._background = artwork.background
-        self._drag = QRegion(QRect(*(round(value * scale) for value in face.drag)))
+        drag = face.drag
         if face.cover_backdrop and "art" in face.controls:
-            # Presses on a cover backdrop reach the face; let them move it.
-            self._drag = self._drag.united(
-                QRegion(QRect(*(round(value * scale) for value in face.controls["art"]))),
-            )
+            # Presses on a cover backdrop reach the face. The cover is the
+            # backdrop, so the frame round it is too: anything no control
+            # takes moves the window.
+            drag = (0, 0, *face.size)
+        self._drag = QRegion(QRect(*(round(value * scale) for value in drag)))
         if artwork.alpha_mask is None:
             if self.graphicsEffect() is not None:
                 self.setGraphicsEffect(None)
