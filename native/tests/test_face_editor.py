@@ -98,6 +98,60 @@ def test_escape_cancels_an_active_gesture_without_recording_it(editor, qapp):
     assert editor._canvas._gesture is None
 
 
+def test_canvas_click_prefers_controls_over_selected_art(editor, qapp):
+    from PySide6.QtCore import QRectF
+
+    editor._canvas.select("art")
+    # A draft cover enlarged under the title, as the player stacks it.
+    editor.document.set_rect("art", [150, 40, 300, 300])
+    editor._changed()
+    title = QRectF(*editor.document.manifest["controls"]["title"]).center()
+    _drag(qapp, editor._canvas, title, title)
+    assert editor._canvas.selected == "title"
+
+
+def test_cover_backdrop_checkbox_edits_and_undoes(editor, qapp):
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QCheckBox
+
+    backdrop = editor._inspector.face.findChild(QCheckBox, "coverBackdrop")
+    assert backdrop is not None and backdrop.isEnabled() and not backdrop.isChecked()
+    backdrop.click()
+    assert editor.document.manifest["coverBackdrop"] is True
+    assert editor._canvas._item.face.cover_backdrop is True
+    assert editor._undo_action.text() == "Undo Change Cover Backdrop"
+    editor._undo()
+    assert "coverBackdrop" not in editor.document.manifest
+    assert not backdrop.isChecked()
+    backdrop.click()
+    editor._canvas.setFocus()
+    editor._canvas.select("art")
+    QTest.keyClick(editor._canvas, Qt.Key.Key_Delete)
+    assert "art" not in editor.document.manifest["controls"]
+    assert "coverBackdrop" not in editor.document.manifest
+    assert not backdrop.isEnabled() and not backdrop.isChecked()
+    editor._undo()
+    assert backdrop.isEnabled() and backdrop.isChecked()
+
+
+def test_canvas_hit_on_backdrop_face(editor, qapp):
+    from PySide6.QtCore import QPointF, QRectF
+
+    # The cover grows under the title and the drag region.
+    editor.document.set_rect("art", [20, 10, 170, 170])
+    editor._changed()
+    on_title = QRectF(*editor.document.manifest["controls"]["title"]).center()
+    on_drag, bare = QPointF(100, 26), QPointF(60, 120)
+    _drag(qapp, editor._canvas, on_drag, on_drag)
+    assert editor._canvas.selected == "art"  # Without a backdrop, art lies over drag.
+    editor.document.set_value(("coverBackdrop",), True)
+    editor._changed()
+    for point, expected in [(on_title, "title"), (on_drag, "drag"), (bare, "art")]:
+        _drag(qapp, editor._canvas, point, point)
+        assert editor._canvas.selected == expected, point
+
+
 def test_drag_resize_changes_bounds_and_undo_restores_them(editor, qapp):
     from PySide6.QtCore import QPointF
 

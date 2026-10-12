@@ -97,7 +97,9 @@ def _changed_share(image, shipped):
     return changed / (len(deltas) // 4), max(deltas)
 
 
-@pytest.mark.parametrize("face_id", ["nightglass", "inner-sleeve", "instant-print", "j-card"])
+@pytest.mark.parametrize(
+    "face_id", ["nightglass", "inner-sleeve", "instant-print", "j-card", "lightbox"],
+)
 def test_painted_faces_export_the_shipped_pack(exporter, monkeypatch, face_id):
     """Cover faces are painted in code; the shipped PNGs must be its output."""
     module, original, _ = exporter
@@ -134,3 +136,39 @@ def test_export_preserves_supplied_lens_layout_and_sprite_sizes(exporter, monkey
     assert (directory / "face.json").read_bytes() == manifest
     assert {path.name: QImage(str(path)).size() for path in directory.glob("*.png")} == image_sizes
     assert load_face(directory).info.id == face_id
+
+
+def _clear(module, image, path):
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPainter
+
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Clear)
+    painter.scale(module.SCALE, module.SCALE)
+    painter.fillPath(path, Qt.GlobalColor.transparent)
+    painter.end()
+
+
+def test_backdrop_aperture_counts_as_opaque(exporter):
+    """The player fills a cover backdrop's aperture with the cover itself."""
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QColor
+
+    module = exporter[0]
+    face = {
+        "drag": [4, 4, 60, 12], "radius": 6,
+        "controlShapes": {"art": "rounded"},
+        "controls": {"art": [10, 20, 60, 60], "title": [20, 30, 40, 12], "play": [80, 30, 20, 12]},
+    }
+    image = QImage(110 * module.SCALE, 90 * module.SCALE, QImage.Format.Format_ARGB32)
+    image.fill(QColor("#303030"))
+    _clear(module, image, module._control_path(QRectF(10, 20, 60, 60), "rounded", 6))
+
+    assert module._translucent_regions(face, image) == ["art", "title"]
+    face["coverBackdrop"] = True
+    assert module._translucent_regions(face, image) == []
+    _clear(module, image, module._control_path(QRectF(78, 28, 24, 16), "rectangle", 0))
+    assert module._translucent_regions(face, image) == ["play"]
+    del face["coverBackdrop"]  # The check fills a copy, never the exported image.
+    assert module._translucent_regions(face, image) == ["art", "title", "play"]

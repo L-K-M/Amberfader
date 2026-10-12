@@ -35,6 +35,7 @@ FACE_ORDER = (
     "tangent", "keystone", "switchback", "vane",
     "aureole", "viridian",
     "nightglass", "inner-sleeve", "instant-print", "j-card",
+    "lightbox",
 )
 PREVIEW_DIRECTORY = ROOT / "build" / "face-previews"
 MARGIN = 48

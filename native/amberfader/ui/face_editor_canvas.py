@@ -406,19 +406,29 @@ class FaceEditorCanvas(QGraphicsView):
         if self._document is None:
             return None
         data = self._document.manifest
-        names = list(data["controls"])
+
+        def contains(name: str) -> bool:
+            rect, angle = self._geometry(name)
+            local = _control_transform(rect, angle).inverted()[0].map(point)
+            shape = data.get("controlShapes", {}).get(name, "rectangle")
+            return control_path(rect, shape, data.get("radius", 4)).contains(local)
+
+        # The player stacks the cover beneath every control, so even a
+        # selected cover yields to the controls placed on it.
+        names = [name for name in data["controls"] if name != "art"]
         if self._selected in names:
             names.remove(self._selected)
             names.append(self._selected)
         for name in reversed(names):
-            rect, angle = self._geometry(name)
-            local = _control_transform(rect, angle).inverted()[0].map(point)
-            shape = data.get("controlShapes", {}).get(name, "rectangle")
-            if control_path(rect, shape, data.get("radius", 4)).contains(local):
+            if contains(name):
                 return name
-        if QRectF(*data["drag"]).contains(point):
+        on_art = "art" in data["controls"] and contains("art")
+        on_drag = QRectF(*data["drag"]).contains(point)
+        # The player hands presses on a cover backdrop to the face, which
+        # moves the window, so there the drag region lies above the cover.
+        if on_drag and (data.get("coverBackdrop", False) or not on_art):
             return "drag"
-        return None
+        return "art" if on_art else None
 
     def _handle_at(self, point: QPointF) -> tuple[_Gesture | None, int]:
         if not self._show_guides or self._document is None:

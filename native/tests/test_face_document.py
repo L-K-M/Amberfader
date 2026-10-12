@@ -342,6 +342,51 @@ def test_rotation_overlap_blocks_save_but_retains_draft(tmp_path):
         document.save(tmp_path / "bad")
 
 
+def _legacy_document():
+    template = FaceDocument.from_template(TEMPLATE)
+    manifest = template.manifest
+    manifest["formatVersion"] = 1
+    for key in ("controlShapes", "coverGlass", "readoutStyles", "sliderStyle"):
+        manifest.pop(key, None)
+    return FaceDocument.from_snapshot(manifest, template.assets)
+
+
+def test_cover_backdrop_upgrades_legacy_drafts_and_leaves_with_the_cover():
+    document = _legacy_document()
+    document.set_value(("coverBackdrop",), True, label="Change Cover Backdrop")
+    assert document.manifest["formatVersion"] == 2
+    assert document.manifest["coverBackdrop"] is True
+    assert not document.validate()
+    document.set_value(("coverBackdrop",), None)
+    assert "coverBackdrop" not in document.manifest
+    document.undo()
+    assert document.manifest["coverBackdrop"] is True
+    # Without the cover there is no backdrop; the draft stays valid.
+    document.set_value(("controls", "art"), None)
+    assert "art" not in document.manifest["controls"]
+    assert "coverBackdrop" not in document.manifest
+    assert not document.validate()
+    document.undo()
+    assert "art" in document.manifest["controls"]
+    assert document.manifest["coverBackdrop"] is True
+
+
+def test_cover_backdrop_survives_save_and_reopen(tmp_path):
+    document = FaceDocument.from_template(TEMPLATE)
+    document.set_value(("coverBackdrop",), True)
+    reopened = FaceDocument.open(document.save(tmp_path / "backdrop"))
+    assert reopened.manifest["coverBackdrop"] is True
+    assert reopened.preview().cover_backdrop is True
+
+
+def test_cover_backdrop_lets_the_cover_lie_under_controls():
+    document = FaceDocument.from_template(TEMPLATE)
+    document.set_rect("art", [20, 10, 170, 170])
+    assert any("art overlaps" in problem for problem in document.validate())
+    document.set_value(("coverBackdrop",), True)
+    assert not document.validate()
+
+
 def test_open_rejects_asset_path_traversal(tmp_path):
     document = FaceDocument.from_template(TEMPLATE)
     target = document.save(tmp_path / "source")

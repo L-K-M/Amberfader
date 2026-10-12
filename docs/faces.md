@@ -9,10 +9,13 @@ and palette. The same controls and state remain in place: switching faces
 does not interrupt playback, clear a search, cancel a request, or change a like.
 Search, recents and **Start mix** use the face's palette. Click the cover, or
 choose **Cover view** from the menu, to see the whole cover in its own window.
+On a face whose cover is the backdrop, such as Lightbox, drag the cover or its
+frame to move the window; a click on it does not open Cover view. Choose
+**☰ → Cover view**, or press Tab until the cover is focused and press Enter.
 
 ## Included faces
 
-![Twenty-two player faces rendered with sample metadata](faces-preview.png)
+![Twenty-three player faces rendered with sample metadata](faces-preview.png)
 
 | Face | Character |
 | --- | --- |
@@ -38,6 +41,7 @@ choose **Cover view** from the menu, to see the whole cover in its own window.
 | Inner Sleeve | A record jacket with its kraft inner sleeve pulled out beside it |
 | Instant Print | A taped-up instant photo with the controls on its white chin |
 | J-Card | An unfolded cobalt cassette insert with tape hubs down the spine |
+| Lightbox | The cover fills the window; track details and controls float on smoked glass over it |
 
 The four experimental sculptural faces place the player controls in curved
 instruments and characters, with transparent gaps between parts of the shell.
@@ -62,7 +66,14 @@ around it on a glass strip, a record sleeve, a photo's chin or a cassette insert
 The player fetches covers at up to 768 pixels, about what these apertures need
 on a 2x display.
 
-![Four cover-first player faces rendered with sample metadata](faces-cover-preview.png)
+Lightbox goes further: the cover is the backdrop. It fills the window inside a
+narrow graphite frame, and the track details and controls sit on it. The
+glass over it is clear from below the header keys to above the title, then
+deepens into smoke that keeps the text readable on light, dark and busy covers.
+Drag the cover or its frame to move the window; Cover view opens from the ☰
+menu. At 2x its 384 pixel cover shows a 768 pixel image pixel for pixel.
+
+![Five cover-first player faces rendered with sample metadata](faces-cover-preview.png)
 
 These are original designs inspired by [Audion Faces](https://panic.com/blog/facing-forward/),
 SoundJam MP, and late-1990s desktop players. They do not contain those apps'
@@ -143,6 +154,19 @@ my-face/
   `radius`; `capsule` uses half the shorter dimension.
 - `coverGlass` (version 2): optional boolean, default false. Adds a faint glass
   reflection over the cover while leaving the background's bezel visible.
+- `coverBackdrop` (version 2): optional boolean, default false. Makes the cover
+  the backdrop. The player draws the album art, then the background again over
+  it inside the `art` aperture: transparent background pixels there show the
+  cover, translucent ones tint it and opaque ones hide it. In version 1/2,
+  controls and the drag region may then overlap `art`; other overlaps are still
+  errors. Version 3 allows every overlap anyway. Unless the face has an
+  `alphaMask`, the aperture counts as opaque for the window shape, because the
+  cover always fills it; an `alphaMask` sets the shape and masks the cover too.
+  `art` cannot rotate. Presses on the cover, or anywhere else on the face that
+  no control takes, move the window, so Cover view opens from the menu, or with
+  Tab to the cover and Enter. For light text, a white cover is the worst case:
+  keep text at 4.5:1 contrast over it. Older Amberfader versions reject packs
+  that use this field.
 - `readoutStyles` (version 2): optional entries for `title`, `artists`, `time`,
   `playback` and `status`. Each entry can set `align` (`left`, `center`, `right`),
   `font` (`sans`, `mono`, `serif`), `size` (10–36 logical pixels) and `bold`.
@@ -166,7 +190,7 @@ my-face/
 
 | Name | Host-owned behavior |
 | --- | --- |
-| `art` | Album artwork; opens Cover view |
+| `art` | Album artwork; opens Cover view (on a cover backdrop: from the menu or Enter) |
 | `title`, `artists` | Current metadata, elided to fit; full text in tooltips |
 | `time`, `playback` | Reported position/duration and playback state |
 | `previous`, `play`, `next` | Existing playback command path |
@@ -179,8 +203,10 @@ my-face/
 | `minimize`, `close` | Desktop window controls; closing leaves music playing |
 
 In version 1/2, every control must fit inside the canvas, avoid other controls
-and `drag`, and sit on an opaque part of the background. Buttons need at least 22×22 logical
-pixels; labels and drag regions need 64×18; sliders need 80×18. Artwork must be
+and `drag`, and sit on an opaque part of the background. With `coverBackdrop`,
+controls and `drag` may overlap `art`, and the `art` aperture counts as opaque.
+Buttons need at least 22×22 logical pixels;
+labels and drag regions need 64×18; sliders need 80×18. Artwork must be
 square and at least 64×64, except version 2 elliptical apertures, which can be
 oval and need at least 48×48. The entire control rectangle must still fit on
 the opaque shell. Leave enough room for translated desktop fonts and long track
@@ -260,9 +286,10 @@ preview reports these limitations before you accept the copy.
 - Image filenames use letters, digits, underscores and hyphens plus `.png`.
   No nested paths, remote URLs, or symlinks outside the pack.
 - Unsupported fields, out-of-bounds controls and invalid images are rejected.
-  Version 1/2 also rejects overlapping controls and transparent control regions;
-  version 3 requires controls to intersect the visible shell. The face browser
-  shows errors.
+  Version 1/2 also rejects overlapping controls and transparent control regions,
+  except that `coverBackdrop` lets controls and `drag` sit on `art`, whose
+  aperture counts as opaque; version 3 requires controls to intersect the
+  visible shell. The face browser shows errors.
 
 Discovery reads metadata and PNG headers, not full image payloads. Selected
 faces and installation snapshots are loaded and validated again before use.
@@ -282,7 +309,8 @@ the exact generation and edit prompts are recorded in
 [`artwork/face-prompts.json`](../artwork/face-prompts.json). The sources are
 inspiration-based originals, not converted Audion or Winamp assets.
 
-Nightglass, Inner Sleeve, Instant Print and J-Card have no generated material.
+Nightglass, Inner Sleeve, Instant Print, J-Card and Lightbox have no generated
+material.
 Each is painted in code by [`artwork/procedural`](../artwork/procedural)`/<id>.py`,
 including its paper, board, glass, ink and button surfaces. Their images contain
 no text, so a re-export matches the shipped images apart from small rounding
@@ -311,7 +339,7 @@ QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
   --face aureole --face viridian --output docs/faces-lens-preview.png
 QT_QPA_PLATFORM=offscreen uv run python artwork/preview_faces.py \
   --face nightglass --face inner-sleeve --face instant-print --face j-card \
-  --output docs/faces-cover-preview.png
+  --face lightbox --output docs/faces-cover-preview.png
 ```
 
 The preview script renders the actual player widgets with synthetic metadata,

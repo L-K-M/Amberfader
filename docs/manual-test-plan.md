@@ -135,6 +135,25 @@ tests verify rendering and state preservation, not compositor integration.
   for reported state; recents, play-result, and **Start mix** must still work.
 - Click the cover. Change tracks and faces with Cover view open; check artwork
   updates and absent-artwork placeholders.
+- With Lightbox, or another face that sets `coverBackdrop`, on X11, Wayland,
+  Flatpak and macOS:
+  drag the window by the bare cover, by the frame round it, by a readout on it
+  and by a button's transparent corner. Click the bare cover several times
+  without moving the pointer: the window stays put, and the next click on a
+  key acts at once, with no lingering window move or pointer grab. Over the
+  bare cover the pointer stays an arrow without the cover tooltip, and a click
+  never opens Cover view. Right-click the cover
+  for the face menu, and open Cover view from **☰**, from **View**, and with
+  Tab to the cover and Enter. Check that the window shape keeps the whole cover
+  where the glass is clear. Switch to another face; clicking its cover opens
+  Cover view again.
+- On Lightbox, play tracks with real light, dark and busy covers, and with no
+  cover (the placeholder). Every readout must stay readable on the glass, in
+  normal and long metadata and in the pending and offline states. Tab to the
+  cover and check that its focus outline shows on light and dark covers.
+  Repeat with `--scale 1.0`, `--scale 1.5` and `--scale 2.0`; on a Retina or
+  other 2x display the cover must be sharp at `--scale 1.0`. Check the rounded
+  window corners over light and dark wallpaper.
 - Restart the app and verify the saved face. Remove its user-pack folder and
   restart; expect Amber Classic and an explicit face error.
 - Install a local face folder through the native and Flatpak file choosers.

@@ -612,6 +612,16 @@ class FaceInspector(QWidget):
             ("coverGlass",), value, "Change Artwork Reflection",
         ))
         form.addRow("", self._glass)
+        self._backdrop = QCheckBox("Album art as backdrop", section.body)
+        self._backdrop.setToolTip(
+            "Draw the album art behind the background. Transparent and tinted parts "
+            "of the background show it, and controls may sit on it."
+        )
+        self._backdrop.setObjectName("coverBackdrop")
+        self._backdrop.toggled.connect(lambda value: self._emit(
+            ("coverBackdrop",), value, "Change Cover Backdrop",
+        ))
+        form.addRow("", self._backdrop)
         self._sprite_labels = QCheckBox("Labels on button art", section.body)
         self._sprite_labels.setToolTip("Draw button labels over imported button artwork")
         self._sprite_labels.setObjectName("spriteLabels")
@@ -723,6 +733,9 @@ class FaceInspector(QWidget):
             _select_data(self._slider_style, data.get("sliderStyle", "classic"))
             with QSignalBlocker(self._glass):
                 self._glass.setChecked(data.get("coverGlass", False))
+            with QSignalBlocker(self._backdrop):
+                self._backdrop.setChecked(data.get("coverBackdrop", False))
+            self._backdrop.setEnabled("art" in data["controls"])
             with QSignalBlocker(self._sprite_labels):
                 self._sprite_labels.setChecked(data.get("spriteLabels", True))
             self._background_name.setText(data["background"])
