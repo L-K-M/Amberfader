@@ -201,7 +201,12 @@ def _smoke_knots(face: dict) -> list[tuple[float, float]]:
         "top": top, "bottom": top + height, "title": controls["title"][1],
         "status": controls["status"][1], "divider": _divider(controls)[0],
     }
-    return [(anchors[anchor] + offset, alpha) for anchor, offset, alpha in SMOKE_KNOTS]
+    knots = [(anchors[anchor] + offset, alpha) for anchor, offset, alpha in SMOKE_KNOTS]
+    # _smoke_alpha needs strictly rising rows; a layout that reorders them
+    # would silently drop the smoke floor under the readouts.
+    if any(lower <= upper for (upper, _), (lower, _) in pairwise(knots)):
+        raise ValueError(f"smoke knots do not descend the face for this layout: {knots}")
+    return knots
 
 
 def _paint_frame(painter: QPainter, kit, face: dict) -> None:
@@ -243,10 +248,10 @@ def _paint_frame_edges(
     painter.setPen(QPen(_color("#000000", 200), 1))
     painter.drawPath(outline)
     light = [(0, _color("#ffffff", 18)), (1, _color("#ffffff", 0))]
-    painter.setPen(_vertical_pen(1, 220, light, 1))
+    painter.setPen(_vertical_pen(silhouette.top(), 220, light, 1))
     painter.drawPath(chamfer)
     shade = [(0, _color("#000000", 0)), (1, _color("#000000", 70))]
-    painter.setPen(_vertical_pen(260, 399, shade, 1))
+    painter.setPen(_vertical_pen(260, silhouette.bottom(), shade, 1))
     painter.drawPath(chamfer)
 
     # The cover sits a step below the frame. The frame's lower inner wall

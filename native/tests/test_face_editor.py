@@ -136,12 +136,13 @@ def test_cover_backdrop_checkbox_edits_and_undoes(editor, qapp):
 
 
 def test_canvas_hit_on_backdrop_face(editor, qapp):
-    from PySide6.QtCore import QPointF
+    from PySide6.QtCore import QPointF, QRectF
 
     # The cover grows under the title and the drag region.
     editor.document.set_rect("art", [20, 10, 170, 170])
     editor._changed()
-    on_title, on_drag, bare = QPointF(186, 69), QPointF(100, 26), QPointF(60, 120)
+    on_title = QRectF(*editor.document.manifest["controls"]["title"]).center()
+    on_drag, bare = QPointF(100, 26), QPointF(60, 120)
     _drag(qapp, editor._canvas, on_drag, on_drag)
     assert editor._canvas.selected == "art"  # Without a backdrop, art lies over drag.
     editor.document.set_value(("coverBackdrop",), True)

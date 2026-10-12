@@ -10,7 +10,8 @@ Faces with a module in artwork/procedural/<id>.py are painted entirely in code
 instead: the module's render_background(face, kit) returns the 2x background,
 and its render_button(face, control, state, kit) returns one button surface.
 `kit` is PROCEDURAL_KIT, the exporter's shared drawing helpers. A face with
-coverBackdrop paints the glass laid over its cover into background.png.
+coverBackdrop paints only the translucent glass laid over its cover into
+background.png; the player draws the cover beneath it.
 
 Run: QT_QPA_PLATFORM=offscreen uv run python artwork/render_faces.py
 Repeat --face ID to re-export only those packs.

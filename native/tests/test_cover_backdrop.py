@@ -531,8 +531,9 @@ def test_normal_face_after_backdrop_restores_cover_click(backdrop_window, qapp):
     window.select_face("amber-classic")
     qapp.processEvents()
     assert not window._art.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-    drag = window._faces.load("amber-classic").drag
-    scale = window._surface.width() / window._faces.load("amber-classic").size[0]
+    classic = window._faces.load("amber-classic")
+    drag = classic.drag
+    scale = window._surface.width() / classic.size[0]
     assert window._surface._drag == QRegion(QRect(*(round(value * scale) for value in drag)))
     centre = window._art.geometry().center()
     assert window._surface.childAt(centre) is window._art
@@ -636,7 +637,7 @@ def test_lightbox_keys_do_not_depend_on_the_cover(qapp):
         label = QRectF(QFontMetrics(font).boundingRect(
             QRect(0, 0, width, height), Qt.AlignmentFlag.AlignCenter, PREVIEW_LABELS[name],
         ))
-        assert body.contains(label.center()), name
+        assert body.contains(label), name
         for state, sprite in sprites.items():
             image = sprite.toImage().convertToFormat(QImage.Format.Format_RGBA8888)
             scale = image.width() / width
@@ -686,14 +687,16 @@ def test_lightbox_disabled_keys_never_outshine_enabled_ones(qapp):
 
     for color in (QColor("#ffffff"), QColor("#808080"), QColor("#000000")):
         # Bare glass in the key row, between like and previous.
-        glass = _lightbox_over(face, artwork, color).pixelColor(2 * 100, 2 * 344)
+        like, previous = face.controls["like"], face.controls["previous"]
+        gap = QPoint(like[0] + like[2] + previous[0], 2 * like[1] + like[3])
+        glass = _lightbox_over(face, artwork, color).pixelColor(gap)
         for name, sprites in artwork.buttons.items():
             enabled = _contrast(body(sprites["normal"]), glass)
             disabled = _contrast(body(sprites["disabled"]), glass)
             assert disabled <= enabled + 0.01, (color.name(), name, disabled, enabled)
 
 
-def test_lightbox_cover_renders_one_to_one_at_2x():
+def test_lightbox_cover_aperture_is_one_to_one_at_2x():
     # Covers are fetched at up to MAX_ARTWORK_DIMENSION px; at 2x the
     # aperture shows them pixel for pixel, never upscaled.
     face = load_face(BUILTIN_DIRECTORY / "lightbox")
