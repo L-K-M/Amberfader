@@ -3,9 +3,19 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from math import ceil, floor
+from math import ceil, floor, hypot
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSignalBlocker, Qt, Signal
+from PySide6.QtCore import (
+    QEvent,
+    QPoint,
+    QPointF,
+    QRect,
+    QRectF,
+    QSignalBlocker,
+    QSize,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import (
     QBitmap,
     QColor,
@@ -23,6 +33,7 @@ from PySide6.QtGui import (
     QPixmap,
     QPolygonF,
     QRegion,
+    QTransform,
 )
 from PySide6.QtWidgets import (
     QFrame,
@@ -150,13 +161,14 @@ def control_path(rect: QRectF, shape: str, radius: float) -> QPainterPath:
 
 def draw_cover(
     painter: QPainter, pixmap: QPixmap, rect: QRectF, shape: str, radius: float, glass: bool,
-    overlay: tuple[QPixmap, QRectF] | None = None,
+    overlay: tuple[QPixmap, QRectF] | None = None, cache: BackdropCache | None = None,
 ) -> None:
     """Fill a physical aperture without stretching or drawing over its bezel.
 
     `overlay` is an image and its target rect in this painter's coordinates,
     drawn over the cover inside the aperture: a cover backdrop's face
-    background, mapped exactly as the face itself paints it.
+    background, mapped exactly as the face itself paints it. `cache` keeps
+    the cover and overlay composed between one widget's repaints.
     """
     if pixmap.isNull() or rect.isEmpty():
         return
@@ -176,9 +188,10 @@ def draw_cover(
         QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform,
     )
     painter.setClipPath(path, Qt.ClipOperation.IntersectClip)
-    painter.drawPixmap(rect, pixmap, source)
-    if overlay is not None:
-        painter.drawPixmap(overlay[1], overlay[0], QRectF(overlay[0].rect()))
+    if overlay is None:
+        painter.drawPixmap(rect, pixmap, source)
+    else:
+        _draw_backdrop(painter, pixmap, rect, source, overlay, cache)
     if glass:
         reflection = QLinearGradient(rect.topLeft(), rect.bottomRight())
         reflection.setColorAt(0, QColor(255, 255, 255, 55))
@@ -186,6 +199,141 @@ def draw_cover(
         reflection.setColorAt(1, QColor(0, 0, 0, 30))
         painter.fillPath(path, reflection)
     painter.restore()
+
+
+@dataclass(frozen=True)
+class _BackdropLayer:
+    """A composed cover backdrop and where it lands.
+
+    On the device grid, `target` is in device pixels and the image is drawn
+    1:1; otherwise it is in the painter's logical coordinates.
+    """
+
+    image: QImage
+    target: QRectF
+    on_device_grid: bool
+
+
+class BackdropCache:
+    """The last backdrop layer one widget composed, kept while its inputs hold.
+
+    Readouts and sliders over a cover backdrop repaint the cover beneath
+    them: the time twice a second, a slider on every move. The layer changes
+    only with the cover, the face, the scale or the screen.
+    """
+
+    def __init__(self) -> None:
+        self._key: tuple | None = None
+        self._layer: _BackdropLayer | None = None
+
+    def layer(
+        self, key: tuple, compose: Callable[[], _BackdropLayer | None],
+    ) -> _BackdropLayer | None:
+        if key != self._key:
+            self._key, self._layer = key, compose()
+        return self._layer
+
+    def clear(self) -> None:
+        self._key = self._layer = None
+
+
+def _draw_backdrop(
+    painter: QPainter, pixmap: QPixmap, rect: QRectF, source: QRectF,
+    overlay: tuple[QPixmap, QRectF], cache: BackdropCache | None,
+) -> None:
+    """Draw the cover with the overlay already over it, inside the caller's clip.
+
+    Clipping the cover and then the overlay to the antialiased aperture would
+    count each edge pixel's coverage twice and let the cover show through an
+    opaque frame, so the clip applies to this one layer instead.
+    """
+    world = painter.worldTransform()
+    world_inverse, invertible = world.inverted()
+    if not invertible:
+        return
+    visible = rect & painter.clipBoundingRect()
+    if not painter.viewTransformEnabled():
+        # window() is the device's rect; for images it is in device pixels,
+        # a looser bound than their logical size but never a tighter one.
+        visible &= world_inverse.mapRect(QRectF(painter.window()))
+    if visible.isEmpty():
+        return
+    device = painter.deviceTransform()
+    key = (
+        pixmap.cacheKey(), overlay[0].cacheKey(),
+        *(value for area in (rect, source, overlay[1], visible) for value in area.getRect()),
+        device.m11(), device.m12(), device.m13(), device.m21(), device.m22(), device.m23(),
+        device.m31(), device.m32(), device.m33(),
+    )
+
+    def compose() -> _BackdropLayer | None:
+        return _compose_backdrop(pixmap, rect, source, overlay, visible, device)
+
+    layer = compose() if cache is None else cache.layer(key, compose)
+    if layer is None:
+        return
+    if not layer.on_device_grid:
+        painter.drawImage(layer.target, layer.image)
+        return
+    device_inverse, _ = device.inverted()
+    painter.setWorldTransform(device_inverse * world)
+    painter.drawImage(layer.target.topLeft(), layer.image)
+    painter.setWorldTransform(world)
+
+
+def _compose_backdrop(
+    pixmap: QPixmap, rect: QRectF, source: QRectF, overlay: tuple[QPixmap, QRectF],
+    visible: QRectF, device: QTransform,
+) -> _BackdropLayer | None:
+    """The visible part of the cover with the overlay over it.
+
+    The layer never holds more pixels than its sources. Up to their density
+    it is composed on the device's own pixel grid, so drawn 1:1 it registers
+    with the face painted around it, even where the aperture starts between
+    device pixels. Zoomed past them, as in the face editor, it is composed at
+    their density on the overlay's pixel grid and scaled up as the face
+    around it is; only its outermost texels differ, held at the aperture's
+    edge instead of blending into the frame beyond it.
+    """
+    density = max(
+        source.width() / rect.width(), source.height() / rect.height(),
+        overlay[0].width() / overlay[1].width(), overlay[0].height() / overlay[1].height(),
+    )
+    scale = max(hypot(device.m11(), device.m12()), hypot(device.m21(), device.m22()))
+    if scale <= density:
+        bounds = device.mapRect(visible).toAlignedRect()
+        target, size, on_device_grid = QRectF(bounds), bounds.size(), True
+        transform = device * QTransform.fromTranslate(-bounds.x(), -bounds.y())
+    else:
+        origin = overlay[1].topLeft()
+        left = floor((visible.left() - origin.x()) * density)
+        top = floor((visible.top() - origin.y()) * density)
+        right = ceil((visible.right() - origin.x()) * density)
+        bottom = ceil((visible.bottom() - origin.y()) * density)
+        target = QRectF(
+            origin.x() + left / density, origin.y() + top / density,
+            (right - left) / density, (bottom - top) / density,
+        )
+        size, on_device_grid = QSize(right - left, bottom - top), False
+        transform = (
+            QTransform.fromTranslate(-target.x(), -target.y())
+            * QTransform.fromScale(density, density)
+        )
+    if size.isEmpty():
+        return None
+    image = QImage(size, QImage.Format.Format_ARGB32_Premultiplied)
+    if image.isNull():
+        return None
+    image.fill(Qt.GlobalColor.transparent)
+    layer_painter = QPainter(image)
+    layer_painter.setRenderHints(
+        QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform,
+    )
+    layer_painter.setTransform(transform)
+    layer_painter.drawPixmap(rect, pixmap, source)
+    layer_painter.drawPixmap(overlay[1], overlay[0], QRectF(overlay[0].rect()))
+    layer_painter.end()
+    return _BackdropLayer(image, target, on_device_grid)
 
 
 def draw_slider(
@@ -947,6 +1095,7 @@ class CoverLabel(KeyboardFocusRing, QLabel):
         self._radius = 0.0
         self._glass = False
         self._overlay: tuple[QPixmap, QRectF] | None = None
+        self._backdrop = BackdropCache()
         self._pressed = False
 
     def set_shape(self, shape: str, radius: float, glass: bool) -> None:
@@ -961,6 +1110,7 @@ class CoverLabel(KeyboardFocusRing, QLabel):
         backdrop restores the pointer cursor, tooltip and click.
         """
         self._overlay = None if background is None else (background, window)
+        self._backdrop.clear()
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, background is not None)
         self._pressed = False
         self.update()
@@ -972,7 +1122,7 @@ class CoverLabel(KeyboardFocusRing, QLabel):
         painter = QPainter(self)
         draw_cover(
             painter, self.pixmap(), QRectF(self.rect()), self._shape, self._radius, self._glass,
-            self._overlay,
+            self._overlay, self._backdrop,
         )
         if self.focus_ring_visible():
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)

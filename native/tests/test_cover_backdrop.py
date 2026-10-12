@@ -14,7 +14,13 @@ from test_faces import make_pack, png
 from test_gui_features import _state
 
 from amberfader.face_library import FaceLibrary, load_face
-from amberfader.ui.face_surface import draw_face_preview, prepare_face, prepare_face_preview
+from amberfader.ui import face_surface
+from amberfader.ui.face_surface import (
+    draw_cover,
+    draw_face_preview,
+    prepare_face,
+    prepare_face_preview,
+)
 from amberfader.ui.main_window import MainWindow
 
 RED = QColor("#ff0000")
@@ -224,6 +230,171 @@ def test_backdrop_layers_background_over_cover(backdrop_window, qapp):
         assert _close(preview.pixelColor(pixel).getRgb()[:3], actual, 1), point
 
 
+def test_backdrop_overlay_meets_the_aperture_edge_once(qapp):
+    """The cover and the background over it reach the rounded edge as one layer.
+
+    Every pixel is the face's own background blended, by how much of the
+    pixel the aperture covers, with that background over the cover. An
+    opaque frame therefore never lets the cover through at the corners, and
+    a translucent one outside the aperture is not coated twice.
+    """
+    window, aperture = QRectF(0, 0, 60, 60), QRectF(8, 8, 44, 44)
+    cover = QPixmap(16, 16)
+    cover.fill(QColor("#ffffff"))
+    for alpha in (255, 128):
+        background = QPixmap(120, 120)
+        background.fill(QColor(0, 0, 0, alpha))
+        image = QImage(120, 120, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(image)
+        painter.scale(2, 2)
+        painter.drawPixmap(window, background, QRectF(background.rect()))
+        draw_cover(painter, cover, aperture, "rounded", 12, False, (background, window))
+        painter.end()
+        pixels = image.convertToFormat(QImage.Format.Format_RGBA8888_Premultiplied)
+        data = bytes(pixels.constBits())
+        # Blending black at `alpha` toward black over white adds as much
+        # light as it adds opacity.
+        worst = max(
+            abs(data[index] - (data[index + 3] - alpha)) for index in range(0, len(data), 4)
+        )
+        assert worst <= 2, (alpha, worst)
+
+
+def _checker(size):
+    """One-pixel squares: any resampling of it shows as grey."""
+    image = QImage(size, size, QImage.Format.Format_RGB32)
+    for y in range(size):
+        for x in range(size):
+            image.setPixelColor(x, y, QColor("#ffffff") if (x + y) % 2 else QColor("#000000"))
+    return QPixmap.fromImage(image)
+
+
+def _paint_backdrop(ratio, scale, offset, cover, overlay, size=(120, 120)):
+    """The face background, then draw_cover, on a `ratio` image scaled and translated."""
+    image = QImage(*size, QImage.Format.Format_ARGB32_Premultiplied)
+    image.setDevicePixelRatio(ratio)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+    painter.scale(scale, scale)
+    painter.translate(offset, offset)
+    if overlay is not None:
+        painter.drawPixmap(overlay[1], overlay[0], QRectF(overlay[0].rect()))
+    draw_cover(painter, cover, QRectF(8, 8, 44, 44), "rounded", 6, False, overlay)
+    painter.end()
+    return image.convertToFormat(QImage.Format.Format_RGBA8888_Premultiplied)
+
+
+def _worst_difference(left, right):
+    return max(
+        abs(a - b) for a, b in zip(bytes(left.constBits()), bytes(right.constBits()), strict=True)
+    )
+
+
+@pytest.mark.parametrize(("ratio", "scale", "offset"), [
+    (2.0, 1.0, 0.0),  # A 2x display.
+    (1.0, 2.0, 0.0),  # A scaled preview.
+    (1.5, 1.0, 3.0),  # The aperture starts mid device pixel.
+    (2.0, 8.0, -6.0),  # The face editor zoomed past the sources, on the corner.
+])
+def test_backdrop_keeps_the_cover_at_full_resolution(qapp, ratio, scale, offset):
+    # A clear overlay must leave the cover exactly as the plain path paints
+    # it: a layer at too low a density blurs the checker into grey.
+    cover = _checker(88)
+    clear = QPixmap(120, 120)
+    clear.fill(Qt.GlobalColor.transparent)
+    plain = _paint_backdrop(ratio, scale, offset, cover, None)
+    layered = _paint_backdrop(ratio, scale, offset, cover, (clear, QRectF(0, 0, 60, 60)))
+    assert _worst_difference(plain, layered) <= 1
+
+
+@pytest.mark.parametrize(("ratio", "scale", "offset"), [
+    (1.5, 1.0, 3.0), (1.25, 1.0, 0.0), (2.0, 1.0, 0.25), (2.0, 8.0, -6.0),
+])
+def test_backdrop_registers_with_the_face_around_it(qapp, ratio, scale, offset):
+    # An opaque overlay hides the cover, so the aperture must show exactly
+    # the background the face paints around it, even where the aperture's
+    # origin falls between device pixels.
+    stripes = QImage(120, 120, QImage.Format.Format_RGB32)
+    for y in range(120):
+        for x in range(120):
+            dark = (x + y // 3) % 2
+            stripes.setPixelColor(x, y, QColor("#000000" if dark else "#e0e0e0"))
+    background = QPixmap.fromImage(stripes)
+    red = QPixmap(16, 16)
+    red.fill(RED)
+    window = QRectF(0, 0, 60, 60)
+    face_only = _paint_backdrop(ratio, scale, offset, QPixmap(), (background, window))
+    layered = _paint_backdrop(ratio, scale, offset, red, (background, window))
+    if scale > 1:
+        # Zoomed past the sources, the layer's outermost texels are held at
+        # the aperture's edge rather than blended with the frame beyond it.
+        texel = round(scale * ratio / 2)
+        inside = QRect(
+            *(round((8 + offset) * scale * ratio) + texel,) * 2,
+            *(round(44 * scale * ratio) - 2 * texel,) * 2,
+        ).intersected(face_only.rect())
+        face_only, layered = face_only.copy(inside), layered.copy(inside)
+    assert _worst_difference(face_only, layered) <= 1
+
+
+def test_zoomed_backdrop_holds_no_more_pixels_than_its_sources(qapp, monkeypatch):
+    # The face editor zooms to 800 % on 2x screens. A layer composed at that
+    # density would be 16 times the sources' size on each side, rebuilt on
+    # every repaint; past the sources' density it adds no detail.
+    sizes = []
+
+    class RecordingImage(QImage):
+        def __init__(self, *args):
+            super().__init__(*args)
+            sizes.append(self.size())
+
+    cover = QPixmap(88, 88)
+    cover.fill(QColor("#ffffff"))
+    smoke = QPixmap(120, 120)
+    smoke.fill(SMOKE)
+    monkeypatch.setattr(face_surface, "QImage", RecordingImage)
+    _paint_backdrop(2.0, 8.0, 0.0, cover, (smoke, QRectF(0, 0, 60, 60)), size=(1200, 900))
+    assert sizes
+    # The aperture is 44 logical px at two source pixels each.
+    assert all(size.width() <= 90 and size.height() <= 90 for size in sizes), sizes
+
+    # Only what the painter can show is composed: 18 logical px here.
+    sizes.clear()
+    _paint_backdrop(2.0, 8.0, -34.0, cover, (smoke, QRectF(0, 0, 60, 60)), size=(400, 400))
+    assert sizes
+    assert all(size.width() <= 38 and size.height() <= 38 for size in sizes), sizes
+
+
+def test_player_reuses_the_composed_backdrop(backdrop_window, qapp, monkeypatch):
+    # The time readout over the cover repaints twice a second, and sliders
+    # repaint on every move; the cover beneath them changes only with the
+    # cover, the face or the scale.
+    window, _, _ = backdrop_window
+    composed = []
+    compose = face_surface._compose_backdrop
+
+    def counting(*args):
+        composed.append(args)
+        return compose(*args)
+
+    monkeypatch.setattr(face_surface, "_compose_backdrop", counting)
+    window._art.repaint()
+    window._art.repaint()
+    window._time.setText("00:01 / 04:30")
+    window._time.repaint()
+    assert len(composed) <= 1
+
+    composed.clear()
+    black = QPixmap(64, 64)
+    black.fill(QColor("#000000"))
+    window._cover = black
+    window._render_cover()
+    window._art.repaint()
+    assert len(composed) == 1
+
+
 def test_backdrop_mask_counts_the_aperture(qapp, tmp_path):
     face = load_face(backdrop_pack(tmp_path)[0])
     # A format 2 face needs opaque footprints; the clear glass under the
@@ -370,3 +541,4 @@ def test_full_canvas_drag_without_backdrop_keeps_cover_click(qapp, tmp_path):
         window.close()
         window.deleteLater()
         qapp.processEvents()
+
