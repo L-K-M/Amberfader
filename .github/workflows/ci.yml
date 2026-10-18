@@ -110,7 +110,7 @@ jobs:
           tar -tzf dist/*.tar.gz | grep -q "amberfader/embedded/web/ad-filter.js"
 
       - name: Upload Python distributions
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python-dist
           path: |
@@ -180,7 +180,7 @@ jobs:
         run: dist/macos/dist/Amberfader.app/Contents/MacOS/Amberfader --self-test
 
       - name: Upload .dmg
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: macos-dmg
           path: |
@@ -318,7 +318,7 @@ jobs:
           fi
 
       - name: Upload .deb
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux-deb
           path: dist/*.deb
@@ -389,7 +389,7 @@ jobs:
         run: cd dist && for f in amberfader_*.flatpak; do sha256sum "$f" > "$f.sha256"; done
 
       - name: Upload the Flatpak
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux-flatpak
           path: |
