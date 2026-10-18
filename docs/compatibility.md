@@ -50,6 +50,50 @@ session still require the artwork checks in `docs/manual-test-plan.md`.
   `web/tests/fixtures/player-page-2026-10-05.json`. The full Start mix
   flow after this fix is not yet confirmed in a signed-in session.
 
+## Live observations (2026-10-07)
+
+Signed-out session in QtWebEngine 6.11.2, Linux container:
+
+- YouTube Music shows the player bar's Like button only when the page is
+  at least 936 CSS px wide. From 935 px down it hides
+  `ytmusic-like-button-renderer` (`display: none`). At about 615 px and
+  below it switches to a mobile layout
+  (`ytmusic-app-layout[is-mweb-modernization-enabled]`) with two player
+  bars and no laid-out Like button.
+- A page that loads while its window is hidden gets a 0×0 viewport, and so
+  the mobile layout. This applies to the first load behind a window that
+  was never shown, and to any page in a new renderer, for example a reload
+  after the renderer exits or a cross-site load. Pages loaded after the
+  window was shown keep its size. The 2026-10-05 layout with
+  `is-wiz-miniplayer-enabled` matches these 0×0 pages.
+- Amberfader keeps the page at least 1024 CSS px wide: hidden loads run
+  with the window shown off screen, and narrower windows zoom out. The
+  heart then showed the live Like state after a `--background` start,
+  after closing the window during the first load, in an 820 px window, and
+  after a reload in a new renderer behind the hidden window. Liking itself
+  needs a signed-in session and is not verified here.
+
+## Live observations (2026-10-09)
+
+Signed-out session in QtWebEngine 6.11.2, Linux container. Signed out,
+this session offered videos, artists and episodes but no catalog songs, so
+a song's player-bar cover was not observed here.
+
+- Search-row images are 60×60 with Google image-server size options:
+  `lh3.googleusercontent.com/…=w60-h60-p-l90-rj`,
+  `yt3.googleusercontent.com/…=w60-c-h60-k-c0x00ffffff-no-l90-rj` and
+  `yt3.ggpht.com/…=w60-h60-l90-rj`.
+- Fetched without cookies, each of those hosts returned the image at
+  768×768 when the `w`/`h` options were changed to 768, keeping the other
+  options. One `lh3` cover returned 544, 768 and 1200 px the same way.
+- While a video played, the player bar showed
+  `i.ytimg.com/vi/<id>/hqdefault.jpg?sqp=…&rs=…`, a 400×225 crop.
+  `i.ytimg.com/vi/<id>/maxresdefault.jpg` returned 1280×720 without the
+  signed parameters.
+- Amberfader now requests these larger versions and falls back to the
+  page's own image. A song's sharper cover in a signed-in session still
+  needs the artwork checks in `docs/manual-test-plan.md`.
+
 ## Platforms
 
 | Platform | Install type | Status |

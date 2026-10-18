@@ -1,0 +1,129 @@
+{
+  "formatVersion": 2,
+  "id": "j-card",
+  "name": "J-Card",
+  "author": "Amberfader",
+  "description": "An unfolded cobalt cassette insert: the cover fills the front panel, tape hubs run down the spine, and the ruled back flap holds the window keys.",
+  "size": [600, 596],
+  "background": "background.png",
+  "drag": [10, 44, 84, 424],
+  "font": "mono",
+  "timeSize": 24,
+  "radius": 4,
+  "sliderStyle": "inset",
+  "palette": {
+    "window": "#eef1f8",
+    "panel": "#f9fafd",
+    "display": "#b7c0d8",
+    "text": "#121a33",
+    "muted": "#4a5470",
+    "readout": "#0f1630",
+    "accent": "#bf3f15",
+    "border": "#5a6688",
+    "buttonTop": "#ffffff",
+    "buttonBottom": "#dde3f0",
+    "danger": "#b3261e"
+  },
+  "readoutStyles": {
+    "title": {"font": "mono", "size": 15, "bold": true},
+    "artists": {"font": "mono", "size": 12},
+    "time": {"font": "mono"},
+    "playback": {"font": "mono", "size": 11, "bold": true, "align": "right"},
+    "status": {"font": "mono", "size": 11}
+  },
+  "controlShapes": {
+    "art": "rectangle",
+    "previous": "ellipse",
+    "play": "ellipse",
+    "next": "ellipse",
+    "like": "ellipse",
+    "search": "rounded",
+    "show": "rounded",
+    "hide": "rounded",
+    "menu": "rounded",
+    "minimize": "rounded",
+    "close": "rounded"
+  },
+  "controls": {
+    "art": [188, 12, 400, 400],
+    "menu": [10, 12, 24, 24],
+    "minimize": [40, 12, 24, 24],
+    "close": [70, 12, 24, 24],
+    "search": [10, 480, 84, 26],
+    "show": [10, 512, 84, 26],
+    "hide": [10, 544, 84, 26],
+    "previous": [119, 104, 42, 42],
+    "play": [113, 156, 54, 54],
+    "next": [119, 220, 42, 42],
+    "like": [119, 280, 42, 42],
+    "title": [196, 426, 384, 22],
+    "artists": [196, 454, 384, 18],
+    "time": [196, 478, 200, 30],
+    "playback": [484, 484, 96, 18],
+    "status": [196, 514, 384, 18],
+    "seek": [192, 548, 250, 18],
+    "volume": [454, 548, 130, 18]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
+  }
+}

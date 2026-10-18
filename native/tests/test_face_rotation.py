@@ -420,7 +420,8 @@ def test_scaled_rotation_maps_buttons_to_their_actual_visual_centers(
         qapp.processEvents()
 
 
-def test_rotated_round_button_has_native_contour_and_keyboard_focus(qapp):
+@pytest.mark.parametrize("no_system_background", [False, True])
+def test_rotated_round_button_has_native_contour_and_keyboard_focus(qapp, no_system_background):
     from PySide6.QtCore import QPoint, Qt
     from PySide6.QtTest import QSignalSpy, QTest
     from PySide6.QtWidgets import QWidget
@@ -432,6 +433,7 @@ def test_rotated_round_button_has_native_contour_and_keyboard_focus(qapp):
     button = FaceButton("Search", shell)
     button.resize(80, 32)
     button.set_shape("ellipse", 0)
+    button.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, no_system_background)
     wrapper = RotatedControl(button, shell)
     wrapper.apply_geometry((50, 50, 80, 32), 35)
     spy = QSignalSpy(button.clicked)
@@ -455,10 +457,89 @@ def test_rotated_round_button_has_native_contour_and_keyboard_focus(qapp):
         qapp.processEvents()
         assert button.parentWidget() is shell
         assert button.isVisible()
+        assert (
+            button.testAttribute(Qt.WidgetAttribute.WA_NoSystemBackground) == no_system_background
+        )
     finally:
         shell.close()
         shell.deleteLater()
         qapp.processEvents()
+
+
+@pytest.mark.parametrize("shape,sprite", [("ellipse", False), ("rectangle", True)])
+def test_rotated_button_transparent_corners_reveal_shell(
+    rotated_window, rotating_pack, qapp, shape, sprite,
+):
+    from dataclasses import replace
+
+    from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt
+    from PySide6.QtGui import QColor, QMouseEvent, QPainter, QPixmap
+    from test_faces import png
+
+    from amberfader.ui.face_surface import prepare_face
+
+    window, _ = rotated_window
+    backing = QColor("#163b5c")
+    face = replace(
+        load_face(save_pack(rotating_pack)),
+        background=png(640, 560, bytes((22, 59, 92, 255))),
+        control_shapes=MappingProxyType({"play": shape}),
+    )
+    artwork = prepare_face(face)
+    if sprite:
+        surface = QPixmap(70, 24)
+        surface.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(surface)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#10e040"))
+        painter.drawEllipse(QRectF(0, 0, 70, 24))
+        painter.end()
+        artwork = replace(artwork, buttons={"play": {"normal": surface}})
+    window._apply_face(face, artwork)
+    button = window._play
+    button.clearFocus()
+
+    def assert_transparent_corners():
+        wrapper = window._surface._rotated["play"]
+        image = window._surface.grab().toImage()
+        ratio = image.devicePixelRatio()
+
+        def pixel(local):
+            point = wrapper.viewport().mapTo(window._surface, proxy_position(wrapper, local))
+            return image.pixelColor(round(point.x() * ratio), round(point.y() * ratio))
+
+        right, bottom = button.width() - 3, button.height() - 3
+        for corner in (QPoint(2, 2), QPoint(right, 2), QPoint(2, bottom), QPoint(right, bottom)):
+            assert pixel(corner) == backing
+        # Transparency must retain the actual painted button, not hide it.
+        assert pixel(QPoint(button.width() // 4, button.height() // 2)) != backing
+
+    for state in ("normal", "hover", "disabled"):
+        if state == "hover":
+            wrapper = window._surface._rotated["play"]
+            # Viewport events retain Qt's proxy hover mapping without depending
+            # on the operating system cursor between offscreen test windows.
+            for point in (QPoint(0, 0), proxy_position(wrapper, button.rect().center())):
+                qapp.sendEvent(wrapper.viewport(), QMouseEvent(
+                    QEvent.Type.MouseMove, QPointF(point),
+                    QPointF(wrapper.viewport().mapToGlobal(point)),
+                    Qt.MouseButton.NoButton, Qt.MouseButton.NoButton,
+                    Qt.KeyboardModifier.NoModifier,
+                ))
+                qapp.processEvents()
+            assert button.underMouse()
+        elif state == "disabled":
+            button.setEnabled(False)
+        qapp.processEvents()
+        assert_transparent_corners()
+    window.select_face("amber-classic")
+    assert window._play is button
+    assert "play" not in window._surface._rotated
+    window._apply_face(face, artwork)
+    qapp.processEvents()
+    assert window._play is button
+    assert_transparent_corners()
 
 
 def test_snapshot_draft_previews_unfinished_canvas_size(rotating_pack):

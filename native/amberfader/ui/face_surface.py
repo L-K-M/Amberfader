@@ -3,9 +3,19 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from math import ceil, floor
+from math import ceil, floor, hypot
 
-from PySide6.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSignalBlocker, Qt, Signal
+from PySide6.QtCore import (
+    QEvent,
+    QPoint,
+    QPointF,
+    QRect,
+    QRectF,
+    QSignalBlocker,
+    QSize,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import (
     QBitmap,
     QColor,
@@ -23,6 +33,7 @@ from PySide6.QtGui import (
     QPixmap,
     QPolygonF,
     QRegion,
+    QTransform,
 )
 from PySide6.QtWidgets import (
     QFrame,
@@ -150,8 +161,15 @@ def control_path(rect: QRectF, shape: str, radius: float) -> QPainterPath:
 
 def draw_cover(
     painter: QPainter, pixmap: QPixmap, rect: QRectF, shape: str, radius: float, glass: bool,
+    overlay: tuple[QPixmap, QRectF] | None = None, cache: BackdropCache | None = None,
 ) -> None:
-    """Fill a physical aperture without stretching or drawing over its bezel."""
+    """Fill a physical aperture without stretching or drawing over its bezel.
+
+    `overlay` is an image and its target rect in this painter's coordinates,
+    drawn over the cover inside the aperture: a cover backdrop's face
+    background, mapped exactly as the face itself paints it. `cache` keeps
+    the cover and overlay composed between one widget's repaints.
+    """
     if pixmap.isNull() or rect.isEmpty():
         return
     path = control_path(rect, shape, radius)
@@ -170,7 +188,10 @@ def draw_cover(
         QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform,
     )
     painter.setClipPath(path, Qt.ClipOperation.IntersectClip)
-    painter.drawPixmap(rect, pixmap, source)
+    if overlay is None:
+        painter.drawPixmap(rect, pixmap, source)
+    else:
+        _draw_backdrop(painter, pixmap, rect, source, overlay, cache)
     if glass:
         reflection = QLinearGradient(rect.topLeft(), rect.bottomRight())
         reflection.setColorAt(0, QColor(255, 255, 255, 55))
@@ -178,6 +199,141 @@ def draw_cover(
         reflection.setColorAt(1, QColor(0, 0, 0, 30))
         painter.fillPath(path, reflection)
     painter.restore()
+
+
+@dataclass(frozen=True)
+class _BackdropLayer:
+    """A composed cover backdrop and where it lands.
+
+    On the device grid, `target` is in device pixels and the image is drawn
+    1:1; otherwise it is in the painter's logical coordinates.
+    """
+
+    image: QImage
+    target: QRectF
+    on_device_grid: bool
+
+
+class BackdropCache:
+    """The last backdrop layer one widget composed, kept while its inputs hold.
+
+    Readouts and sliders over a cover backdrop repaint the cover beneath
+    them: the time twice a second, a slider on every move. The layer changes
+    only with the cover, the face, the scale or the screen.
+    """
+
+    def __init__(self) -> None:
+        self._key: tuple | None = None
+        self._layer: _BackdropLayer | None = None
+
+    def layer(
+        self, key: tuple, compose: Callable[[], _BackdropLayer | None],
+    ) -> _BackdropLayer | None:
+        if key != self._key:
+            self._key, self._layer = key, compose()
+        return self._layer
+
+    def clear(self) -> None:
+        self._key = self._layer = None
+
+
+def _draw_backdrop(
+    painter: QPainter, pixmap: QPixmap, rect: QRectF, source: QRectF,
+    overlay: tuple[QPixmap, QRectF], cache: BackdropCache | None,
+) -> None:
+    """Draw the cover with the overlay already over it, inside the caller's clip.
+
+    Clipping the cover and then the overlay to the antialiased aperture would
+    count each edge pixel's coverage twice and let the cover show through an
+    opaque frame, so the clip applies to this one layer instead.
+    """
+    world = painter.worldTransform()
+    world_inverse, invertible = world.inverted()
+    if not invertible:
+        return
+    visible = rect & painter.clipBoundingRect()
+    if not painter.viewTransformEnabled():
+        # window() is the device's rect; for images it is in device pixels,
+        # a looser bound than their logical size but never a tighter one.
+        visible &= world_inverse.mapRect(QRectF(painter.window()))
+    if visible.isEmpty():
+        return
+    device = painter.deviceTransform()
+    key = (
+        pixmap.cacheKey(), overlay[0].cacheKey(),
+        *(value for area in (rect, source, overlay[1], visible) for value in area.getRect()),
+        device.m11(), device.m12(), device.m13(), device.m21(), device.m22(), device.m23(),
+        device.m31(), device.m32(), device.m33(),
+    )
+
+    def compose() -> _BackdropLayer | None:
+        return _compose_backdrop(pixmap, rect, source, overlay, visible, device)
+
+    layer = compose() if cache is None else cache.layer(key, compose)
+    if layer is None:
+        return
+    if not layer.on_device_grid:
+        painter.drawImage(layer.target, layer.image)
+        return
+    device_inverse, _ = device.inverted()
+    painter.setWorldTransform(device_inverse * world)
+    painter.drawImage(layer.target.topLeft(), layer.image)
+    painter.setWorldTransform(world)
+
+
+def _compose_backdrop(
+    pixmap: QPixmap, rect: QRectF, source: QRectF, overlay: tuple[QPixmap, QRectF],
+    visible: QRectF, device: QTransform,
+) -> _BackdropLayer | None:
+    """The visible part of the cover with the overlay over it.
+
+    The layer never holds more pixels than its sources. Up to their density
+    it is composed on the device's own pixel grid, so drawn 1:1 it registers
+    with the face painted around it, even where the aperture starts between
+    device pixels. Zoomed past them, as in the face editor, it is composed at
+    their density on the overlay's pixel grid and scaled up as the face
+    around it is; only its outermost texels differ, held at the aperture's
+    edge instead of blending into the frame beyond it.
+    """
+    density = max(
+        source.width() / rect.width(), source.height() / rect.height(),
+        overlay[0].width() / overlay[1].width(), overlay[0].height() / overlay[1].height(),
+    )
+    scale = max(hypot(device.m11(), device.m12()), hypot(device.m21(), device.m22()))
+    if scale <= density:
+        bounds = device.mapRect(visible).toAlignedRect()
+        target, size, on_device_grid = QRectF(bounds), bounds.size(), True
+        transform = device * QTransform.fromTranslate(-bounds.x(), -bounds.y())
+    else:
+        origin = overlay[1].topLeft()
+        left = floor((visible.left() - origin.x()) * density)
+        top = floor((visible.top() - origin.y()) * density)
+        right = ceil((visible.right() - origin.x()) * density)
+        bottom = ceil((visible.bottom() - origin.y()) * density)
+        target = QRectF(
+            origin.x() + left / density, origin.y() + top / density,
+            (right - left) / density, (bottom - top) / density,
+        )
+        size, on_device_grid = QSize(right - left, bottom - top), False
+        transform = (
+            QTransform.fromTranslate(-target.x(), -target.y())
+            * QTransform.fromScale(density, density)
+        )
+    if size.isEmpty():
+        return None
+    image = QImage(size, QImage.Format.Format_ARGB32_Premultiplied)
+    if image.isNull():
+        return None
+    image.fill(Qt.GlobalColor.transparent)
+    layer_painter = QPainter(image)
+    layer_painter.setRenderHints(
+        QPainter.RenderHint.Antialiasing | QPainter.RenderHint.SmoothPixmapTransform,
+    )
+    layer_painter.setTransform(transform)
+    layer_painter.drawPixmap(rect, pixmap, source)
+    layer_painter.drawPixmap(overlay[1], overlay[0], QRectF(overlay[0].rect()))
+    layer_painter.end()
+    return _BackdropLayer(image, target, on_device_grid)
 
 
 def draw_slider(
@@ -554,15 +710,33 @@ def prepare_face_preview(face: Face) -> FaceArtwork:
     }
     digits = tuple(DigitArtwork(digit.rect, tuple(decode(data) for data in digit.images))
                    for digit in face.time_digits)
-    hit_source = (
-        _assembled_hit_source(face, background, buttons)
-        if face.format_version >= 3 and alpha_mask is None else None
-    )
+    hit_source = None
+    if alpha_mask is None and face.format_version >= 3:
+        hit_source = _assembled_hit_source(face, background, buttons)
+    elif alpha_mask is None and face.cover_backdrop and "art" in face.controls:
+        # A draft can still lack the art its backdrop needs.
+        hit_source = _backdrop_hit_source(face, background)
     mask = _alpha_mask(alpha_mask or hit_source or background, face.size, face.format_version)
     return FaceArtwork(
         background=background, mask=mask, buttons=buttons, time_digits=digits,
         alpha_mask=alpha_mask, format_version=face.format_version, _hit_source=hit_source,
     )
+
+
+def _backdrop_hit_source(face: Face, background: QPixmap) -> QPixmap:
+    """Count a cover backdrop's aperture as opaque, however clear its glass.
+
+    The cover always fills its aperture, so the window keeps that shape.
+    """
+    source = background.copy()
+    painter = QPainter(source)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.scale(source.width() / face.size[0], source.height() / face.size[1])
+    painter.fillPath(control_path(
+        QRectF(*face.controls["art"]), face.control_shapes.get("art", "rectangle"), face.radius,
+    ), Qt.GlobalColor.black)
+    painter.end()
+    return source
 
 
 def _assembled_hit_source(face: Face, background: QPixmap, buttons) -> QPixmap:
@@ -662,7 +836,10 @@ def _draw_face_layers(painter, face, artwork, cover, labels) -> None:
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
     painter.drawPixmap(QRect(0, 0, *face.size), artwork.background)
-    for name, coordinates in face.controls.items():
+    # The player stacks the cover beneath every control; paint it first to
+    # match. The sort is stable, so other controls keep manifest order.
+    for name in sorted(face.controls, key=lambda name: name != "art"):
+        coordinates = face.controls[name]
         painter.save()
         rect = QRect(*coordinates)
         rotation = face.control_rotations.get(name, 0)
@@ -696,6 +873,7 @@ def _draw_preview_control(painter, face, artwork, cover, labels, name, coordinat
         draw_cover(
             painter, cover, QRectF(rect), face.control_shapes.get("art", "rectangle"),
             face.radius, face.cover_glass,
+            (artwork.background, QRectF(0, 0, *face.size)) if face.cover_backdrop else None,
         )
         return
     if name in ("seek", "volume"):
@@ -916,10 +1094,25 @@ class CoverLabel(KeyboardFocusRing, QLabel):
         self._shape = "rectangle"
         self._radius = 0.0
         self._glass = False
+        self._overlay: tuple[QPixmap, QRectF] | None = None
+        self._backdrop = BackdropCache()
         self._pressed = False
 
     def set_shape(self, shape: str, radius: float, glass: bool) -> None:
         self._shape, self._radius, self._glass = shape, radius, glass
+        self.update()
+
+    def set_backdrop(self, background: QPixmap | None, window: QRectF) -> None:
+        """Lay the face background, mapped onto `window`, over the cover.
+
+        On a cover backdrop, pointer input passes through to the face, which
+        moves the window; the keyboard still opens Cover view. Clearing the
+        backdrop restores the pointer cursor, tooltip and click.
+        """
+        self._overlay = None if background is None else (background, window)
+        self._backdrop.clear()
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, background is not None)
+        self._pressed = False
         self.update()
 
     def _cover_path(self) -> QPainterPath:
@@ -929,6 +1122,7 @@ class CoverLabel(KeyboardFocusRing, QLabel):
         painter = QPainter(self)
         draw_cover(
             painter, self.pixmap(), QRectF(self.rect()), self._shape, self._radius, self._glass,
+            self._overlay, self._backdrop,
         )
         if self.focus_ring_visible():
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -1066,11 +1260,33 @@ class RotatedControl(QGraphicsView):
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
         widget.hide()
+        self._original_no_system_background = widget.testAttribute(
+            Qt.WidgetAttribute.WA_NoSystemBackground,
+        )
         widget.setParent(None)
         widget.setGeometry(0, 0, widget.width(), widget.height())
+        # Proxy rendering fills a top-level widget's rectangle before its
+        # paintEvent, covering transparent sprite or curved-control corners.
+        # Let the control paint its own surface while it is hosted here.
+        widget.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
         self._proxy: QGraphicsProxyWidget = self._scene.addWidget(widget)
         widget.show()
         self.setFocusPolicy(widget.focusPolicy())
+
+    # A press no control takes, as on a readout, passes on to the face, but
+    # QGraphicsView keeps its moves and release. Pass those on too, as a flat
+    # label does, so the face can move the window and end the drag.
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        grabbed = self._scene.mouseGrabberItem() is not None
+        super().mouseMoveEvent(event)
+        if not grabbed:
+            event.ignore()
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        grabbed = self._scene.mouseGrabberItem() is not None
+        super().mouseReleaseEvent(event)
+        if not grabbed:
+            event.ignore()
 
     def apply_geometry(self, rect: Rect, rotation: float) -> None:
         x, y, width, height = rect
@@ -1100,6 +1316,9 @@ class RotatedControl(QGraphicsView):
         self._proxy.setWidget(None)
         widget.setParent(parent)
         widget.setStyleSheet("")
+        widget.setAttribute(
+            Qt.WidgetAttribute.WA_NoSystemBackground, self._original_no_system_background,
+        )
         widget.show()
         self.hide()
         self.deleteLater()
@@ -1147,13 +1366,19 @@ class FaceSurface(QWidget):
         super().__init__(parent)
         self.setObjectName("faceSurface")
         self._background = QPixmap()
-        self._drag = QRect()
+        self._drag = QRegion()
         self._drag_offset: QPoint | None = None
         self._rotated: dict[str, RotatedControl] = {}
 
     def apply_face(self, face: Face, artwork: FaceArtwork, scale: float) -> None:
         self._background = artwork.background
-        self._drag = QRect(*(round(value * scale) for value in face.drag))
+        drag = face.drag
+        if face.cover_backdrop and "art" in face.controls:
+            # Presses on a cover backdrop reach the face. The cover is the
+            # backdrop, so the frame round it is too: anything no control
+            # takes moves the window.
+            drag = (0, 0, *face.size)
+        self._drag = QRegion(QRect(*(round(value * scale) for value in drag)))
         if artwork.alpha_mask is None:
             if self.graphicsEffect() is not None:
                 self.setGraphicsEffect(None)
@@ -1199,6 +1424,10 @@ class FaceSurface(QWidget):
         if wrapper is not None:
             wrapper.detach(self)
         widget.hide()
+
+    def lower_control(self, name: str, widget: QWidget) -> None:
+        """Stack a control, or its rotation wrapper, beneath its siblings."""
+        (self._rotated.get(name) or widget).lower()
 
     def control_global_position(self, name: str, widget: QWidget, point: QPoint) -> QPoint:
         wrapper = self._rotated.get(name)

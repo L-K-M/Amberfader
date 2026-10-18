@@ -25,6 +25,7 @@
     "timeSize": {"type": "integer", "minimum": 16, "maximum": 36},
     "radius": {"type": "integer", "minimum": 0, "maximum": 24},
     "coverGlass": {"type": "boolean"},
+    "coverBackdrop": {"type": "boolean"},
     "sliderStyle": {"enum": ["classic", "inset", "popup"]},
     "readoutStyles": {
       "type": "object",
@@ -103,7 +104,7 @@
   },
   "allOf": [{
     "if": {"properties": {"formatVersion": {"const": 1}}},
-    "then": {"not": {"anyOf": [{"required": ["controlShapes"]}, {"required": ["coverGlass"]}, {"required": ["readoutStyles"]}, {"required": ["sliderStyle"]}, {"required": ["controlRotations"]}]}}
+    "then": {"not": {"anyOf": [{"required": ["controlShapes"]}, {"required": ["coverGlass"]}, {"required": ["coverBackdrop"]}, {"required": ["readoutStyles"]}, {"required": ["sliderStyle"]}, {"required": ["controlRotations"]}]}}
   }, {
     "if": {"properties": {"formatVersion": {"enum": [1, 2]}}},
     "then": {

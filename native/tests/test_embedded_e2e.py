@@ -37,7 +37,8 @@ def test_embedded_stack_end_to_end():
 
     env = {
         **os.environ,
-        "QT_QPA_PLATFORM": "offscreen",
+        # Native Cocoa exercises concealed-window rendering on macOS.
+        "QT_QPA_PLATFORM": "cocoa" if sys.platform == "darwin" else "offscreen",
         # Chromium's sandbox needs user namespaces that CI runners and
         # containers often deny. The test page loads no remote content.
         "QTWEBENGINE_DISABLE_SANDBOX": "1",
@@ -57,6 +58,12 @@ def test_embedded_stack_end_to_end():
     assert run.returncode == 0, (
         f"driver exited {run.returncode}\nstdout:\n{run.stdout}\nstderr:\n{run.stderr}"
     )
+    for context in (
+        "hidden start", "hiding", "closing the browser", "hidden reload", "renderer recovery",
+    ):
+        assert report["checks"][f"continue playing after {context}: prompt dismissed"]
+        assert report["checks"][f"continue playing after {context}: browser stays hidden"]
+
     assert len(report["checks"]) >= 23
 
 

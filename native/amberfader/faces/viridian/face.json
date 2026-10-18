@@ -59,8 +59,8 @@
     "next": [153, 355, 30, 30],
     "like": [307, 349, 30, 30],
     "search": [199, 373, 70, 22],
-    "show": [141, 50, 70, 22],
-    "hide": [228, 45, 70, 22],
+    "show": [140, 48, 71, 24],
+    "hide": [217, 42, 70, 22],
     "menu": [114, 75, 24, 24],
     "minimize": [84, 104, 24, 24],
     "close": [62, 139, 24, 24]
@@ -126,5 +126,9 @@
       "pressed": "chrome-pressed.png",
       "disabled": "chrome-disabled.png"
     }
+  },
+  "controlRotations": {
+    "show": -16.9,
+    "hide": 8.5
   }
 }

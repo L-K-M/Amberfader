@@ -30,6 +30,8 @@ Change a selector only with evidence from a live page:
       playback event.
 - [ ] The player shows artwork, title, artist and album for the playing track.
       If the cover is absent, record the page image's origin.
+- [ ] On a Retina display, the cover is sharp in the player and in Cover view
+      for a song and for a music video, not an enlarged 60 px thumbnail.
 - [ ] Pause playback, quit and relaunch. The same cover returns without a site
       playback event.
 - [ ] While paused, change the player image's source or let its srcset image
@@ -50,7 +52,9 @@ Change a selector only with evidence from a live page:
 - [ ] Compare the heart with YouTube Music's Like button. Click to like, then
       unlike. Each request acts once and the icon changes only after
       `aria-pressed` confirms it. Unknown or conflicting controls disable the
-      heart. Switch tracks while a request is pending.
+      heart. Switch tracks while a request is pending. Repeat with the
+      YouTube Music window narrower than 936 px, and after starting with
+      `--background` without opening it: the heart still shows the state.
 - [ ] Search twice, close and reopen the search window, and restart
       Amberfader. The window shows the saved newest-first queries and played
       artists. Clicking either entry submits a search. **Clear recents**
@@ -77,13 +81,18 @@ Change a selector only with evidence from a live page:
       non-Premium account. Record any audio or video ad and the page's
       behavior. Turn it off, reload, and confirm the page still plays.
 - [ ] With **Continue playing automatically** on, leave music playing for
-      several hours without touching the page. If YouTube Music shows
+      several hours with the YouTube Music window hidden, without pressing
+      **Show YT**. Repeat after closing that window and after a hidden reload.
+      If YouTube Music shows
       "Video paused. Continue watching?", Amberfader closes it and playback
       resumes. Capture the prompt's markup (see Selector evidence) the first
-      time it appears.
+      time it appears. Turn the option off, reload, and confirm the next prompt
+      waits for your input.
 
 ## Soak
 
+- [ ] Compare CPU use while playing with the YouTube Music window hidden and
+      visible. Record the difference in `docs/compatibility.md`.
 - [ ] 8-hour continuous listening with the player open. Record the combined
       RSS of Amberfader and its QtWebEngine processes at start and end (the
       command is in the gate), skip counts and any reattaches. Numbers go into
@@ -126,6 +135,25 @@ tests verify rendering and state preservation, not compositor integration.
   for reported state; recents, play-result, and **Start mix** must still work.
 - Click the cover. Change tracks and faces with Cover view open; check artwork
   updates and absent-artwork placeholders.
+- With Lightbox, or another face that sets `coverBackdrop`, on X11, Wayland,
+  Flatpak and macOS:
+  drag the window by the bare cover, by the frame round it, by a readout on it
+  and by a button's transparent corner. Click the bare cover several times
+  without moving the pointer: the window stays put, and the next click on a
+  key acts at once, with no lingering window move or pointer grab. Over the
+  bare cover the pointer stays an arrow without the cover tooltip, and a click
+  never opens Cover view. Right-click the cover
+  for the face menu, and open Cover view from **☰**, from **View**, and with
+  Tab to the cover and Enter. Check that the window shape keeps the whole cover
+  where the glass is clear. Switch to another face; clicking its cover opens
+  Cover view again.
+- On Lightbox, play tracks with real light, dark and busy covers, and with no
+  cover (the placeholder). Every readout must stay readable on the glass, in
+  normal and long metadata and in the pending and offline states. Tab to the
+  cover and check that its focus outline shows on light and dark covers.
+  Repeat with `--scale 1.0`, `--scale 1.5` and `--scale 2.0`; on a Retina or
+  other 2x display the cover must be sharp at `--scale 1.0`. Check the rounded
+  window corners over light and dark wallpaper.
 - Restart the app and verify the saved face. Remove its user-pack folder and
   restart; expect Amber Classic and an explicit face error.
 - Install a local face folder through the native and Flatpak file choosers.

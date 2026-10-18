@@ -242,7 +242,9 @@ def main(mode: str) -> int:
                 _display_label(child[1].get("label", ""))
                 for child in editor_layout[2]
             }
-            check("editor exports File Edit View", editor_labels == {"File", "Edit", "View"})
+            check("editor exports its menus", editor_labels == {
+                "File", "Edit", "View", "Element", "Face", "Window", "Help",
+            })
             check("clean editor undo is disabled", not bool(
                 _find(editor_layout, "Undo")[1].get("enabled", True),
             ))

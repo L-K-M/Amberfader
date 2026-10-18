@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > LLM disclosure: This codebase was written with substantial help from large language models: AI coding agents working from the [`AGENTS.md`](AGENTS.md) brief in this repo.
 
-**Latest release:** v<!-- version -->0.2.0<!-- /version --> · [Download](https://github.com/L-K-M/Amberfader/releases/latest)
+**Latest release:** v<!-- version -->0.3.0<!-- /version --> · [Download](https://github.com/L-K-M/Amberfader/releases/latest)
 
 A compact classic-style player for YouTube Music, inspired by the small
 focused interfaces of Audion and classic Winamp. Amberfader plays YouTube
@@ -134,7 +134,8 @@ npm ci                 # page bundle toolchain
 uv sync                # python env incl. PySide6 and Qt WebEngine
 npm start              # build the page bundle and run Amberfader
 scripts/check.sh       # typecheck + lint + unit tests, both languages
-scripts/build.sh       # wheel, .deb, .flatpak (skips what this machine can't build)
+scripts/build.sh       # wheel, .deb, .flatpak, macOS .dmg (skips what this
+                       # machine can't build; --install puts both apps in /Applications)
 ```
 
 `npm start` passes no options; run `uv run python -m amberfader --help` for
@@ -155,15 +156,18 @@ record.
 
 ## Linux Faces
 
-In the native app, choose **☰ → Faces…** or press **Ctrl+,**. Eighteen original
-retro faces change the player's shape, layout and textures while keeping
+In the native app, choose **☰ → Faces…** or press **Ctrl+,**. Twenty-three original
+faces change the player's shape, layout and textures while keeping
 artwork, likes, playback, search, recents and mixes. Your choice is saved locally.
 Four of them are experimental sculptural faces: an orbital instrument, a manta ray,
 a jellyfish and a headphone robot with transparent gaps around their controls.
 Tangent, Keystone, Switchback and Vane add compact abstract instrument forms
 in steel, navy glass, graphite and lime.
 Aureole and Viridian add gold and green glass displays framed by silver curves.
-Click the cover for **Cover view**.
+Nightglass, Inner Sleeve, Instant Print and J-Card put the cover first: it fills
+about half the window, and the controls sit around it. Lightbox makes the cover
+the backdrop, with the controls on smoked glass over it.
+Click the cover for **Cover view** (on Lightbox, choose **☰ → Cover view**).
 
 Install additional JSON/PNG face plugins with **Install face folder…**.
 See [Faces](docs/faces.md) for previews, installation paths and the versioned
@@ -186,11 +190,12 @@ uv run amberfader-face-editor
 uv run amberfader-face-editor path/to/your/face
 ```
 
-Drag controls into place, resize and rotate them, adjust their appearance,
-and save a portable JSON/PNG face folder. The editor works independently of
+Start from a template in the Face Gallery, drag controls into place, resize
+and rotate them, adjust their appearance, and save a portable JSON/PNG face
+folder. On macOS it behaves like a document app: one window per face, named
+undo, an inspector, and crash recovery. The editor works independently of
 YouTube Music and playback. See the [editor guide](docs/face-editor.md).
 
-Choose **File → Import Audion face…** to turn a converted Audion face folder or
+Choose **File → Import Audion Face…** to turn a converted Audion face folder or
 collection ZIP into an editable copy, retaining its artwork and original credits.
-**File → Import all Audion faces from ZIP…** installs a whole collection at
-once. The **Faces** panel lists your installed and built-in faces for editing.
+**File → Import Audion Collection…** installs a whole collection at once.

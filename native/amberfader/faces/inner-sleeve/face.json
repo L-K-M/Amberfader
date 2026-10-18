@@ -1,0 +1,129 @@
+{
+  "formatVersion": 2,
+  "id": "inner-sleeve",
+  "name": "Inner Sleeve",
+  "author": "Amberfader",
+  "description": "A record jacket with its kraft inner sleeve half pulled out: the cover fills the jacket, and the player is printed on the sleeve around a die-cut label window.",
+  "size": [696, 428],
+  "background": "background.png",
+  "drag": [430, 14, 142, 32],
+  "font": "serif",
+  "timeSize": 22,
+  "radius": 6,
+  "sliderStyle": "inset",
+  "palette": {
+    "window": "#efe4cf",
+    "panel": "#f4ecda",
+    "display": "#c9a57c",
+    "text": "#2a1e14",
+    "muted": "#6a5440",
+    "readout": "#2a1e14",
+    "accent": "#8e2f24",
+    "border": "#8a6c4a",
+    "buttonTop": "#fbf5e8",
+    "buttonBottom": "#e6d8bc",
+    "danger": "#a3201a"
+  },
+  "readoutStyles": {
+    "title": {"font": "serif", "size": 15, "bold": true},
+    "artists": {"font": "serif", "size": 12},
+    "time": {"font": "mono"},
+    "playback": {"font": "sans", "size": 10, "bold": true, "align": "right"},
+    "status": {"font": "sans", "size": 11}
+  },
+  "controlShapes": {
+    "art": "rectangle",
+    "previous": "ellipse",
+    "play": "ellipse",
+    "next": "ellipse",
+    "like": "rounded",
+    "search": "rounded",
+    "show": "rounded",
+    "hide": "rounded",
+    "menu": "rounded",
+    "minimize": "rounded",
+    "close": "rounded"
+  },
+  "controls": {
+    "art": [14, 14, 400, 400],
+    "title": [446, 58, 224, 22],
+    "artists": [446, 86, 224, 18],
+    "time": [446, 110, 152, 30],
+    "playback": [606, 116, 64, 20],
+    "status": [446, 146, 224, 18],
+    "previous": [458, 218, 36, 36],
+    "play": [532, 210, 52, 52],
+    "next": [622, 218, 36, 36],
+    "seek": [450, 306, 216, 18],
+    "like": [446, 332, 34, 30],
+    "volume": [492, 338, 174, 18],
+    "search": [436, 376, 76, 26],
+    "show": [520, 376, 76, 26],
+    "hide": [604, 376, 76, 26],
+    "menu": [578, 19, 30, 26],
+    "minimize": [614, 19, 30, 26],
+    "close": [650, 19, 30, 26]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "like-normal.png",
+      "hover": "like-hover.png",
+      "pressed": "like-pressed.png",
+      "disabled": "like-disabled.png"
+    },
+    "search": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
+  }
+}

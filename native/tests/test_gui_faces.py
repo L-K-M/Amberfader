@@ -9,7 +9,7 @@ import pytest
 
 pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 
-from PySide6.QtCore import QRect, Qt
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, Qt
 from PySide6.QtGui import QRegion
 from PySide6.QtWidgets import QFileDialog
 from test_faces import BUNDLED_IDS, make_pack, png
@@ -38,6 +38,19 @@ def themed(qapp, tmp_path):
     qapp.processEvents()
 
 
+def _control_region(window, name, control):
+    wrapper = window._surface._rotated.get(name)
+    if wrapper is None:
+        return QRegion(QRect(control.mapTo(window, QPoint()), control.size()))
+    # Widget geometry is local to its proxy. Map its occupied quadrilateral
+    # through the real scene and viewport, excluding unused wrapper corners.
+    polygon = wrapper.viewportTransform().map(
+        wrapper._proxy.mapToScene(QRectF(control.rect())),
+    )
+    polygon.translate(QPointF(wrapper.viewport().mapTo(window, QPoint())))
+    return QRegion(polygon.toPolygon())
+
+
 @pytest.mark.parametrize("face_id", sorted(BUNDLED_IDS))
 def test_each_face_keeps_all_controls_usable(themed, qapp, face_id):
     window, library, sent = themed
@@ -50,10 +63,12 @@ def test_each_face_keeps_all_controls_usable(themed, qapp, face_id):
     assert window._controls == original_widgets
     assert library.preferred_id() == face_id
     assert not sent
-    for control in window._controls.values():
+    for name, control in window._controls.items():
         assert control.isVisible()
-        assert window.rect().contains(control.geometry())
-        assert QRegion(control.geometry()).subtracted(window.mask()).isEmpty()
+        occupied = _control_region(window, name, control)
+        assert not occupied.isEmpty(), name
+        assert window.rect().contains(occupied.boundingRect()), name
+        assert occupied.subtracted(window.mask()).isEmpty(), name
     window._like.click()
     window._next.click()
     window._prev.click()
@@ -131,7 +146,10 @@ def test_scaled_faces_keep_controls_inside_the_shape(qapp, tmp_path, scale):
             window.select_face(face_id)
             qapp.processEvents()
             for name, control in window._controls.items():
-                assert QRegion(control.geometry()).subtracted(window.mask()).isEmpty(), name
+                occupied = _control_region(window, name, control)
+                assert not occupied.isEmpty(), name
+                assert window.rect().contains(occupied.boundingRect()), name
+                assert occupied.subtracted(window.mask()).isEmpty(), name
             assert window.width() <= window.screen().availableGeometry().width()
             assert window.height() <= window.screen().availableGeometry().height()
     finally:
@@ -150,6 +168,48 @@ def test_face_picker_previews_and_applies_without_player_commands(themed, qapp):
     dialog._apply.click()
     assert window._face_id == selected
     assert not sent
+
+
+def _shown(dialog):
+    items = [dialog._list.item(index) for index in range(dialog._list.count())]
+    return [item.text() for item in items if not item.isHidden()]
+
+
+def test_face_picker_filter_narrows_faces_and_selection(themed, qapp):
+    window, _, sent = themed
+    window.open_faces()
+    dialog = window._faces_window
+    everything = _shown(dialog)
+    dialog._filter.setText("VIR")
+    assert _shown(dialog) == ["Viridian"]
+    assert dialog._list.currentItem().text() == "Viridian"
+    assert dialog._apply.isEnabled()
+
+    dialog._filter.setText("no such face")
+    assert _shown(dialog) == []
+    assert dialog._list.currentItem() is None
+    assert not dialog._apply.isEnabled()
+    assert "No faces match" in dialog._description.text()
+
+    dialog._filter.setText("vir")
+    window.open_faces()
+    assert _shown(dialog) == ["Viridian"]
+    dialog._filter.clear()
+    assert _shown(dialog) == everything
+    assert window._face_id == DEFAULT_FACE_ID
+    assert not sent
+
+
+def test_installing_under_a_filter_shows_the_installed_face(themed, pack, monkeypatch):
+    window, _, _ = themed
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *_: str(pack[0]))
+    window.open_faces()
+    dialog = window._faces_window
+    dialog._filter.setText("vir")
+    dialog._install()
+    assert dialog._filter.text() == ""
+    assert "My Face" in _shown(dialog)
+    assert dialog._list.currentItem().text() == "My Face"
 
 
 def test_gui_installs_a_face_folder(themed, pack, monkeypatch):

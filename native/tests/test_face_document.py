@@ -41,6 +41,30 @@ def test_save_reopen_and_assets_match_in_memory_snapshot(tmp_path):
     assert load_face(target).info.id == "studio"
 
 
+def test_unedited_template_copy_has_no_work_to_lose(tmp_path):
+    document = FaceDocument.from_template(TEMPLATE)
+    assert document.dirty and not document.needs_save
+    document.set_rotation("play", 10)
+    assert document.needs_save
+    document.undo()
+    assert not document.needs_save
+    # An import exists only in memory, so it always has work to lose.
+    assert FaceDocument.from_snapshot(document.manifest, document.assets).needs_save
+    reopened = FaceDocument.open(document.save(tmp_path / "saved"))
+    assert not reopened.needs_save
+    reopened.set_rotation("play", 5)
+    assert reopened.needs_save
+
+
+def test_saved_copy_asks_even_when_undone_to_the_template(tmp_path):
+    document = FaceDocument.from_template(TEMPLATE)
+    document.set_rotation("play", 10)
+    document.save(tmp_path / "saved")
+    document.undo()
+    # The folder holds the rotation; closing now would silently keep it.
+    assert document.needs_save
+
+
 def test_returned_manifest_and_assets_cannot_mutate_document():
     document = FaceDocument.from_template(TEMPLATE)
     returned = document.manifest
@@ -79,6 +103,64 @@ def test_gesture_coalesces_moves_and_cancel_restores_exact_snapshot():
     document.set_value(("name",), "Cancelled")
     document.cancel_gesture()
     assert document.manifest == original
+
+
+def test_undo_and_redo_name_the_step_they_revert():
+    document = FaceDocument.from_template(TEMPLATE)
+    assert document.undo_label is None and document.redo_label is None
+    document.set_value(("name",), "Named", label="Change Name")
+    document.begin_gesture("Move")
+    document.set_rect("play", [10, 10, 60, 48])
+    assert document.undo_label == "Move"
+    document.end_gesture()
+    assert document.undo_label == "Move"
+    document.undo()
+    assert (document.undo_label, document.redo_label) == ("Change Name", "Move")
+    document.undo()
+    assert (document.undo_label, document.redo_label) == (None, "Change Name")
+    document.redo()
+    assert document.undo_label == "Change Name"
+
+
+def test_coalesced_edits_share_one_undo_step_until_another_edit():
+    document = FaceDocument.from_template(TEMPLATE)
+    original = document.manifest
+    for degrees in (5, 10, 15):
+        document.set_rotation("play", degrees, label="Rotate", coalesce="dial-1")
+    document.undo()
+    assert document.manifest == original
+    assert not document.can_undo
+    document.redo()
+    assert document.manifest["controlRotations"]["play"] == 15
+
+    # A different edit ends the session; the same key then starts a new step.
+    document.set_value(("name",), "Between", label="Change Name")
+    document.set_rotation("play", 20, coalesce="dial-1")
+    document.undo()
+    assert document.manifest["controlRotations"]["play"] == 15
+    assert document.manifest["name"] == "Between"
+
+
+def test_coalescing_back_to_the_start_leaves_nothing_to_undo():
+    document = FaceDocument.from_template(TEMPLATE)
+    original = document.manifest["palette"]["accent"]
+    document.set_value(("palette", "accent"), "#123456", coalesce="color-panel")
+    document.set_value(("palette", "accent"), original, coalesce="color-panel")
+    assert not document.can_undo
+
+
+def test_removing_normal_artwork_removes_every_state():
+    document = FaceDocument.from_template(BUILTIN_DIRECTORY / "viridian")
+    states = set(document.manifest["buttons"]["search"])
+    assert {"normal", "hover"} <= states
+    document.remove_button_image("search", "hover")
+    assert set(document.manifest["buttons"]["search"]) == states - {"hover"}
+    document.remove_button_image("search", "normal")
+    assert "search" not in document.manifest["buttons"]
+    assert document.undo_label == "Remove Artwork"
+    document.undo()
+    assert set(document.manifest["buttons"]["search"]) == states - {"hover"}
+    assert document.validate() == ()
 
 
 def test_invalid_layout_stays_editable_but_cannot_save(tmp_path):
@@ -258,6 +340,51 @@ def test_rotation_overlap_blocks_save_but_retains_draft(tmp_path):
     assert document.preview().control_rotations["time"] == 90
     with pytest.raises(FaceError):
         document.save(tmp_path / "bad")
+
+
+def _legacy_document():
+    template = FaceDocument.from_template(TEMPLATE)
+    manifest = template.manifest
+    manifest["formatVersion"] = 1
+    for key in ("controlShapes", "coverGlass", "readoutStyles", "sliderStyle"):
+        manifest.pop(key, None)
+    return FaceDocument.from_snapshot(manifest, template.assets)
+
+
+def test_cover_backdrop_upgrades_legacy_drafts_and_leaves_with_the_cover():
+    document = _legacy_document()
+    document.set_value(("coverBackdrop",), True, label="Change Cover Backdrop")
+    assert document.manifest["formatVersion"] == 2
+    assert document.manifest["coverBackdrop"] is True
+    assert not document.validate()
+    document.set_value(("coverBackdrop",), None)
+    assert "coverBackdrop" not in document.manifest
+    document.undo()
+    assert document.manifest["coverBackdrop"] is True
+    # Without the cover there is no backdrop; the draft stays valid.
+    document.set_value(("controls", "art"), None)
+    assert "art" not in document.manifest["controls"]
+    assert "coverBackdrop" not in document.manifest
+    assert not document.validate()
+    document.undo()
+    assert "art" in document.manifest["controls"]
+    assert document.manifest["coverBackdrop"] is True
+
+
+def test_cover_backdrop_survives_save_and_reopen(tmp_path):
+    document = FaceDocument.from_template(TEMPLATE)
+    document.set_value(("coverBackdrop",), True)
+    reopened = FaceDocument.open(document.save(tmp_path / "backdrop"))
+    assert reopened.manifest["coverBackdrop"] is True
+    assert reopened.preview().cover_backdrop is True
+
+
+def test_cover_backdrop_lets_the_cover_lie_under_controls():
+    document = FaceDocument.from_template(TEMPLATE)
+    document.set_rect("art", [20, 10, 170, 170])
+    assert any("art overlaps" in problem for problem in document.validate())
+    document.set_value(("coverBackdrop",), True)
+    assert not document.validate()
 
 
 def test_open_rejects_asset_path_traversal(tmp_path):

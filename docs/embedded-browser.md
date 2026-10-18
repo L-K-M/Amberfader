@@ -207,7 +207,9 @@ A minimal reproduction for a Qt bug report: load a `WebEngineProfile` with
   location and others). Downloads are cancelled. WebRTC is limited to public
   network interfaces.
 - Artwork is fetched without cookies on a separate network stack, limited to
-  YouTube's image hosts and to 2 MiB input and 256 px / 64 KiB thumbnails.
+  YouTube's image hosts and to 2 MiB input and 768 px / 128 KiB thumbnails.
+  The player bar's cover is 60 px, so Amberfader asks the same host for a
+  768 px version first and uses the page's own image if that fails.
 - Page console output is discarded because it can contain track names.
 - Chromium's sandbox stays enabled. Only the automated test disables it, for
   the offline test page.

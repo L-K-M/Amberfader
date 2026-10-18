@@ -1,15 +1,15 @@
 [project]
 name = "amberfader"
-version = "0.2.0"
+version = "0.3.0"
 description = "Compact classic-style player for YouTube Music with its own embedded browser"
 readme = "README.md"
 license = { text = "Unlicense" }
 requires-python = ">=3.11"
-# PySide6-Addons carries Qt WebEngine (Chromium), which hosts YouTube Music.
+# Before 6.12, Addons bundles WebEngine and its wheels support macOS 13.
 dependencies = [
     "jsonschema>=4.23,<5",
-    "PySide6-Essentials>=6.8,<7",
-    "PySide6-Addons>=6.8,<7",
+    "PySide6-Essentials>=6.8,<6.12",
+    "PySide6-Addons>=6.8,<6.12",
 ]
 
 [project.scripts]
@@ -19,7 +19,7 @@ amberfader-face-editor = "amberfader.editor_app:main"
 [dependency-groups]
 dev = [
     "pytest>=8.3,<10",
-    "ruff>=0.11,<0.17",
+    "ruff>=0.11,<0.18",
 ]
 
 [build-system]

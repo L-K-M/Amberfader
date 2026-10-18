@@ -6,6 +6,13 @@ window silhouettes, and paints clean readout wells and button state surfaces.
 Text and transport symbols remain host-owned. No generation or network call is
 needed to rebuild the shipped 2x PNGs.
 
+Faces with a module in artwork/procedural/<id>.py are painted entirely in code
+instead: the module's render_background(face, kit) returns the 2x background,
+and its render_button(face, control, state, kit) returns one button surface.
+`kit` is PROCEDURAL_KIT, the exporter's shared drawing helpers. A face with
+coverBackdrop paints only the translucent glass laid over its cover into
+background.png; the player draws the cover beneath it.
+
 Run: QT_QPA_PLATFORM=offscreen uv run python artwork/render_faces.py
 Repeat --face ID to re-export only those packs.
 """
@@ -13,8 +20,10 @@ Repeat --face ID to re-export only those packs.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 
 from PySide6.QtCore import QBuffer, QPointF, QRectF, Qt
 from PySide6.QtGui import (
@@ -37,6 +46,7 @@ MAX_DIMENSION = 2048
 MAX_FILE_BYTES = 4 * 1024 * 1024
 ROOT = Path(__file__).resolve().parent
 FACES_ROOT = ROOT.parent / "native" / "amberfader" / "faces"
+PROCEDURAL_ROOT = ROOT / "procedural"
 BUTTON_GROUPS = {
     "previous": "transport",
     "next": "transport",
@@ -412,7 +422,28 @@ def _render_lens_background(face: dict, source: QImage) -> QImage:
     return image
 
 
+_PROCEDURAL_MODULES: dict[str, ModuleType | None] = {}
+
+
+def _procedural(face_id: str) -> ModuleType | None:
+    """The face's painting module, or None for faces built from generated art."""
+    if face_id not in _PROCEDURAL_MODULES:
+        path = PROCEDURAL_ROOT / f"{face_id}.py"
+        module = None
+        if path.is_file():
+            spec = importlib.util.spec_from_file_location(
+                f"amberfader_procedural_{face_id.replace('-', '_')}", path,
+            )
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
+        _PROCEDURAL_MODULES[face_id] = module
+    return _PROCEDURAL_MODULES[face_id]
+
+
 def render_background(face: dict) -> QImage:
+    procedural = _procedural(face["id"])
+    if procedural is not None:
+        return procedural.render_background(face, PROCEDURAL_KIT)
     width, height = face["size"]
     source = QImage(str(ROOT / "generated" / f"{face['id']}.png"))
     if source.isNull():
@@ -539,6 +570,14 @@ def _render_shaped_button(face: dict, control: str, state: str) -> QImage:
     return image
 
 
+def _group_representative(face: dict, group: str) -> str:
+    # Viridian's supplied layout enlarges Show YT while retaining the original
+    # utility images. Re-export those images at Search's original dimensions.
+    if face["id"] == "viridian" and group == "utility":
+        return "search"
+    return GROUP_REPRESENTATIVES[group]
+
+
 def _sprite_family(face: dict, name: str) -> str:
     """Name the surface a button uses; Qt stretches a sprite to its control.
 
@@ -547,15 +586,25 @@ def _sprite_family(face: dict, name: str) -> str:
     one button a different socket without distorting corners or rims.
     """
     group = BUTTON_GROUPS[name]
-    representative = GROUP_REPRESENTATIVES[group]
+    representative = _group_representative(face, group)
     controls, shapes = face["controls"], face.get("controlShapes", {})
     same_size = controls[name][2:] == controls[representative][2:]
     same_shape = shapes.get(name) == shapes.get(representative)
+    if (
+        face["id"] == "viridian" and name == "show"
+        and controls[name][2:] == [71, 24]
+        and controls[representative][2:] == [70, 22]
+        and shapes.get(name) == shapes.get(representative) == "ellipse"
+    ):
+        return group
     return group if same_size and same_shape else name
 
 
 def render_button(face: dict, group: str, state: str, control: str | None = None) -> QImage:
     control = control or GROUP_REPRESENTATIVES[group]
+    procedural = _procedural(face["id"])
+    if procedural is not None:
+        return procedural.render_button(face, control, state, PROCEDURAL_KIT)
     if face["id"] in SHAPED_FACES:
         return _render_shaped_button(face, control, state)
     _, _, width, height = face["controls"][control]
@@ -596,6 +645,17 @@ def render_button(face: dict, group: str, state: str, control: str | None = None
     return image
 
 
+# The helpers procedural face modules may use; see the module docstring.
+PROCEDURAL_KIT = SimpleNamespace(
+    SCALE=SCALE,
+    BUTTON_GROUPS=BUTTON_GROUPS,
+    canvas=_canvas,
+    control_path=_control_path,
+    gradient=_gradient,
+    rounded=_rounded,
+)
+
+
 def _encode_png(image: QImage) -> bytes:
     buffer = QBuffer()
     buffer.open(QBuffer.OpenMode.WriteOnly)
@@ -605,6 +665,18 @@ def _encode_png(image: QImage) -> bytes:
 
 
 def _translucent_regions(face: dict, image: QImage) -> list[str]:
+    if face.get("coverBackdrop"):
+        # The cover always fills a backdrop's aperture, so its glass may be
+        # clear. This mirrors face_surface._backdrop_hit_source.
+        image = image.copy()
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.scale(SCALE, SCALE)
+        painter.fillPath(_control_path(
+            QRectF(*face["controls"]["art"]),
+            face.get("controlShapes", {}).get("art", "rectangle"), face.get("radius", 4),
+        ), Qt.GlobalColor.black)
+        painter.end()
     rgba = image.convertToFormat(QImage.Format.Format_RGBA8888)
     data = bytes(rgba.constBits())
     stride = image.width() * 4
@@ -677,7 +749,9 @@ def main() -> None:
         sources = {}
         for name, family in families.items():
             group = BUTTON_GROUPS[name]
-            sources.setdefault(family, GROUP_REPRESENTATIVES[group] if family == group else name)
+            sources.setdefault(
+                family, _group_representative(face, group) if family == group else name,
+            )
         for family, control in sorted(sources.items()):
             for state in BUTTON_STATES:
                 image = render_button(face, BUTTON_GROUPS[control], state, control)

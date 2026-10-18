@@ -17,12 +17,13 @@ from PySide6.QtCore import (
     QElapsedTimer,
     QIODevice,
     QPoint,
+    QRectF,
     QSignalBlocker,
     Qt,
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QAction, QImageReader, QKeySequence, QPixmap, QShortcut
+from PySide6.QtGui import QAction, QImage, QImageReader, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QLabel,
@@ -55,7 +56,7 @@ if TYPE_CHECKING:
     from .faces_window import FacesWindow
 
 ARTWORK_CACHE_BYTES = 20 * 1024 * 1024
-MAX_ARTWORK_DIMENSION = 256
+MAX_ARTWORK_DIMENSION = 768
 MAX_ARTWORK_CACHE_ENTRIES = 80
 
 
@@ -103,8 +104,14 @@ class MainWindow(QMainWindow):
 
         self._art = CoverLabel(self._surface)
         self._art.setObjectName("art")
-        self._placeholder = QPixmap()
-        self._placeholder.loadFromData(QByteArray(placeholder_png()))
+        # Enlarge the 16 px pixel-art placeholder once without smoothing, so
+        # large cover apertures show crisp bars instead of a blur.
+        self._placeholder = QPixmap.fromImage(
+            QImage.fromData(QByteArray(placeholder_png())).scaled(
+                MAX_ARTWORK_DIMENSION, MAX_ARTWORK_DIMENSION,
+                Qt.AspectRatioMode.IgnoreAspectRatio, Qt.TransformationMode.FastTransformation,
+            ),
+        )
         self._cover = self._placeholder
         self._artwork_cache: OrderedDict[tuple[str, str], tuple[QPixmap, int]] = OrderedDict()
         self._artwork_cache_bytes = 0
@@ -361,11 +368,22 @@ class MainWindow(QMainWindow):
                 widget.setProperty("readoutColor", style.color)
                 widget.setProperty("minimumReadoutSize", 6 if face.format_version >= 3 else 10)
                 widget.setFont(readout_font(face, name, effective_scale))
+        # A new rotation wrapper starts on top, and detaching one re-parents
+        # the cover above its siblings. Without this, whether the cover hides
+        # controls placed on it would depend on the face-switch history.
+        self._surface.lower_control("art", self._art)
         self._time.set_time_digits(artwork.time_digits)
         self._art.set_shape(
             face.control_shapes.get("art", "rectangle"), face.radius * effective_scale,
             face.cover_glass,
         )
+        window = QRectF()
+        if face.cover_backdrop:
+            # Map the background over the cover as the surface paints it. Use
+            # the computed size: the surface is not resized yet on startup.
+            x, y = (round(value * effective_scale) for value in face.controls["art"][:2])
+            window = QRectF(-x, -y, *size)
+        self._art.set_backdrop(artwork.background if face.cover_backdrop else None, window)
         self._face_id = face.info.id
         self._render_cover()
         if self._search is not None:
@@ -454,10 +472,14 @@ class MainWindow(QMainWindow):
                     Qt.AspectRatioMode.KeepAspectRatioByExpanding if label is self._art
                     else Qt.AspectRatioMode.KeepAspectRatio
                 )
-                label.setPixmap(self._cover.scaled(
-                    label.size(), mode,
+                # Scale to device pixels: a 1x pixmap looks soft on a 2x display.
+                ratio = label.devicePixelRatioF()
+                pixmap = self._cover.scaled(
+                    label.size() * ratio, mode,
                     Qt.TransformationMode.SmoothTransformation,
-                ))
+                )
+                pixmap.setDevicePixelRatio(ratio)
+                label.setPixmap(pixmap)
 
     @staticmethod
     def _artwork_key(data: dict) -> tuple[str, str] | None:

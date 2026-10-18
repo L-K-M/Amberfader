@@ -90,6 +90,7 @@ class Face:
     buttons: MappingProxyType[str, MappingProxyType[str, bytes]]
     control_shapes: MappingProxyType[str, str] = field(default_factory=lambda: MappingProxyType({}))
     cover_glass: bool = False
+    cover_backdrop: bool = False
     readout_styles: MappingProxyType[str, MappingProxyType[str, Any]] = field(
         default_factory=lambda: MappingProxyType({}),
     )
@@ -236,6 +237,13 @@ def _check_layout(data: dict) -> None:
             for index, digit in enumerate(data.get("timeDigits", []))
         })
     rotations = data.get("controlRotations", {})
+    backdrop = data.get("coverBackdrop", False)
+    if backdrop and "art" not in data["controls"]:
+        raise FaceError("coverBackdrop needs the art control")
+    if backdrop and rotations.get("art"):
+        # The backdrop layer is painted unrotated, and pointer pass-through
+        # into a rotation wrapper's proxy is unverified.
+        raise FaceError("art cannot rotate on a cover backdrop")
     polygons = {
         name: control_polygon(tuple(rect), rotations.get(name, 0))
         for name, rect in regions.items()
@@ -266,6 +274,8 @@ def _check_layout(data: dict) -> None:
     names = list(regions)
     for index, name in enumerate(names):
         for other in names[index + 1:]:
+            if backdrop and "art" in (name, other):
+                continue  # Controls and the drag region may sit on a cover backdrop.
             if _intersects(polygons[name], polygons[other]):
                 raise FaceError(f"{name} overlaps {other}")
 
@@ -453,6 +463,7 @@ def load_face_snapshot(
             }),
             control_shapes=MappingProxyType(dict(manifest.get("controlShapes", {}))),
             cover_glass=manifest.get("coverGlass", False),
+            cover_backdrop=manifest.get("coverBackdrop", False),
             readout_styles=MappingProxyType({
                 name: MappingProxyType(dict(style))
                 for name, style in manifest.get("readoutStyles", {}).items()

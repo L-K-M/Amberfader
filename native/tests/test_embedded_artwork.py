@@ -1,6 +1,7 @@
 """Embedded artwork: allowlist, normalization limits, and the fetcher's
 redirect, size, type and cache rules against a loopback HTTP server."""
 import base64
+import random
 import struct
 import threading
 import zlib
@@ -22,6 +23,7 @@ from amberfader.embedded.artwork import (
     MAX_OUTPUT_BYTES,
     ArtworkFetcher,
     allowed_artwork_url,
+    larger_artwork_url,
     normalize_artwork,
 )
 
@@ -66,12 +68,61 @@ def test_artwork_allowlist(url, expected):
     assert allowed_artwork_url(url) is expected
 
 
+@pytest.mark.parametrize(("url", "expected"), [
+    # Google's image server takes the size in the options after "=". These
+    # forms were observed live on 2026-10-09; all served 768 px when asked.
+    ("https://lh3.googleusercontent.com/abc=w60-h60-p-l90-rj",
+     "https://lh3.googleusercontent.com/abc=w768-h768-p-l90-rj"),
+    ("https://yt3.googleusercontent.com/ytc/abc=w60-c-h60-k-c0x00ffffff-no-l90-rj",
+     "https://yt3.googleusercontent.com/ytc/abc=w768-c-h768-k-c0x00ffffff-no-l90-rj"),
+    ("https://yt3.ggpht.com/ytc/abc=w60-h60-l90-rj", "https://yt3.ggpht.com/ytc/abc=w768-h768-l90-rj"),
+    ("https://lh3.googleusercontent.com/abc=s120-c", "https://lh3.googleusercontent.com/abc=s768-c"),
+    ("https://lh3.googleusercontent.com/abc=w120-h90", "https://lh3.googleusercontent.com/abc=w768-h576"),
+    # Video thumbnails: the player bar shows a signed 400x225 crop.
+    ("https://i.ytimg.com/vi/RG63kLb_Hqo/hqdefault.jpg?sqp=-oaymw&rs=AMzJL3",
+     "https://i.ytimg.com/vi/RG63kLb_Hqo/maxresdefault.jpg"),
+    # Already large, the original size, or no size to change.
+    ("https://lh3.googleusercontent.com/abc=w1200-h1200-p-l90-rj", None),
+    ("https://lh3.googleusercontent.com/abc=w768-h768", None),
+    ("https://lh3.googleusercontent.com/abc=s0", None),
+    ("https://lh3.googleusercontent.com/abc", None),
+    ("https://lh3.googleusercontent.com/abc=p-l90-rj", None),
+    ("https://i.ytimg.com/vi/RG63kLb_Hqo/maxresdefault.jpg", None),
+    ("https://i.ytimg.com/an_webp/RG63kLb_Hqo/mqdefault_6s.webp", None),
+    # Other hosts keep the page's own URL.
+    ("https://music.youtube.com/img/cover=w60-h60", None),
+    ("https://example.net/abc=w60-h60", None),
+    ("not a url", None),
+])
+def test_larger_artwork_url(url, expected):
+    assert larger_artwork_url(url) == expected
+
+
 def test_normalization_downscales_and_reencodes(qapp):
-    result = normalize_artwork(png_bytes(qapp, 600, 300))
+    result = normalize_artwork(png_bytes(qapp, 2 * MAX_EDGE, MAX_EDGE))
 
     assert result is not None
     assert (result.width, result.height) == (MAX_EDGE, MAX_EDGE // 2)
     assert result.jpeg[:2] == b"\xff\xd8"
+    assert len(result.jpeg) <= MAX_OUTPUT_BYTES
+
+
+def test_normalization_shrinks_covers_too_detailed_for_the_byte_limit(qapp):
+    from PySide6.QtCore import QBuffer, QByteArray, QIODevice
+    from PySide6.QtGui import QImage
+
+    # Random pixels do not fit the byte limit at full size in any quality.
+    pixels = random.Random(1).randbytes(MAX_EDGE * MAX_EDGE * 3)
+    noise = QImage(pixels, MAX_EDGE, MAX_EDGE, MAX_EDGE * 3, QImage.Format.Format_RGB888)
+    data = QByteArray()
+    buffer = QBuffer(data)
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    assert noise.save(buffer, "PNG")
+
+    result = normalize_artwork(bytes(data.data()))
+
+    assert result is not None
+    assert result.width < MAX_EDGE
     assert len(result.jpeg) <= MAX_OUTPUT_BYTES
 
 
@@ -106,6 +157,8 @@ class _Server:
                     self._redirect("/ok/cover")
                 elif self.path == "/ok/escape":
                     self._redirect("/blocked/cover")
+                elif self.path.startswith("/ok/missing"):
+                    self._send(404, "image/png", image)
                 else:
                     self._send(200, "image/png", image)
 
@@ -134,7 +187,7 @@ class _Server:
 
 @pytest.fixture()
 def server(qapp):
-    srv = _Server(png_bytes(qapp, 400, 400))
+    srv = _Server(png_bytes(qapp, MAX_EDGE + 100, MAX_EDGE + 100))
     yield srv
     srv.close()
 
@@ -186,3 +239,43 @@ def test_rejects_wrong_type_oversize_and_disallowed_urls(qapp, server, fetcher, 
     if path != "/blocked/cover":
         fetcher.request(f"{server.base}{path}", "art-x", None)
         assert pump(qapp, lambda: server.hits.get(path) == 2)
+
+
+@pytest.mark.parametrize(("larger", "expected_hits"), [
+    ("/ok/large", {"/ok/large": 1}),
+    # A missing or failed larger cover falls back to the page's own URL.
+    ("/ok/missing", {"/ok/missing": 1, "/ok/small": 1}),
+    # A larger URL that is not allowed is never fetched.
+    ("/blocked/large", {"/ok/small": 1}),
+])
+def test_prefers_a_larger_cover_and_falls_back_to_the_page_url(
+    qapp, server, larger, expected_hits,
+):
+    fetcher = ArtworkFetcher(
+        allow=lambda url: url.startswith(f"{server.base}/ok/"),
+        larger=lambda url: url.replace("/ok/small", larger),
+    )
+    assets = []
+    fetcher.assetReady.connect(assets.append)
+
+    fetcher.request(f"{server.base}/ok/small", "art-1", "occ-1")
+
+    assert pump(qapp, lambda: assets and idle(fetcher))
+    assert [a["artworkId"] for a in assets] == ["art-1"]
+    assert server.hits == expected_hits
+    fetcher.deleteLater()
+
+
+def test_a_failed_fallback_lets_the_cover_be_proposed_again(qapp, server):
+    fetcher = ArtworkFetcher(
+        allow=lambda url: url.startswith(f"{server.base}/ok/"),
+        larger=lambda url: url.replace("/ok/missing-small", "/ok/missing-large"),
+    )
+
+    fetcher.request(f"{server.base}/ok/missing-small", "art-1", None)
+    assert pump(qapp, lambda: server.hits.get("/ok/missing-small") == 1 and idle(fetcher))
+    fetcher.request(f"{server.base}/ok/missing-small", "art-1", None)
+    assert pump(qapp, lambda: server.hits.get("/ok/missing-small") == 2 and idle(fetcher))
+
+    assert server.hits["/ok/missing-large"] == 2
+    fetcher.deleteLater()

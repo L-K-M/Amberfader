@@ -1,0 +1,130 @@
+{
+  "formatVersion": 2,
+  "id": "lightbox",
+  "name": "Lightbox",
+  "author": "Amberfader",
+  "description": "The album cover fills the whole window. Track details and controls float on smoked glass across its lower edge; drag the cover to move the window. Open Cover view from the ☰ menu.",
+  "size": [400, 400],
+  "background": "background.png",
+  "coverBackdrop": true,
+  "drag": [14, 18, 64, 24],
+  "font": "sans",
+  "timeSize": 16,
+  "radius": 12,
+  "sliderStyle": "inset",
+  "palette": {
+    "window": "#0c0d10",
+    "panel": "#17181c",
+    "display": "#08090b",
+    "text": "#eeebe5",
+    "muted": "#aaa59d",
+    "readout": "#f6f3ec",
+    "accent": "#e6b678",
+    "border": "#44474e",
+    "buttonTop": "#2c2e33",
+    "buttonBottom": "#1b1c20",
+    "danger": "#ff9a8a"
+  },
+  "readoutStyles": {
+    "title": {"font": "sans", "size": 16, "bold": true},
+    "artists": {"font": "sans", "size": 13},
+    "time": {"font": "mono"},
+    "playback": {"font": "sans", "size": 11, "bold": true, "align": "right"},
+    "status": {"font": "sans", "size": 11}
+  },
+  "controlShapes": {
+    "art": "rounded",
+    "like": "ellipse",
+    "previous": "capsule",
+    "play": "capsule",
+    "next": "capsule",
+    "search": "capsule",
+    "show": "capsule",
+    "hide": "capsule",
+    "menu": "capsule",
+    "minimize": "capsule",
+    "close": "capsule"
+  },
+  "controls": {
+    "art": [8, 8, 384, 384],
+    "show": [78, 18, 68, 24],
+    "hide": [152, 18, 48, 24],
+    "search": [206, 18, 70, 24],
+    "menu": [282, 18, 28, 24],
+    "minimize": [316, 18, 28, 24],
+    "close": [350, 18, 28, 24],
+    "title": [22, 222, 356, 22],
+    "artists": [22, 246, 356, 18],
+    "seek": [22, 270, 356, 18],
+    "time": [22, 290, 160, 22],
+    "playback": [282, 293, 96, 18],
+    "like": [22, 328, 32, 32],
+    "previous": [122, 328, 44, 32],
+    "play": [172, 323, 56, 42],
+    "next": [234, 328, 44, 32],
+    "volume": [298, 335, 80, 18],
+    "status": [22, 368, 356, 18]
+  },
+  "buttons": {
+    "previous": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "play": {
+      "normal": "play-normal.png",
+      "hover": "play-hover.png",
+      "pressed": "play-pressed.png",
+      "disabled": "play-disabled.png"
+    },
+    "next": {
+      "normal": "transport-normal.png",
+      "hover": "transport-hover.png",
+      "pressed": "transport-pressed.png",
+      "disabled": "transport-disabled.png"
+    },
+    "like": {
+      "normal": "like-normal.png",
+      "hover": "like-hover.png",
+      "pressed": "like-pressed.png",
+      "disabled": "like-disabled.png"
+    },
+    "search": {
+      "normal": "search-normal.png",
+      "hover": "search-hover.png",
+      "pressed": "search-pressed.png",
+      "disabled": "search-disabled.png"
+    },
+    "show": {
+      "normal": "utility-normal.png",
+      "hover": "utility-hover.png",
+      "pressed": "utility-pressed.png",
+      "disabled": "utility-disabled.png"
+    },
+    "hide": {
+      "normal": "hide-normal.png",
+      "hover": "hide-hover.png",
+      "pressed": "hide-pressed.png",
+      "disabled": "hide-disabled.png"
+    },
+    "menu": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "minimize": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    },
+    "close": {
+      "normal": "chrome-normal.png",
+      "hover": "chrome-hover.png",
+      "pressed": "chrome-pressed.png",
+      "disabled": "chrome-disabled.png"
+    }
+  }
+}

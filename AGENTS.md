@@ -23,7 +23,8 @@ tests prove parsing logic, not that YouTube Music accepts an action.
 ```sh
 scripts/check.sh        # the one command to run before committing: tsc + eslint +
                         # vitest, ruff + pytest, shellcheck
-scripts/build.sh        # multi-target build → dist/ (wheel, deb, flatpak)
+scripts/build.sh        # multi-target build → dist/ (wheel, deb, flatpak, macos;
+                        # --install copies both apps to /Applications)
 npm start               # build the page bundle and run the app
 uv run amberfader --self-test  # installation check on the scripted test page
 uv run amberfader-face-editor  # standalone face editor
@@ -49,8 +50,8 @@ Node 22+ (`.nvmrc`), Python 3.11+ via uv (`uv sync`). `uv.lock` and
   user agent or disable Chromium's sandbox outside tests. Artwork hosts are
   added only for origins observed live.
 - **Bounds:** 256 KiB transport messages, 500-char queries, 30 search results
-  per batch, 5 s control / 15 s search deadlines, 2 MiB artwork input, 256 px /
-  64 KiB thumbnails, 20 MiB artwork cache.
+  per batch, 5 s control / 15 s search deadlines, 2 MiB artwork input, 768 px /
+  128 KiB thumbnails, 20 MiB artwork cache.
 - **Truthful states:** explicit `play`/`pause` (no toggle-retry), report
   completion only after an observed outcome, `pending_outcome` on timeout,
   unknown states rendered as unknown, no blind fallback clicks.

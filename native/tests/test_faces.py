@@ -26,6 +26,8 @@ BUNDLED_IDS = {
     "orbit-99", "manta-ray", "jellyfish-fm", "boom-bot",
     "tangent", "keystone", "switchback", "vane",
     "aureole", "viridian",
+    "nightglass", "inner-sleeve", "instant-print", "j-card",
+    "lightbox",
 }
 
 
@@ -94,6 +96,18 @@ def test_bundled_shared_sprites_fit_one_button_size(face_id):
         for sprite in images.values():
             members.setdefault(sprite, {})[name] = outline
     for sprite, outlines in members.items():
+        if face_id == "viridian" and sprite in {
+            "utility-normal.png", "utility-hover.png",
+            "utility-pressed.png", "utility-disabled.png",
+        }:
+            # The owner's replacement intentionally enlarges Show YT while
+            # retaining the original utility surfaces along the curved rim.
+            assert outlines == {
+                "search": ((70, 22), "ellipse"),
+                "show": ((71, 24), "ellipse"),
+                "hide": ((70, 22), "ellipse"),
+            }
+            continue
         assert len(set(outlines.values())) == 1, (face_id, sprite, outlines)
 
 
@@ -127,6 +141,7 @@ def test_legacy_manifest_retains_default_presentation(pack):
 
 @pytest.mark.parametrize("metadata", [
     {"controlShapes": {"art": "ellipse"}}, {"controlShapes": {}}, {"coverGlass": False},
+    {"coverBackdrop": True},
 ])
 def test_legacy_version_rejects_new_presentation_fields(pack, metadata):
     pack[1].update(metadata)
@@ -175,6 +190,7 @@ def test_format_two_other_cover_shapes_keep_legacy_size_bounds(pack, shape):
     {"controlShapes": {"play": "triangle"}},
     {"controlShapes": {"play": {"path": "M0,0"}}},
     {"coverGlass": "true"},
+    {"coverBackdrop": "true"},
 ])
 def test_format_two_presentation_remains_constrained_data(pack, metadata):
     pack[1].update(formatVersion=2, **metadata)
@@ -185,7 +201,7 @@ def test_format_two_presentation_remains_constrained_data(pack, metadata):
 
 def test_install_and_restart_preserve_format_two_presentation(pack, library, tmp_path):
     shapes = {"art": "ellipse", "play": "ellipse", "search": "capsule", "menu": "rounded"}
-    pack[1].update(formatVersion=2, controlShapes=shapes, coverGlass=True)
+    pack[1].update(formatVersion=2, controlShapes=shapes, coverGlass=True, coverBackdrop=True)
     pack[1]["controls"]["art"] = [28, 64, 48, 80]
     write_manifest(pack)
     info = library.install(pack[0])
@@ -193,11 +209,67 @@ def test_install_and_restart_preserve_format_two_presentation(pack, library, tmp
     assert installed["formatVersion"] == 2
     assert installed["controlShapes"] == shapes
     assert installed["coverGlass"] is True
+    assert installed["coverBackdrop"] is True
     restarted = FaceLibrary(library.ensure_directory(), tmp_path / "appearance.json")
     face = restarted.load(info.id)
     assert dict(face.control_shapes) == shapes
     assert face.cover_glass is True
+    assert face.cover_backdrop is True
     assert face.controls["art"] == (28, 64, 48, 80)
+
+
+def _cover_under_title_and_drag(data):
+    # The square cover grows under the title, readouts and drag region but
+    # stays clear of the transport row.
+    data["controls"]["art"] = [20, 10, 170, 170]
+
+
+def test_cover_backdrop_lets_controls_and_drag_sit_on_art(pack):
+    pack[1].update(formatVersion=2)
+    _cover_under_title_and_drag(pack[1])
+    write_manifest(pack)
+    with pytest.raises(FaceError, match="art overlaps"):
+        load_face(pack[0])
+    pack[1]["coverBackdrop"] = True
+    write_manifest(pack)
+    face = load_face(pack[0])
+    assert face.cover_backdrop is True
+    assert face.controls["art"] == (20, 10, 170, 170)
+
+
+@pytest.mark.parametrize("change,error", [
+    (lambda d: d["controls"].update(like=d["controls"]["play"]), "play overlaps like"),
+    (lambda d: d.update(drag=[400, 12, 100, 29]), "menu overlaps drag"),
+])
+def test_cover_backdrop_keeps_other_overlap_rules(pack, change, error):
+    pack[1].update(formatVersion=2, coverBackdrop=True)
+    _cover_under_title_and_drag(pack[1])
+    change(pack[1])
+    write_manifest(pack)
+    with pytest.raises(FaceError, match=error):
+        load_face(pack[0])
+
+
+@pytest.mark.parametrize("version", [2, 3])
+def test_cover_backdrop_rejects_rotated_art(pack, version):
+    pack[1].update(formatVersion=version, controlRotations={"art": 10})
+    write_manifest(pack)
+    assert load_face(pack[0]).control_rotations["art"] == 10
+    pack[1]["coverBackdrop"] = True
+    write_manifest(pack)
+    with pytest.raises(FaceError, match="art cannot rotate on a cover backdrop"):
+        load_face(pack[0])
+
+
+def test_cover_backdrop_needs_art(pack):
+    pack[1].update(formatVersion=3)
+    del pack[1]["controls"]["art"]
+    write_manifest(pack)
+    assert "art" not in load_face(pack[0]).controls
+    pack[1]["coverBackdrop"] = True
+    write_manifest(pack)
+    with pytest.raises(FaceError, match="coverBackdrop needs the art control"):
+        load_face(pack[0])
 
 
 def test_manifest_size_is_bounded(pack):

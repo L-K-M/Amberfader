@@ -9,18 +9,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- The face editor opens with a **Faces** panel listing the installed and
+- The face editor is rebuilt as a Mac document app. Each face opens in its own
+  window with an element sidebar, an Element/Face inspector with collapsible
+  sections and color wells, and a symbol toolbar. Menus cover every command
+  with standard shortcuts, Undo names each change, and Edit commands follow
+  the focused field. The **Face Gallery** replaces the Faces panel for
+  templates and installed faces. The editor adds Open Recent, Revert to Saved,
+  Show in Finder, Finder and Dock opening on macOS, and crash recovery of
+  unsaved faces. Dropped PNGs go to the element under the pointer.
+- The face editor opens with the Face Gallery listing the installed and
   built-in faces. Installed faces open for editing in place; built-in faces
   open as a copy.
-- **File → Import all Audion faces from ZIP…** in the face editor converts
+- **File → Import Audion Collection…** in the face editor converts
   and installs every face in an Audion collection ZIP, with progress and a
   Stop button. Importing the same ZIP again skips installed faces.
+- The player's **Faces** window has a filter box to find a face by name.
+- Four cover-first faces: Nightglass, Inner Sleeve, Instant Print and J-Card.
+  A 384 to 412 px cover fills about half the window, and the controls sit
+  around it on a smoked-glass strip, a record's inner sleeve, an instant
+  photo's chin and an unfolded cassette insert.
+- Faces can use the album cover as their backdrop. The format 2 field
+  `coverBackdrop` draws the background over the cover, so clear or tinted
+  glass shows it, and lets controls and the drag region sit on it. Presses on
+  the cover, or anywhere else no control takes, move the window; Cover view
+  opens from the menu or the keyboard.
+  The face editor turns it on with **Album art as backdrop**. Older versions
+  of Amberfader reject faces that use it.
+- The Lightbox face uses the cover as its backdrop: the cover fills the
+  window, and the track details and controls float on smoked glass over it.
 
 ### Changed
 
+- The face editor no longer asks to save an unchanged copy of a template,
+  such as the Amber Classic copy it starts with, when you open another face
+  or close the editor.
 - Up to 1024 installed faces load, up from 64, so all three of Panic's
   Audion collection ZIPs (883 faces together) fit. A catalog cache (`.catalog.json` in the faces
   folder) keeps listing them fast: about 0.4 s for 900 faces instead of 4.6 s.
+- A YouTube Music window narrower than 1024 px zooms the page out instead
+  of switching to a narrower layout. Your own zoom applies up to that width.
+- Covers are fetched at up to 768 px instead of the player bar's 60 px
+  thumbnail, falling back to the thumbnail if the larger image fails. The
+  player draws them at the display's pixel density instead of enlarging a
+  1x image on 2x displays.
+
+### Fixed
+
+- Rotated face controls preserve transparent corners in the player, matching
+  the face editor preview.
+- Imported faces with controls on the album cover: after a face with a
+  rotated cover, the cover could hide those controls, and previews painted it
+  over controls listed before it. In the face editor, a selected cover took
+  clicks meant for them. The cover now stays beneath every control.
+- The heart stayed **♡?** (unknown) when YouTube Music hid its Like button:
+  in a window narrower than 936 px or zoomed in, after closing the window
+  before the first page finished loading, with `--background`, or after a
+  reload while the window was hidden. Pages that load behind the hidden
+  window now get its full size.
+- The empty-cover placeholder stays crisp in large cover apertures instead of
+  blurring.
 
 ## [0.2.0] - 2026-10-06
 

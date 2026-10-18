@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Builds dist/Amberfader-<version>-macos-arm64.dmg: Amberfader.app frozen with
-# PyInstaller, ad-hoc signed (the release is unsigned, see
-# docs/standalone-plan.md D2), in a disk image with an Applications link.
+# Builds dist/Amberfader-<version>-macos-arm64.dmg: Amberfader.app and the
+# Amberfader Face Editor.app, both frozen with PyInstaller, ad-hoc signed
+# (the release is unsigned, see docs/standalone-plan.md D2), in a disk image
+# with an Applications link.
 #
 # Usage: scripts/build-macos.sh <version> <dist-dir>
 # Needs: macOS on Apple silicon, Xcode command line tools (iconutil, sips,
 # codesign, hdiutil), a Python 3.11+ environment with PyInstaller and this
-# project installed, and the page scripts built (npm run build).
+# project installed (PYTHON selects it; default python3), and the page
+# scripts built (npm run build).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -34,21 +36,34 @@ done
 iconutil -c icns "$WORK/Amberfader.iconset" -o "$WORK/Amberfader.icns"
 
 echo "-- PyInstaller"
-AMBERFADER_VERSION="$VERSION" AMBERFADER_ICNS="$PWD/$WORK/Amberfader.icns" \
-  python3 -m PyInstaller --noconfirm --clean \
-  --distpath "$WORK/dist" --workpath "$WORK/build" packaging/macos/amberfader.spec
-APP="$WORK/dist/Amberfader.app"
-[[ -d "$APP" ]] || { echo "error: PyInstaller did not produce $APP" >&2; exit 1; }
+for spec in amberfader face_editor; do
+  AMBERFADER_VERSION="$VERSION" AMBERFADER_ICNS="$PWD/$WORK/Amberfader.icns" \
+    "${PYTHON:-python3}" -m PyInstaller --noconfirm --clean \
+    --distpath "$WORK/dist" --workpath "$WORK/build" "packaging/macos/$spec.spec"
+done
+APPS=("$WORK/dist/Amberfader.app" "$WORK/dist/Amberfader Face Editor.app")
+for APP in "${APPS[@]}"; do
+  [[ -d "$APP" ]] || { echo "error: PyInstaller did not produce $APP" >&2; exit 1; }
+done
 
-echo "-- verify the ad-hoc signature"
-codesign --verify --deep --strict "$APP"
-codesign -dv "$APP" 2>&1 | grep -q "Signature=adhoc" ||
-  { echo "error: $APP is not ad-hoc signed" >&2; exit 1; }
+echo "-- verify the ad-hoc signatures"
+for APP in "${APPS[@]}"; do
+  codesign --verify --deep --strict "$APP" ||
+    { echo "error: signature of $APP does not verify" >&2; exit 1; }
+  # Capture first: grep -q can close the pipe and make codesign fail with SIGPIPE.
+  SIGNATURE_INFO="$(codesign -dv "$APP" 2>&1)" ||
+    { echo "error: could not inspect signature of $APP" >&2; exit 1; }
+  grep -Fxq "Signature=adhoc" <<< "$SIGNATURE_INFO" ||
+    { echo "error: $APP is not ad-hoc signed" >&2; exit 1; }
+done
 
 echo "-- disk image"
 STAGE="$WORK/dmg"
 mkdir -p "$STAGE"
-cp -R "$APP" "$STAGE/"
+for APP in "${APPS[@]}"; do
+  # ditto preserves the signature, resource forks and permissions.
+  ditto "$APP" "$STAGE/$(basename "$APP")"
+done
 ln -s /Applications "$STAGE/Applications"
 OUT="$DIST/Amberfader-${VERSION}-macos-arm64.dmg"
 rm -f "$OUT"
