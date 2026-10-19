@@ -1,6 +1,6 @@
 {
   "name": "amberfader",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Compact classic-style player for YouTube Music with its own embedded browser",
