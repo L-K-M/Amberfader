@@ -41,6 +41,7 @@ modules:
       # build-flatpak.sh downloaded every wheel for the runtime's Python.
       - pip3 install --no-index --no-deps --prefix=${FLATPAK_DEST} wheels/*.whl
       - install -Dm644 ch.lkmc.amberfader.desktop -t ${FLATPAK_DEST}/share/applications/
+      - install -Dm644 ch.lkmc.amberfader.metainfo.xml -t ${FLATPAK_DEST}/share/metainfo/
       - mkdir -p ${FLATPAK_DEST}/share/icons && cp -r hicolor ${FLATPAK_DEST}/share/icons/
     sources:
       - type: dir

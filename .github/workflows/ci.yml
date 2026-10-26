@@ -405,6 +405,12 @@ jobs:
           sudo apt-get install -y -qq --no-install-recommends flatpak flatpak-builder elfutils dbus >/dev/null
           scripts/build-flatpak.sh dist/amberfader-*.whl
 
+      # project_license states Amberfader's own license (Amberfader-m5).
+      - name: Validate the AppStream metadata
+        run: |
+          sudo apt-get install -y -qq --no-install-recommends appstream >/dev/null
+          appstreamcli validate --no-net packaging/flatpak/ch.lkmc.amberfader.metainfo.xml
+
       - name: Install the bundle and check its permissions
         run: |
           flatpak install --user -y --noninteractive dist/amberfader_*.flatpak
@@ -427,6 +433,7 @@ jobs:
           grep -q '^Qt WebEngine, Qt PDF and Qt WebView ' "$doc/Third-Party-Notices.txt"
           grep -q '^rpds-py ' "$doc/Third-Party-Notices.txt"
           grep -q 'io.qt.qtwebengine.BaseApp' "$doc/SOURCES.txt"
+          grep -q '<project_license>Unlicense</project_license>' "$app/share/metainfo/ch.lkmc.amberfader.metainfo.xml"
 
       # Chromium's renderers run in a sub-sandbox that the Flatpak portal
       # starts, which needs a session bus, as every desktop session has.

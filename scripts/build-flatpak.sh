@@ -6,7 +6,7 @@
 # BaseApp.
 #
 #   dist/flatpak/src/wheels/   amberfader + jsonschema and its dependencies
-#   dist/flatpak/src/          desktop entry and hicolor icons
+#   dist/flatpak/src/          desktop entry, AppStream metainfo and hicolor icons
 #
 # Between building and exporting, it writes the license notices for the
 # finished tree to /app/share/doc/amberfader/: Third-Party-Notices.txt,
@@ -56,6 +56,7 @@ uv tool run --python "$PYTHON_VERSION" pip download --quiet --only-binary=:all: 
   --dest "$SRC/wheels" -r "$SRC/requirements.txt"
 
 cp packaging/linux/"$APP_ID".desktop "$SRC/"
+cp packaging/flatpak/"$APP_ID".metainfo.xml "$SRC/"
 cp -r packaging/icons/hicolor "$SRC/"
 
 echo "-- flatpak-builder"
