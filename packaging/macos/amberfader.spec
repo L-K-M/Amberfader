@@ -4,6 +4,7 @@
 # with its QtWebEngineProcess.app helper, resources and locales.
 import os
 import re
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files
@@ -26,6 +27,12 @@ a = Analysis(
     hiddenimports=["amberfader.embedded.selftest"],
     excludes=["tkinter"],
 )
+# License notices for exactly what Analysis collected, as data, so BUNDLE
+# seals them in Contents/Resources (packaging/macos/third_party_notices.py).
+sys.path.insert(0, SPECPATH)
+from third_party_notices import notices_datas  # noqa: E402
+
+a.datas += notices_datas(a, workpath, "Amberfader.app")
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz, a.scripts, [],

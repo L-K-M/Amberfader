@@ -6,10 +6,15 @@
 # BaseApp.
 #
 #   dist/flatpak/src/wheels/   amberfader + jsonschema and its dependencies
-#   dist/flatpak/src/          desktop entry and hicolor icons
+#   dist/flatpak/src/          desktop entry, AppStream metainfo and hicolor icons
+#
+# Between building and exporting, it writes the license notices for the
+# finished tree to /app/share/doc/amberfader/: Third-Party-Notices.txt,
+# Rust-Licenses.html and SOURCES.txt.
 #
 # Usage: scripts/build-flatpak.sh <path-to-amberfader.whl>
-# Needs: flatpak, flatpak-builder, uv, network access (Flathub, PyPI).
+# Needs: flatpak, flatpak-builder, uv, python3 (3.11+), network access
+# (Flathub, PyPI).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -21,7 +26,7 @@ BUILD="dist/flatpak/build"
 REPO="dist/flatpak/repo"
 FLATHUB_REPO=https://dl.flathub.org/repo/flathub.flatpakrepo
 
-for tool in flatpak flatpak-builder uv; do
+for tool in flatpak flatpak-builder uv python3; do
   command -v "$tool" >/dev/null 2>&1 || { echo "!! $tool not installed" >&2; exit 1; }
 done
 [[ -f $WHEEL ]] || { echo "!! no wheel at $WHEEL" >&2; exit 1; }
@@ -51,11 +56,61 @@ uv tool run --python "$PYTHON_VERSION" pip download --quiet --only-binary=:all: 
   --dest "$SRC/wheels" -r "$SRC/requirements.txt"
 
 cp packaging/linux/"$APP_ID".desktop "$SRC/"
+cp packaging/flatpak/"$APP_ID".metainfo.xml "$SRC/"
 cp -r packaging/icons/hicolor "$SRC/"
 
 echo "-- flatpak-builder"
+# Build and finish without exporting, so the notices below go in first.
 flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse \
-  --force-clean --repo="$REPO" "$BUILD" "$MANIFEST"
+  --force-clean "$BUILD" "$MANIFEST"
+
+echo "-- license notices"
+# The bundle carries Amberfader's wheels and both BaseApps it merges (PySide6,
+# Qt WebEngine and their libraries); they keep their own licenses. Scan the
+# tree after the BaseApp's cleanup, so only what ships is listed. The
+# generator fails on a package without license text or with a version its
+# overrides were not checked for. SOURCES.txt names every bundled module's
+# exact source (flatpak-sources.py fails on an unpinned one).
+DOC="$BUILD/files/share/doc/amberfader"
+mkdir -p "$DOC"
+SITE_ARGS=()
+for site in "$BUILD"/files/lib/python3.*/site-packages; do SITE_ARGS+=(--path "$site"); done
+python3 -I scripts/python-notices.py "${SITE_ARGS[@]}" --own amberfader \
+  --overrides packaging/licenses/python-notices-flatpak.toml \
+  --rust-licenses packaging/licenses/Rust-Licenses.html \
+  --title "Amberfader's Flatpak bundles the software below, including what the io.qt.PySide.BaseApp and io.qt.qtwebengine.BaseApp it is built on add to /app." \
+  --out "$DOC/Third-Party-Notices.txt"
+python3 -I scripts/flatpak-sources.py "$BUILD/files" --app Amberfader --out "$DOC/SOURCES.txt"
+# python-notices-flatpak.toml took the BaseApp libraries' texts at these
+# versions; a BaseApp update must fail here until someone re-checks them.
+# The BaseApps' recorded manifests keep no git tags: flatpak-builder stores
+# each tag as "commit" with the tag object's id: the unpeeled line of
+# `git ls-remote <url> refs/tags/<tag>`, not the peeled ^{} commit the TOML
+# names. These are qtwebengine and qtwebview v6.11.1, pyside-setup v6.11.2
+# and snappy 1.2.2 (a lightweight tag, so the two ids are the same).
+for pin in "qtwebengine.git commit 7aa0d2a34896cfbe88ce0e9ea69bb4e943e1c998" \
+    "qtwebview.git commit be41cd167b81b04eaeab943af17885935471b590" \
+    "pyside-setup.git commit bd13ae01c34bd018aa53f29b6044043a255cf9e0" \
+    "snappy.git commit 6af9287fbdb913f0794d0148c6aa43b58e63c8e3" \
+    krb5-1.22.2.tar.gz libevent-2.1.13-stable.tar.gz zlib-1.3.2.tar.gz \
+    pciutils-3.15.0.tar.gz re2-2025-11-05.tar.gz; do
+  grep -qF "$pin" "$DOC/SOURCES.txt" || {
+    echo "!! BaseApp module changed ($pin): re-check packaging/licenses/python-notices-flatpak.toml" >&2
+    cat "$DOC/SOURCES.txt" >&2
+    exit 1
+  }
+done
+[[ -e "$BUILD/files/lib/libLLVM.so.21.1" ]] ||
+  { echo "!! BaseApp LLVM changed (no libLLVM.so.21.1): re-check packaging/licenses/python-notices-flatpak.toml" >&2; exit 1; }
+# The QtWebEngine BaseApp converts the SDK's Hunspell dictionaries, each under
+# its own license, into spell-check dictionaries that Amberfader never loads.
+# The notices above do not cover them, so none may ship.
+BDIC="$(find "$BUILD/files" -name '*.bdic' -print -quit)"
+[[ -z $BDIC ]] ||
+  { echo "!! BaseApp spell-check dictionaries in the bundle (${BDIC#"$BUILD/"}): drop them in the manifest's cleanup-commands" >&2; exit 1; }
+
+echo "-- export"
+flatpak-builder --user --disable-rofiles-fuse --export-only --repo="$REPO" "$BUILD" "$MANIFEST"
 
 VERSION="$(basename "$WHEEL" | sed -n 's/^amberfader-\([^-]*\)-.*\.whl$/\1/p')"
 OUT="dist/amberfader_${VERSION:-local}.flatpak"

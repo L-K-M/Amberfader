@@ -86,6 +86,19 @@ jobs:
         # Debian versions must start with a digit.
         run: scripts/build-deb.sh "${GITHUB_REF_NAME#v}" dist
 
+      # This job builds its own .deb; check the notices in the one it uploads.
+      - name: Check the license notices in the .deb
+        run: |
+          dpkg-deb -x dist/amberfader_*_*.deb "$RUNNER_TEMP/deb"
+          doc="$RUNNER_TEMP/deb/usr/share/doc/amberfader"
+          for f in copyright Third-Party-Notices.txt Rust-Licenses.html SOURCES.txt; do
+            test -s "$doc/$f" || { echo "::error::$f missing or empty"; exit 1; }
+          done
+          grep -q '^PySide6_Essentials 6\.' "$doc/Third-Party-Notices.txt"
+          grep -q '^FFmpeg, version ' "$doc/Third-Party-Notices.txt"
+          grep -q '^rpds-py ' "$doc/Third-Party-Notices.txt"
+          grep -qx 'License: Unlicense' "$doc/copyright"
+
       - name: Build .flatpak
         # flatpak-builder was never installed here, so the old `|| warning`
         # skipped the artifact on every release. Install it and fail hard —
@@ -99,6 +112,21 @@ jobs:
           sudo apt-get update && sudo apt-get install --no-install-recommends -y flatpak flatpak-builder elfutils
           uv build --wheel --out-dir dist/wheel
           scripts/build-flatpak.sh dist/wheel/amberfader-*.whl
+
+      # This job builds its own bundle; install it to check its notices.
+      - name: Check the license notices in the .flatpak
+        run: |
+          flatpak install --user -y --noninteractive dist/amberfader_*.flatpak
+          app="$(flatpak info --user --show-location ch.lkmc.amberfader)/files"
+          doc="$app/share/doc/amberfader"
+          for f in Third-Party-Notices.txt Rust-Licenses.html SOURCES.txt; do
+            test -s "$doc/$f" || { echo "::error::$f missing or empty"; exit 1; }
+          done
+          grep -q '^PySide6' "$doc/Third-Party-Notices.txt"
+          grep -q '^Qt WebEngine, Qt PDF and Qt WebView ' "$doc/Third-Party-Notices.txt"
+          grep -q '^rpds-py ' "$doc/Third-Party-Notices.txt"
+          grep -q 'io.qt.qtwebengine.BaseApp' "$doc/SOURCES.txt"
+          grep -q '<project_license>Unlicense</project_license>' "$app/share/metainfo/ch.lkmc.amberfader.metainfo.xml"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

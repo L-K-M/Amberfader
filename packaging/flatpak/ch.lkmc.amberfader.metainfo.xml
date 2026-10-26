@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata for the Flatpak. project_license is Amberfader's own
+     license (LICENSE); the bundled components' licenses are in
+     /app/share/doc/amberfader/Third-Party-Notices.txt. -->
+<component type="desktop-application">
+  <id>ch.lkmc.amberfader</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Unlicense</project_license>
+  <name>Amberfader</name>
+  <summary>Compact classic-style player for YouTube Music</summary>
+  <description>
+    <p>
+      Amberfader plays YouTube Music in its own embedded browser (Qt WebEngine)
+      and shows a small player with artwork, playback controls, likes, song
+      search and skinnable faces. Sign in once in the YouTube Music window.
+    </p>
+  </description>
+  <developer id="ch.lkmc">
+    <name>L-K-M</name>
+  </developer>
+  <url type="homepage">https://github.com/L-K-M/Amberfader</url>
+  <launchable type="desktop-id">ch.lkmc.amberfader.desktop</launchable>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+    <category>Music</category>
+    <category>Player</category>
+  </categories>
+</component>

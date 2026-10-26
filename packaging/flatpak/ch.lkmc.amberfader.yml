@@ -34,6 +34,10 @@ build-options:
     BASEAPP_DISABLE_NUMPY: '1'
 cleanup-commands:
   - /app/cleanup-BaseApp.sh
+  # The QtWebEngine BaseApp's spell-check dictionaries, converted from the
+  # SDK's Hunspell dictionaries under many licenses; Amberfader never turns
+  # spell checking on (build-flatpak.sh fails if any remain).
+  - rm -rf /app/qtwebengine_dictionaries /app/share/locale/*/qtwebengine_dictionaries
 modules:
   - name: amberfader
     buildsystem: simple
@@ -41,6 +45,7 @@ modules:
       # build-flatpak.sh downloaded every wheel for the runtime's Python.
       - pip3 install --no-index --no-deps --prefix=${FLATPAK_DEST} wheels/*.whl
       - install -Dm644 ch.lkmc.amberfader.desktop -t ${FLATPAK_DEST}/share/applications/
+      - install -Dm644 ch.lkmc.amberfader.metainfo.xml -t ${FLATPAK_DEST}/share/metainfo/
       - mkdir -p ${FLATPAK_DEST}/share/icons && cp -r hicolor ${FLATPAK_DEST}/share/icons/
     sources:
       - type: dir

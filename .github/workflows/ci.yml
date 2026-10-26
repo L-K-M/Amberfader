@@ -46,6 +46,14 @@ jobs:
       - name: Check version files stay in sync
         run: npm run version:check
 
+      # Amberfader's own code is Unlicense (LICENSE); the README and the
+      # Flatpak's AppStream metadata must say so.
+      - name: Check license statements
+        run: |
+          grep -qx '## License' README.md
+          grep -q 'Unlicense' README.md
+          grep -q '<project_license>Unlicense</project_license>' packaging/flatpak/ch.lkmc.amberfader.metainfo.xml
+
   python:
     name: Python app lint and unit tests
     runs-on: ubuntu-24.04
@@ -170,14 +178,43 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      # uv.lock's versions (hash-checked), which the bundled notices are
+      # checked for; uv only exports them, the python.org interpreter installs.
       - name: Install Amberfader and PyInstaller
-        run: python -m pip install . "pyinstaller==6.22.3"
+        run: |
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt \
+            --output-file "$RUNNER_TEMP/requirements.txt"
+          python -m pip install --require-hashes -r "$RUNNER_TEMP/requirements.txt"
+          python -m pip install --no-deps .
+          python -m pip install "pyinstaller==6.22.3"
 
       - name: Build Amberfader.app and the .dmg
         run: scripts/build-macos.sh "$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' native/amberfader/__init__.py)" dist
 
       - name: Self-test the frozen app
         run: dist/macos/dist/Amberfader.app/Contents/MacOS/Amberfader --self-test
+
+      # Qt, Qt WebEngine, PySide6, the Python packages and CPython keep their
+      # own licenses; their notices must be inside both apps in the .dmg.
+      - name: Check the bundled license notices
+        run: |
+          check() {
+            local resources="$1/Contents/Resources"
+            for f in Third-Party-Notices.txt Rust-Licenses.html; do
+              test -s "$resources/$f" || { echo "::error::$1: $f missing or empty"; exit 1; }
+            done
+            grep -q '^PySide6_Essentials 6\.' "$resources/Third-Party-Notices.txt"
+            grep -q '^CPython 3\.' "$resources/Third-Party-Notices.txt"
+          }
+          mount="$RUNNER_TEMP/dmg"
+          mkdir -p "$mount"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" dist/Amberfader-*-macos-arm64.dmg
+          check "$mount/Amberfader.app"
+          check "$mount/Amberfader Face Editor.app"
+          grep -q '^PySide6_Addons 6\.' "$mount/Amberfader.app/Contents/Resources/Third-Party-Notices.txt"
+          hdiutil detach "$mount"
 
       - name: Upload .dmg
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -258,6 +295,20 @@ jobs:
         run: |
           dpkg-deb --info dist/amberfader_*_*.deb
           dpkg-deb --contents dist/amberfader_*_*.deb | grep -E "applications|bin/amberfader|icon"
+
+      # Qt, PySide6, FFmpeg, ICU and the Python packages keep their own
+      # licenses; their notices must be inside the package.
+      - name: Check the bundled license notices
+        run: |
+          dpkg-deb -x dist/amberfader_*_*.deb "$RUNNER_TEMP/deb"
+          doc="$RUNNER_TEMP/deb/usr/share/doc/amberfader"
+          for f in copyright Third-Party-Notices.txt Rust-Licenses.html SOURCES.txt; do
+            test -s "$doc/$f" || { echo "::error::$f missing or empty"; exit 1; }
+          done
+          grep -q '^PySide6_Essentials 6\.' "$doc/Third-Party-Notices.txt"
+          grep -q '^FFmpeg, version ' "$doc/Third-Party-Notices.txt"
+          grep -q '^rpds-py ' "$doc/Third-Party-Notices.txt"
+          grep -qx 'License: Unlicense' "$doc/copyright"
 
       # Hints and "will be fatal in the future" errors exit 0, so any output fails.
       - name: Validate the desktop entry
@@ -354,6 +405,12 @@ jobs:
           sudo apt-get install -y -qq --no-install-recommends flatpak flatpak-builder elfutils dbus >/dev/null
           scripts/build-flatpak.sh dist/amberfader-*.whl
 
+      # project_license states Amberfader's own license (Amberfader-m5).
+      - name: Validate the AppStream metadata
+        run: |
+          sudo apt-get install -y -qq --no-install-recommends appstream >/dev/null
+          appstreamcli validate --no-net packaging/flatpak/ch.lkmc.amberfader.metainfo.xml
+
       - name: Install the bundle and check its permissions
         run: |
           flatpak install --user -y --noninteractive dist/amberfader_*.flatpak
@@ -362,6 +419,21 @@ jobs:
           grep -q '^shared=.*network' permissions.txt
           grep -q '^sockets=.*pulseaudio' permissions.txt
           grep -q '^filesystems=.*xdg-run/amberfader:create' permissions.txt
+
+      # Amberfader's packages and the BaseApps' PySide6, Qt WebEngine and
+      # libraries keep their own licenses; their notices must be in the bundle.
+      - name: Check the bundled license notices
+        run: |
+          app="$(flatpak info --user --show-location ch.lkmc.amberfader)/files"
+          doc="$app/share/doc/amberfader"
+          for f in Third-Party-Notices.txt Rust-Licenses.html SOURCES.txt; do
+            test -s "$doc/$f" || { echo "::error::$f missing or empty"; exit 1; }
+          done
+          grep -q '^PySide6' "$doc/Third-Party-Notices.txt"
+          grep -q '^Qt WebEngine, Qt PDF and Qt WebView ' "$doc/Third-Party-Notices.txt"
+          grep -q '^rpds-py ' "$doc/Third-Party-Notices.txt"
+          grep -q 'io.qt.qtwebengine.BaseApp' "$doc/SOURCES.txt"
+          grep -q '<project_license>Unlicense</project_license>' "$app/share/metainfo/ch.lkmc.amberfader.metainfo.xml"
 
       # Chromium's renderers run in a sub-sandbox that the Flatpak portal
       # starts, which needs a session bus, as every desktop session has.
