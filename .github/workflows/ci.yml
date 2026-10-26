@@ -276,6 +276,20 @@ jobs:
           dpkg-deb --info dist/amberfader_*_*.deb
           dpkg-deb --contents dist/amberfader_*_*.deb | grep -E "applications|bin/amberfader|icon"
 
+      # Qt, PySide6, FFmpeg, ICU and the Python packages keep their own
+      # licenses; their notices must be inside the package.
+      - name: Check the bundled license notices
+        run: |
+          dpkg-deb -x dist/amberfader_*_*.deb "$RUNNER_TEMP/deb"
+          doc="$RUNNER_TEMP/deb/usr/share/doc/amberfader"
+          for f in copyright Third-Party-Notices.txt Rust-Licenses.html SOURCES.txt; do
+            test -s "$doc/$f" || { echo "::error::$f missing or empty"; exit 1; }
+          done
+          grep -q '^PySide6_Essentials 6\.' "$doc/Third-Party-Notices.txt"
+          grep -q '^FFmpeg, version ' "$doc/Third-Party-Notices.txt"
+          grep -q '^rpds-py ' "$doc/Third-Party-Notices.txt"
+          grep -qx 'License: Unlicense' "$doc/copyright"
+
       # Hints and "will be fatal in the future" errors exit 0, so any output fails.
       - name: Validate the desktop entry
         run: |

@@ -8,6 +8,8 @@
 #   /etc/apparmor.d/amberfader        lets Chromium's sandbox use user namespaces
 #   /usr/share/applications/ch.lkmc.amberfader.desktop
 #   /usr/share/icons/hicolor/<n>x<n>/apps/ch.lkmc.amberfader.png (scripts/render_icons.py)
+#   /usr/share/doc/amberfader/        copyright (DEP-5), Third-Party-Notices.txt,
+#                                     Rust-Licenses.html, SOURCES.txt
 # Depends: the launcher's Python ABI, libdbus for native menus, and the system
 # libraries Qt WebEngine links against. PySide6, including Qt WebEngine,
 # arrives inside the pip --target tree.
@@ -54,6 +56,22 @@ else
 fi
 # Distutils metadata dirs are noise for end users; keep the code only.
 find "$LIB" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+
+# License notices for everything the tree bundles: Qt, Qt WebEngine and
+# PySide6, FFmpeg, ICU, the Python packages, and the Rust code in rpds-py.
+# The generator fails on a package without license text or with a version
+# its overrides were not checked for. The DEP-5 copyright file declares the
+# bundled parts, SOURCES.txt names the exact sources of the copyleft ones.
+DOC="$STAGE/usr/share/doc/amberfader"
+mkdir -p "$DOC"
+"$BUILD_PYTHON" -I scripts/python-notices.py --path "$LIB" --own amberfader \
+  --overrides packaging/licenses/python-notices.toml \
+  --rust-licenses packaging/licenses/Rust-Licenses.html \
+  --title "Amberfader's .deb bundles the software below in /opt/amberfader/lib." \
+  --out "$DOC/Third-Party-Notices.txt"
+"$BUILD_PYTHON" -I scripts/deb-copyright.py generate packaging/licenses/deb-copyright.json \
+  --copyright-out "$DOC/copyright" --sources-out "$DOC/SOURCES.txt"
+"$BUILD_PYTHON" -I scripts/deb-copyright.py check "$DOC/copyright" --no-common-licenses
 
 # A Python script rather than a shell wrapper: the AppArmor profile attaches
 # to this path, and the interpreter keeps it, because no further exec follows.

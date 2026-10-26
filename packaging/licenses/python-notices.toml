@@ -1,0 +1,82 @@
+# Overrides for scripts/python-notices.py, which writes Third-Party-Notices.txt
+# for the .deb (scripts/build-deb.sh scans /opt/amberfader/lib) and for both
+# macOS apps (packaging/macos/third_party_notices.py scans what PyInstaller
+# collected). The Flatpak has its own file, python-notices-flatpak.toml.
+# Format: scripts/python-notices.py. Paths are relative to this file; where
+# each text comes from and how to regenerate it: README.md here.
+#
+# Every table pins the exact versions it was checked for. The deb and the
+# macOS apps install uv.lock's versions, so a dependency bump fails their
+# build until someone re-checks the native content and texts and updates the
+# pins. Unused covers patterns only warn: the Linux and macOS wheels differ.
+
+[distribution.pyside6-essentials]
+# The Qt for Python wheels publish no license texts. Qt and PySide6 are
+# available under LGPL-3.0-only, GPL-2.0-only or GPL-3.0-only; LGPL-3.0 adds
+# permissions to GPL-3.0, so both ship, with GPL-2.0 for the other option.
+# Qt's tools (designer, linguist, qml*) are GPL-3.0-only WITH
+# Qt-GPL-exception-1.0. qt-6.11-attributions.txt lists Qt's third-party code
+# with its texts (SQLite in the QtSql plugin, zlib in Qt Core on macOS). The
+# Linux wheel also ships ICU 73.2 (PySide6/Qt/lib/libicu*.so.73) for Qt Core.
+# Exact version: the source links name it.
+versions = ["6.11.2"]
+files = ["LGPL-3.0.txt", "GPL-3.0.txt", "GPL-2.0.txt", "Qt-GPL-exception-1.0.txt",
+         "qt-6.11-attributions.txt", "ICU-73.2-LICENSE.txt"]
+# Where the Corresponding Source is (GPL-3.0 section 6(d) "clear directions").
+# Qt removes old minors from official_releases/qt; archive/qt keeps them.
+source = "https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.2-src/pyside-setup-everywhere-src-6.11.2.tar.xz and https://download.qt.io/archive/qt/6.11/6.11.2/single/qt-everywhere-src-6.11.2.tar.xz"
+covers = ["native:PySide6/Qt/*", "native:PySide6/libpyside6*", "sqlite", "zlib",
+          "native:PySide6/assistant", "native:PySide6/designer", "native:PySide6/l*",
+          "native:PySide6/qml*", "native:PySide6/svgtoqml"]
+
+[distribution.pyside6-addons]
+# Same Qt release and terms as Essentials. Adds Qt WebEngine (Chromium with
+# BoringSSL, libxslt, libxml, Expat, SQLite, zlib and more) and Qt
+# Multimedia's FFmpeg 7.1.3 (LGPL-2.1-or-later, libav*/libsw* on Linux), all
+# with their texts in the attributions. It also carries Qt's GPL-3.0-only
+# add-on modules (Charts, Graphs, Quick 3D, Virtual Keyboard, ...), which
+# Amberfader does not use; the GPL-3.0 text covers them.
+versions = ["6.11.2"]
+files = ["LGPL-3.0.txt", "GPL-3.0.txt", "GPL-2.0.txt", "Qt-GPL-exception-1.0.txt",
+         "qt-6.11-attributions.txt"]
+source = "https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.2-src/pyside-setup-everywhere-src-6.11.2.tar.xz and https://download.qt.io/archive/qt/6.11/6.11.2/single/qt-everywhere-src-6.11.2.tar.xz; FFmpeg 7.1.3: https://ffmpeg.org/releases/ffmpeg-7.1.3.tar.xz (Qt's build scripts: https://code.qt.io/cgit/qt/qt5.git/tree/coin/provisioning?h=v6.11.2)"
+# balsam*/qsb are Qt Quick 3D and shader tools (GPL-3.0, as above).
+covers = ["native:PySide6/Qt/*", "native:PySide6/balsam*", "native:PySide6/qsb",
+          "boringssl", "libxslt", "libxml2", "expat", "sqlite", "zlib"]
+
+[distribution.shiboken6]
+# Same terms and source package as PySide6.
+versions = ["6.11.2"]
+files = ["LGPL-3.0.txt", "GPL-3.0.txt", "GPL-2.0.txt"]
+source = "https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.2-src/pyside-setup-everywhere-src-6.11.2.tar.xz"
+covers = ["native:shiboken6/libshiboken6*"]
+
+[distribution.rpds-py]
+# PyO3 extension: the crate texts come from the sdist's Cargo.lock
+# (wheel-crates.py rpds-py==2026.6.3); the Rust standard library of rustc
+# 1.96.0, which built every 2026.6.3 wheel, ships as Rust-Licenses.html.
+versions = ["2026.6.3"]
+files = ["rpds-py-2026.6.3-crates.txt"]
+
+[distribution.pyinstaller]
+# macOS apps only: PyInstaller's bootloader and loader scripts ship in every
+# frozen app. Its metadata classifier maps to GPL-2.0-only; COPYING.txt says
+# GPL-2.0-or-later with the Bootloader exception, which allows distributing
+# the frozen program under any terms.
+versions = ["6.22.3"]
+license = "GPL-2.0-or-later WITH Bootloader-exception"
+
+[cpython]
+# macOS apps only: the python.org interpreter (actions/setup-python 3.12 in
+# CI) that PyInstaller freezes into both apps. Its LICENSE.txt (PSF) is added
+# automatically; this adds Doc/license.rst's "Licenses and Acknowledgements
+# for Incorporated Software" (fetch-cpython-notices.py 3.12.16).
+versions = ["3.12.*"]
+files = ["cpython-3.12-incorporated.txt"]
+covers = [
+  "native:Python",                                   # the framework's libpython: CPython itself
+  "openssl", "native:libssl*", "native:libcrypto*",  # OpenSSL 3 (Apache-2.0), in the Incorporated Software text
+  "expat", "mpdecimal", "libffi", "zlib",            # sections of the Incorporated Software text
+  "sqlite", "liblzma",                               # public domain / 0BSD: no notice required
+  "bzip2",                                           # its license requires notices in source copies only
+]

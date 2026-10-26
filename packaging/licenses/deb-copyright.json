@@ -1,0 +1,125 @@
+{
+  "_comment": [
+    "What scripts/build-deb.sh writes to usr/share/doc/amberfader/copyright (DEP-5) and",
+    "SOURCES.txt, through scripts/deb-copyright.py. Third-Party-Notices.txt next to them",
+    "comes from scripts/python-notices.py. Paths are relative to this file.",
+    "deb-copyright.py writes the component paragraphs sorted by name, and in DEP-5 the",
+    "last matching Files paragraph wins: the names keep narrower paths after wider ones.",
+    "The FFmpeg and ICU versions are the ones the PySide6 6.11.2 wheels bundle; re-check",
+    "them with every PySide6 bump (python-notices.toml pins the version)."
+  ],
+  "package": "amberfader",
+  "upstream_name": "Amberfader",
+  "source": "https://github.com/L-K-M/Amberfader",
+  "own": {
+    "copyright": [
+      "2026 L-K-M"
+    ],
+    "license": "Unlicense",
+    "license_files": [
+      "../../LICENSE"
+    ]
+  },
+  "components": [
+    {
+      "name": "Bundled Python packages",
+      "license": "LicenseRef-Bundled-Python-Packages",
+      "license_text": "Each package keeps its own license (MIT, PSF-2.0, LGPL-3.0 and others). Their full license texts, copyright notices and source links are in Third-Party-Notices.txt, next to this file; the Rust standard library compiled into rpds-py has its notices in Rust-Licenses.html.",
+      "copyright": [
+        "The authors of each package, as listed in Third-Party-Notices.txt"
+      ],
+      "files": [
+        "opt/amberfader/lib/*"
+      ]
+    },
+    {
+      "name": "PySide6, shiboken6 and Qt",
+      "version": "6.11.2",
+      "license": "(LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only) AND GPL-3.0-only AND GPL-3.0-only WITH Qt-GPL-exception-1.0",
+      "copyright": [
+        "The Qt Company Ltd. and other contributors"
+      ],
+      "source_url": "https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.2-src/pyside-setup-everywhere-src-6.11.2.tar.xz",
+      "sources": [
+        "Qt 6.11.2: https://download.qt.io/archive/qt/6.11/6.11.2/single/qt-everywhere-src-6.11.2.tar.xz"
+      ],
+      "license_files": {
+        "LGPL-3.0-only": [
+          "LGPL-3.0.txt",
+          "GPL-3.0.txt"
+        ],
+        "GPL-2.0-only": [
+          "GPL-2.0.txt"
+        ],
+        "GPL-3.0-only": [
+          "GPL-3.0.txt"
+        ],
+        "GPL-3.0-only WITH Qt-GPL-exception-1.0": [
+          "GPL-3.0.txt",
+          "Qt-GPL-exception-1.0.txt"
+        ]
+      },
+      "files": [
+        "opt/amberfader/lib/PySide6/*",
+        "opt/amberfader/lib/shiboken6/*"
+      ],
+      "comment": "Qt and PySide6 are available under LGPL-3.0-only, GPL-2.0-only or GPL-3.0-only. Qt's add-on modules that are only available under GPL-3.0-only (Charts, Graphs, Quick 3D, Virtual Keyboard and others) and its tools (designer, linguist, qml and others: GPL-3.0-only WITH Qt-GPL-exception-1.0) are included. Qt WebEngine includes Chromium; Third-Party-Notices.txt lists Qt's third-party components with their texts. The Qt libraries are separate shared objects and can be replaced."
+    },
+    {
+      "name": "Python package amberfader",
+      "license": "Unlicense",
+      "copyright": [
+        "2026 L-K-M"
+      ],
+      "license_files": [
+        "../../LICENSE"
+      ],
+      "files": [
+        "opt/amberfader/lib/amberfader/*",
+        "opt/amberfader/lib/amberfader-*.dist-info/*",
+        "opt/amberfader/lib/bin/amberfader*"
+      ],
+      "comment": "Amberfader's own code, installed with its dependencies."
+    },
+    {
+      "name": "Qt Multimedia's FFmpeg",
+      "version": "7.1.3",
+      "license": "LGPL-2.1-or-later",
+      "copyright": [
+        "2000-2023 the FFmpeg developers"
+      ],
+      "source_url": "https://ffmpeg.org/releases/ffmpeg-7.1.3.tar.xz",
+      "sources": [
+        "Qt's build scripts: https://code.qt.io/cgit/qt/qt5.git/tree/coin/provisioning?h=v6.11.2"
+      ],
+      "license_files": [
+        "LGPL-2.1.txt"
+      ],
+      "files": [
+        "opt/amberfader/lib/PySide6/Qt/lib/libavcodec.so*",
+        "opt/amberfader/lib/PySide6/Qt/lib/libavformat.so*",
+        "opt/amberfader/lib/PySide6/Qt/lib/libavutil.so*",
+        "opt/amberfader/lib/PySide6/Qt/lib/libswresample.so*",
+        "opt/amberfader/lib/PySide6/Qt/lib/libswscale.so*"
+      ],
+      "comment": "Built by Qt without FFmpeg's optional GPL and LGPL-3.0 parts. Some FFmpeg files are under BSD, ISC, MIT or MPL-2.0 terms; Third-Party-Notices.txt has them in Qt's FFmpeg attribution. The libraries are separate shared objects and can be replaced."
+    },
+    {
+      "name": "Qt's ICU",
+      "version": "73.2",
+      "license": "Unicode-DFS-2016",
+      "copyright": [
+        "1991-2023 Unicode, Inc.",
+        "1995-2016 International Business Machines Corporation and others"
+      ],
+      "source_url": "https://github.com/unicode-org/icu/releases/tag/release-73-2",
+      "license_files": [
+        "ICU-73.2-LICENSE.txt"
+      ],
+      "files": [
+        "opt/amberfader/lib/PySide6/Qt/lib/libicu*.so.*"
+      ],
+      "comment": "ICU's libraries and data for Qt Core. The license text includes the terms of the third-party code and data ICU contains."
+    }
+  ]
+}

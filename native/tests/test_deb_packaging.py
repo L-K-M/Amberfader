@@ -27,6 +27,9 @@ def build_environment(tmp_path):
 function /usr/bin/python3 {
   if [[ "$1" == -c ]]; then
     printf '%s\\n' "$AF_TEST_SYSTEM_VERSION"
+  elif [[ "$1" == -I ]]; then
+    # The license notice generators, which read the installed tree.
+    printf '%s\\n' "$*" >> "$AF_TEST_NOTICES_LOG"
   else
     printf '%s\\n' /usr/bin/python3 "$@" > "$AF_TEST_INSTALL_LOG"
   fi
@@ -56,6 +59,7 @@ dpkg-deb() { :; }
         "BASH_ENV": str(initialization),
         "AF_TEST_INSTALL_LOG": str(tmp_path / "install.log"),
         "AF_TEST_UV_LOG": str(tmp_path / "uv.log"),
+        "AF_TEST_NOTICES_LOG": str(tmp_path / "notices.log"),
     }
     return root, env
 
@@ -112,6 +116,28 @@ def test_deb_installs_for_launcher_interpreter_and_declares_its_abi(
         "amberfader", "amberfader-face-editor",
     ]
     assert not (stage / "usr/lib/mozilla").exists()
+
+
+def test_deb_ships_license_notices_for_the_installed_tree(build_environment):
+    root, env = build_environment
+    env.update(AF_TEST_BACKEND="uv", AF_TEST_SYSTEM_VERSION="3.12")
+    result = run_builder(root, env)
+    assert result.returncode == 0, result.stderr
+
+    lib = "dist/deb/stage/opt/amberfader/lib"
+    doc = "dist/deb/stage/usr/share/doc/amberfader"
+    calls = Path(env["AF_TEST_NOTICES_LOG"]).read_text().splitlines()
+    assert calls[0].startswith(f"-I scripts/python-notices.py --path {lib} --own amberfader ")
+    assert "--overrides packaging/licenses/python-notices.toml" in calls[0]
+    assert "--rust-licenses packaging/licenses/Rust-Licenses.html" in calls[0]
+    assert calls[0].endswith(f" --out {doc}/Third-Party-Notices.txt")
+    assert calls[1] == (
+        "-I scripts/deb-copyright.py generate packaging/licenses/deb-copyright.json "
+        f"--copyright-out {doc}/copyright --sources-out {doc}/SOURCES.txt"
+    )
+    assert calls[2] == f"-I scripts/deb-copyright.py check {doc}/copyright --no-common-licenses"
+    for path in (calls[0].split()[1], calls[1].split()[1], "packaging/licenses/deb-copyright.json"):
+        assert (ROOT / path).is_file()
 
 
 def test_deb_rejects_unsupported_launcher_python_before_installing(build_environment):
