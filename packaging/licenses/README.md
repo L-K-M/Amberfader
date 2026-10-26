@@ -1,9 +1,10 @@
 # Third-party license texts
 
 The packages bundle third-party code whose license texts the build adds to
-each artifact's `Third-Party-Notices.txt`. These files are those texts, as
-published upstream; none of them is Amberfader's own license (that is
-[`LICENSE`](../../LICENSE), the Unlicense).
+each artifact's `Third-Party-Notices.txt`. The text files listed under
+Provenance are those texts, as published upstream; none of them is
+Amberfader's own license (that is [`LICENSE`](../../LICENSE), the Unlicense).
+The TOML and JSON files below configure the generators.
 
 | File | What generates or reads it |
 | --- | --- |

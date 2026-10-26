@@ -220,11 +220,12 @@ ship inside each package:
 - macOS: `Contents/Resources/Third-Party-Notices.txt` and
   `Rust-Licenses.html` in each app
 
-`Third-Party-Notices.txt` and `SOURCES.txt` name the exact sources of the
-LGPL and GPL components, such as
+`Third-Party-Notices.txt` and `SOURCES.txt` name the exact sources of each
+package's LGPL and GPL components. For the deb and the macOS apps they include
 [PySide6 6.11.2](https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.2-src/pyside-setup-everywhere-src-6.11.2.tar.xz),
 [Qt 6.11.2](https://download.qt.io/archive/qt/6.11/6.11.2/single/qt-everywhere-src-6.11.2.tar.xz)
-and [FFmpeg 7.1.3](https://ffmpeg.org/releases/ffmpeg-7.1.3.tar.xz). Qt,
+and [FFmpeg 7.1.3](https://ffmpeg.org/releases/ffmpeg-7.1.3.tar.xz); the
+Flatpak's name the versions its BaseApps ship. Qt,
 PySide6 and FFmpeg ship as separate shared libraries, which you may replace
 with your own builds. Replacing a library in a macOS app breaks its ad-hoc
 signature; re-sign it with `codesign --force --deep --sign - <App>.app`.

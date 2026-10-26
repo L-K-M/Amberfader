@@ -96,8 +96,9 @@ Windows are out of scope.
   from what it really ships and fails on a component without license text
   or with a version its overrides in `packaging/licenses/` were not checked
   for. After a dependency or BaseApp bump, regenerate the texts as
-  `packaging/licenses/README.md` describes and update the pins; record gaps
-  as explicit, commented overrides. Keep the CI notice checks passing.
+  `packaging/licenses/README.md` describes, update the pins and the README's
+  source links; record gaps as explicit, commented overrides. Keep the CI
+  notice checks passing.
 
 ## Testing
 

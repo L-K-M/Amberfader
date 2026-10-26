@@ -84,9 +84,10 @@ python3 -I scripts/flatpak-sources.py "$BUILD/files" --app Amberfader --out "$DO
 # python-notices-flatpak.toml took the BaseApp libraries' texts at these
 # versions; a BaseApp update must fail here until someone re-checks them.
 # The BaseApps' recorded manifests keep no git tags: flatpak-builder stores
-# each tag as "commit" with the tag object's id (git ls-remote <url>
-# refs/tags/<tag>). These are qtwebengine and qtwebview v6.11.1,
-# pyside-setup v6.11.2 and snappy 1.2.2.
+# each tag as "commit" with the tag object's id: the unpeeled line of
+# `git ls-remote <url> refs/tags/<tag>`, not the peeled ^{} commit the TOML
+# names. These are qtwebengine and qtwebview v6.11.1, pyside-setup v6.11.2
+# and snappy 1.2.2 (a lightweight tag, so the two ids are the same).
 for pin in "qtwebengine.git commit 7aa0d2a34896cfbe88ce0e9ea69bb4e943e1c998" \
     "qtwebview.git commit be41cd167b81b04eaeab943af17885935471b590" \
     "pyside-setup.git commit bd13ae01c34bd018aa53f29b6044043a255cf9e0" \
