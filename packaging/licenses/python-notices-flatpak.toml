@@ -54,8 +54,9 @@ versions = ["2026.6.3"]
 files = ["rpds-py-2026.6.3-crates.txt"]
 
 [distribution.patchelf]
-# From the BaseApp: the patchelf binary (GPL-3.0-or-later; COPYING ships in
-# the wheel's dist-info) installed as /app/bin/patchelf.
+# From the BaseApp (GPL-3.0-or-later; COPYING ships in the dist-info). Its
+# module's cleanup removes /app/bin/patchelf, so only the metadata ships;
+# covers keeps the binary covered if a BaseApp update ships it again.
 versions = ["0.17.2.0"]
 source = "https://github.com/NixOS/patchelf/tree/0.17.2, packaged by https://pypi.org/project/patchelf/0.17.2.0/#files (sdist)"
 covers = ["native:*bin/patchelf"]

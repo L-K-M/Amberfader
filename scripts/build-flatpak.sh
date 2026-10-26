@@ -83,11 +83,21 @@ python3 -I scripts/python-notices.py "${SITE_ARGS[@]}" --own amberfader \
 python3 -I scripts/flatpak-sources.py "$BUILD/files" --app Amberfader --out "$DOC/SOURCES.txt"
 # python-notices-flatpak.toml took the BaseApp libraries' texts at these
 # versions; a BaseApp update must fail here until someone re-checks them.
-for pin in "qtwebengine.git tag v6.11.1" "qtwebview.git tag v6.11.1" "pyside-setup.git tag v6.11.2" \
+# The BaseApps' recorded manifests keep no git tags: flatpak-builder stores
+# each tag as "commit" with the tag object's id (git ls-remote <url>
+# refs/tags/<tag>). These are qtwebengine and qtwebview v6.11.1,
+# pyside-setup v6.11.2 and snappy 1.2.2.
+for pin in "qtwebengine.git commit 7aa0d2a34896cfbe88ce0e9ea69bb4e943e1c998" \
+    "qtwebview.git commit be41cd167b81b04eaeab943af17885935471b590" \
+    "pyside-setup.git commit bd13ae01c34bd018aa53f29b6044043a255cf9e0" \
+    "snappy.git commit 6af9287fbdb913f0794d0148c6aa43b58e63c8e3" \
     krb5-1.22.2.tar.gz libevent-2.1.13-stable.tar.gz zlib-1.3.2.tar.gz \
-    pciutils-3.15.0.tar.gz re2-2025-11-05.tar.gz "snappy.git tag 1.2.2"; do
-  grep -qF "$pin" "$DOC/SOURCES.txt" ||
-    { echo "!! BaseApp module changed ($pin): re-check packaging/licenses/python-notices-flatpak.toml" >&2; exit 1; }
+    pciutils-3.15.0.tar.gz re2-2025-11-05.tar.gz; do
+  grep -qF "$pin" "$DOC/SOURCES.txt" || {
+    echo "!! BaseApp module changed ($pin): re-check packaging/licenses/python-notices-flatpak.toml" >&2
+    cat "$DOC/SOURCES.txt" >&2
+    exit 1
+  }
 done
 [[ -e "$BUILD/files/lib/libLLVM.so.21.1" ]] ||
   { echo "!! BaseApp LLVM changed (no libLLVM.so.21.1): re-check packaging/licenses/python-notices-flatpak.toml" >&2; exit 1; }
