@@ -83,7 +83,7 @@ python3 -I scripts/python-notices.py "${SITE_ARGS[@]}" --own amberfader \
 python3 -I scripts/flatpak-sources.py "$BUILD/files" --app Amberfader --out "$DOC/SOURCES.txt"
 # python-notices-flatpak.toml took the BaseApp libraries' texts at these
 # versions; a BaseApp update must fail here until someone re-checks them.
-for pin in "qtwebengine.git tag v6.11.2" "qtwebview.git tag v6.11.2" "pyside-setup.git tag v6.11.2" \
+for pin in "qtwebengine.git tag v6.11.1" "qtwebview.git tag v6.11.1" "pyside-setup.git tag v6.11.2" \
     krb5-1.22.2.tar.gz libevent-2.1.13-stable.tar.gz zlib-1.3.2.tar.gz \
     pciutils-3.15.0.tar.gz re2-2025-11-05.tar.gz "snappy.git tag 1.2.2"; do
   grep -qF "$pin" "$DOC/SOURCES.txt" ||

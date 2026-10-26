@@ -75,10 +75,14 @@ covers = ["native:OpenGL/DLLS/*"]
 
 [[component]]
 # LGPL; the attributions list Chromium's third-party code with its texts.
+# io.qt.PySide.BaseApp 6.11 (PySide6 6.11.2) was built on the 6.11.1 build of
+# io.qt.qtwebengine.BaseApp, so the bundle ships Qt WebEngine 6.11.1 even
+# though that BaseApp's recipe has since moved to 6.11.2. The attributions
+# are Qt 6.11's documentation, which describes 6.11.2.
 name = "Qt WebEngine, Qt PDF and Qt WebView (io.qt.qtwebengine.BaseApp)"
-version = "6.11.2"
+version = "6.11.1"
 license = "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only"
-source = "https://invent.kde.org/qt/qt/qtwebengine.git tag v6.11.2 (commit a33fa2a897e5ee58e385b3f88dc247d99fca56db) and https://invent.kde.org/qt/qt/qtwebview.git tag v6.11.2 (commit 5e6561080be8de2099381fa3a729682d1b652340); build recipe: https://github.com/flathub/io.qt.qtwebengine.BaseApp/tree/branch/6.11"
+source = "https://invent.kde.org/qt/qt/qtwebengine.git tag v6.11.1 (commit eb0793cc4b76e93cf669f586fd68c76019f40ec9) and https://invent.kde.org/qt/qt/qtwebview.git tag v6.11.1 (commit acf7547689bd4b14c1401063b4418cac1221c7e5); build recipe: https://github.com/flathub/io.qt.qtwebengine.BaseApp/tree/756418a3ec4ade945a162299cad187b314b5e544"
 files = ["LGPL-3.0.txt", "GPL-3.0.txt", "GPL-2.0.txt", "qt-6.11-attributions.txt"]
 
 [[component]]
