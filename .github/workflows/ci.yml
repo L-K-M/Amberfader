@@ -46,6 +46,14 @@ jobs:
       - name: Check version files stay in sync
         run: npm run version:check
 
+      # Amberfader's own code is Unlicense (LICENSE); the README and the
+      # Flatpak's AppStream metadata must say so.
+      - name: Check license statements
+        run: |
+          grep -qx '## License' README.md
+          grep -q 'Unlicense' README.md
+          grep -q '<project_license>Unlicense</project_license>' packaging/flatpak/ch.lkmc.amberfader.metainfo.xml
+
   python:
     name: Python app lint and unit tests
     runs-on: ubuntu-24.04
