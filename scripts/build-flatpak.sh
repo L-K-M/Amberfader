@@ -101,6 +101,12 @@ for pin in "qtwebengine.git commit 7aa0d2a34896cfbe88ce0e9ea69bb4e943e1c998" \
 done
 [[ -e "$BUILD/files/lib/libLLVM.so.21.1" ]] ||
   { echo "!! BaseApp LLVM changed (no libLLVM.so.21.1): re-check packaging/licenses/python-notices-flatpak.toml" >&2; exit 1; }
+# The QtWebEngine BaseApp converts the SDK's Hunspell dictionaries, each under
+# its own license, into spell-check dictionaries that Amberfader never loads.
+# The notices above do not cover them, so none may ship.
+BDIC="$(find "$BUILD/files" -name '*.bdic' -print -quit)"
+[[ -z $BDIC ]] ||
+  { echo "!! BaseApp spell-check dictionaries in the bundle (${BDIC#"$BUILD/"}): drop them in the manifest's cleanup-commands" >&2; exit 1; }
 
 echo "-- export"
 flatpak-builder --user --disable-rofiles-fuse --export-only --repo="$REPO" "$BUILD" "$MANIFEST"
