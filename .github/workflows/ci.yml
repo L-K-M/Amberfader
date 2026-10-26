@@ -178,8 +178,17 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      # uv.lock's versions (hash-checked), which the bundled notices are
+      # checked for; uv only exports them, the python.org interpreter installs.
       - name: Install Amberfader and PyInstaller
-        run: python -m pip install . "pyinstaller==6.22.3"
+        run: |
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt \
+            --output-file "$RUNNER_TEMP/requirements.txt"
+          python -m pip install --require-hashes -r "$RUNNER_TEMP/requirements.txt"
+          python -m pip install --no-deps .
+          python -m pip install "pyinstaller==6.22.3"
 
       - name: Build Amberfader.app and the .dmg
         run: scripts/build-macos.sh "$(sed -n 's/^__version__ = "\([^"]*\)"/\1/p' native/amberfader/__init__.py)" dist

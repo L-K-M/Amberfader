@@ -154,7 +154,8 @@ for target in "${TARGETS[@]}"; do
       fi
       # The freeze needs PyInstaller and the project importable from one
       # interpreter. Prefer a python3 that already has PyInstaller; else
-      # bootstrap a venv with uv (same pin as CI); else explain what's missing.
+      # bootstrap a venv with uv (uv.lock's versions and the same pin as CI,
+      # which the bundled notices are checked for); else explain what's missing.
       PYTHON_BIN=""
       if python3 -c "import PyInstaller" >/dev/null 2>&1; then
         PYTHON_BIN="python3"
@@ -162,7 +163,11 @@ for target in "${TARGETS[@]}"; do
         VENV="$DIST/.macos-venv"
         echo "-- freeze env via uv (pyinstaller==6.22.3)"
         if uv venv --quiet --python '>=3.11' "$VENV" &&
-           uv pip install --quiet --python "$VENV/bin/python" . 'pyinstaller==6.22.3'; then
+           uv export --quiet --frozen --no-dev --no-emit-project --format requirements-txt \
+             --output-file "$VENV/requirements.txt" &&
+           uv pip install --quiet --python "$VENV/bin/python" --require-hashes -r "$VENV/requirements.txt" &&
+           uv pip install --quiet --python "$VENV/bin/python" --no-deps . &&
+           uv pip install --quiet --python "$VENV/bin/python" 'pyinstaller==6.22.3'; then
           PYTHON_BIN="$PWD/$VENV/bin/python"
         else
           skip_or_fail macos "could not create the PyInstaller env via uv"; continue

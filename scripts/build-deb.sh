@@ -41,8 +41,14 @@ mkdir -p "$LIB" "$STAGE/usr/bin" "$STAGE/etc/apparmor.d" \
 
 # Resolve native wheels for the launcher's interpreter, not an active venv.
 # The dependency interval below keeps its CPython ABI on the same minor.
+# With uv, install the versions uv.lock pins (hash-checked), as the Flatpak
+# and the macOS app do; the bundled notices are checked for exactly those.
 if command -v uv >/dev/null 2>&1; then
-  uv pip install --quiet --python "$BUILD_PYTHON" --target "$LIB" .
+  uv export --quiet --frozen --no-dev --no-emit-project --format requirements-txt \
+    --output-file "$DIST/deb/requirements.txt"
+  uv pip install --quiet --python "$BUILD_PYTHON" --target "$LIB" \
+    --require-hashes -r "$DIST/deb/requirements.txt"
+  uv pip install --quiet --python "$BUILD_PYTHON" --target "$LIB" --no-deps .
 else
   "$BUILD_PYTHON" -m pip install --quiet --target "$LIB" .
 fi

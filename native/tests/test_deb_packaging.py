@@ -33,6 +33,8 @@ function /usr/bin/python3 {
 }
 python3() { printf '%s\\n' ambient-python "$@" > "$AF_TEST_INSTALL_LOG"; }
 uv() {
+  printf '%s\\n' "$*" >> "$AF_TEST_UV_LOG"
+  [[ "$1" == export ]] && return
   printf '%s\\n' uv "$@" > "$AF_TEST_INSTALL_LOG"
   # Installer caches can hand out owner-only files, as uv's did in a dev box.
   local target
@@ -53,6 +55,7 @@ dpkg-deb() { :; }
         "PATH": os.environ["PATH"],
         "BASH_ENV": str(initialization),
         "AF_TEST_INSTALL_LOG": str(tmp_path / "install.log"),
+        "AF_TEST_UV_LOG": str(tmp_path / "uv.log"),
     }
     return root, env
 
@@ -83,6 +86,11 @@ def test_deb_installs_for_launcher_interpreter_and_declares_its_abi(
 
     invocation = Path(env["AF_TEST_INSTALL_LOG"]).read_text().splitlines()
     if backend == "uv":
+        # uv.lock's versions, hash-checked, then the project without resolving.
+        calls = Path(env["AF_TEST_UV_LOG"]).read_text().splitlines()
+        assert calls[0].startswith("export --quiet --frozen --no-dev --no-emit-project ")
+        assert "--require-hashes -r dist/deb/requirements.txt" in calls[1]
+        assert calls[2].endswith(" --no-deps .")
         assert invocation[0] == "uv"
         assert "--python" in invocation
         assert invocation[invocation.index("--python") + 1] == "/usr/bin/python3"
