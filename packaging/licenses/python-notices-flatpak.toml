@@ -1,0 +1,134 @@
+# Overrides for scripts/python-notices.py in the Flatpak. scripts/build-flatpak.sh
+# runs it after flatpak-builder's cleanup over /app/lib/python3.*/site-packages,
+# which holds Amberfader's wheels and the Python packages of the merged
+# io.qt.PySide.BaseApp 6.11. The BaseApps' other libraries in /app are the
+# [[component]] entries below. Format: scripts/python-notices.py; paths are
+# relative to this file; sources of the texts: README.md here.
+#
+# The BaseApps follow Flathub, not uv.lock. A BaseApp update that changes a
+# pinned Python package fails the build here, and build-flatpak.sh fails when
+# a BaseApp module no longer has the version a [[component]] names: re-check
+# the texts, then update both.
+
+[distribution.pyside6]
+# The BaseApp builds PySide6 6.11.2 from pyside-setup against the KDE
+# runtime's Qt (not bundled). Its wheels publish no license texts; terms as
+# in python-notices.toml: LGPL-3.0-only, GPL-2.0-only or GPL-3.0-only, and
+# GPL-3.0-only WITH Qt-GPL-exception-1.0 for tools.
+versions = ["6.11.2"]
+files = ["LGPL-3.0.txt", "GPL-3.0.txt", "GPL-2.0.txt"]
+source = "https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.2-src/pyside-setup-everywhere-src-6.11.2.tar.xz (the BaseApp builds tag v6.11.2, commit 24627cd36e1593adf22eb1f2950e4248e7bcc1ec)"
+
+[distribution.pyside6-essentials]
+# Bindings, libpyside6 and any Qt tools the wheel carries.
+versions = ["6.11.2"]
+files = ["LGPL-3.0.txt", "GPL-3.0.txt", "GPL-2.0.txt", "Qt-GPL-exception-1.0.txt"]
+source = "https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.2-src/pyside-setup-everywhere-src-6.11.2.tar.xz (the BaseApp builds tag v6.11.2, commit 24627cd36e1593adf22eb1f2950e4248e7bcc1ec)"
+covers = ["native:PySide6/*"]
+
+[distribution.pyside6-addons]
+# Bindings for the add-on modules, including Qt WebEngine (built in
+# io.qt.qtwebengine.BaseApp, see its component below).
+versions = ["6.11.2"]
+files = ["LGPL-3.0.txt", "GPL-3.0.txt", "GPL-2.0.txt", "Qt-GPL-exception-1.0.txt"]
+source = "https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.2-src/pyside-setup-everywhere-src-6.11.2.tar.xz (the BaseApp builds tag v6.11.2, commit 24627cd36e1593adf22eb1f2950e4248e7bcc1ec)"
+covers = ["native:PySide6/*"]
+
+[distribution.shiboken6]
+# Same terms and source package as PySide6.
+versions = ["6.11.2"]
+files = ["LGPL-3.0.txt", "GPL-3.0.txt", "GPL-2.0.txt"]
+source = "https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.2-src/pyside-setup-everywhere-src-6.11.2.tar.xz (the BaseApp builds tag v6.11.2, commit 24627cd36e1593adf22eb1f2950e4248e7bcc1ec)"
+covers = ["native:shiboken6/*"]
+
+[distribution.shiboken6-generator]
+# The binding generator, a Qt tool: GPL-3.0-only WITH Qt-GPL-exception-1.0.
+versions = ["6.11.2"]
+files = ["GPL-3.0.txt", "Qt-GPL-exception-1.0.txt"]
+source = "https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.2-src/pyside-setup-everywhere-src-6.11.2.tar.xz (the BaseApp builds tag v6.11.2, commit 24627cd36e1593adf22eb1f2950e4248e7bcc1ec)"
+covers = ["native:shiboken6_generator/*"]
+
+[distribution.rpds-py]
+# As in python-notices.toml: build-flatpak.sh downloads uv.lock's version.
+versions = ["2026.6.3"]
+files = ["rpds-py-2026.6.3-crates.txt"]
+
+[distribution.patchelf]
+# From the BaseApp: the patchelf binary (GPL-3.0-or-later; COPYING ships in
+# the wheel's dist-info) installed as /app/bin/patchelf.
+versions = ["0.17.2.0"]
+source = "https://github.com/NixOS/patchelf/tree/0.17.2, packaged by https://pypi.org/project/patchelf/0.17.2.0/#files (sdist)"
+covers = ["native:*bin/patchelf"]
+
+[distribution.pyopengl]
+# From the BaseApp. The wheel ships no license file of its own; license.txt
+# at the 3.1.10 tag holds PyOpenGL's BSD-style licenses. Its Windows DLLs
+# (freeglut, GLE) bring their own texts (OpenGL/DLLS/*COPYING*).
+versions = ["3.1.10"]
+files = ["PyOpenGL-3.1.10-license.txt"]
+license = "BSD-3-Clause"
+covers = ["native:OpenGL/DLLS/*"]
+
+# --- BaseApp libraries outside site-packages --------------------------------
+# Versions and sources from the BaseApp manifests (SOURCES.txt next to the
+# notices lists every bundled module with its commit or checksum).
+
+[[component]]
+# LGPL; the attributions list Chromium's third-party code with its texts.
+name = "Qt WebEngine, Qt PDF and Qt WebView (io.qt.qtwebengine.BaseApp)"
+version = "6.11.2"
+license = "LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only"
+source = "https://invent.kde.org/qt/qt/qtwebengine.git tag v6.11.2 (commit a33fa2a897e5ee58e385b3f88dc247d99fca56db) and https://invent.kde.org/qt/qt/qtwebview.git tag v6.11.2 (commit 5e6561080be8de2099381fa3a729682d1b652340); build recipe: https://github.com/flathub/io.qt.qtwebengine.BaseApp/tree/branch/6.11"
+files = ["LGPL-3.0.txt", "GPL-3.0.txt", "GPL-2.0.txt", "qt-6.11-attributions.txt"]
+
+[[component]]
+# Qt WebEngine's Kerberos support. NOTICE lists every license in krb5.
+name = "MIT Kerberos (krb5 libraries, io.qt.qtwebengine.BaseApp)"
+version = "1.22.2"
+source = "https://kerberos.org/dist/krb5/1.22/krb5-1.22.2.tar.gz"
+files = ["krb5-1.22.2-NOTICE.txt"]
+
+[[component]]
+name = "libevent (io.qt.qtwebengine.BaseApp)"
+version = "2.1.13"
+source = "https://github.com/libevent/libevent/releases/download/release-2.1.13-stable/libevent-2.1.13-stable.tar.gz"
+files = ["libevent-2.1.13-LICENSE.txt"]
+
+[[component]]
+# minizip from zlib's contrib directory.
+name = "minizip (zlib, io.qt.qtwebengine.BaseApp)"
+version = "1.3.2"
+license = "Zlib"
+source = "https://zlib.net/zlib-1.3.2.tar.gz"
+files = ["zlib-1.3.2-LICENSE.txt"]
+
+[[component]]
+name = "pciutils (libpci, io.qt.qtwebengine.BaseApp)"
+version = "3.15.0"
+license = "GPL-2.0-or-later"
+source = "https://mj.ucw.cz/download/linux/pci/pciutils-3.15.0.tar.gz"
+files = ["pciutils-3.15.0-COPYING.txt"]
+
+[[component]]
+name = "RE2 (io.qt.qtwebengine.BaseApp)"
+version = "2025-11-05"
+license = "BSD-3-Clause"
+source = "https://github.com/google/re2/archive/2025-11-05/re2-2025-11-05.tar.gz"
+files = ["re2-2025-11-05-LICENSE.txt"]
+
+[[component]]
+name = "Snappy (io.qt.qtwebengine.BaseApp)"
+version = "1.2.2"
+license = "BSD-3-Clause"
+source = "https://github.com/google/snappy.git tag 1.2.2 (commit 6af9287fbdb913f0794d0148c6aa43b58e63c8e3)"
+files = ["snappy-1.2.2-COPYING.txt"]
+
+[[component]]
+# io.qt.PySide.BaseApp copies libLLVM, libclang-cpp and libclang 21.1 from
+# the org.freedesktop.Sdk.Extension.llvm21 SDK extension for shiboken6's
+# generator.
+name = "LLVM and Clang libraries (io.qt.PySide.BaseApp)"
+version = "21.1"
+license = "Apache-2.0 WITH LLVM-exception"
+source = "https://github.com/llvm/llvm-project/tree/release/21.x"
+files = ["LLVM-21-LICENSE.txt"]

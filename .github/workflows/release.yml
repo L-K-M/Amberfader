@@ -113,6 +113,20 @@ jobs:
           uv build --wheel --out-dir dist/wheel
           scripts/build-flatpak.sh dist/wheel/amberfader-*.whl
 
+      # This job builds its own bundle; install it to check its notices.
+      - name: Check the license notices in the .flatpak
+        run: |
+          flatpak install --user -y --noninteractive dist/amberfader_*.flatpak
+          app="$(flatpak info --user --show-location ch.lkmc.amberfader)/files"
+          doc="$app/share/doc/amberfader"
+          for f in Third-Party-Notices.txt Rust-Licenses.html SOURCES.txt; do
+            test -s "$doc/$f" || { echo "::error::$f missing or empty"; exit 1; }
+          done
+          grep -q '^PySide6' "$doc/Third-Party-Notices.txt"
+          grep -q '^Qt WebEngine, Qt PDF and Qt WebView ' "$doc/Third-Party-Notices.txt"
+          grep -q '^rpds-py ' "$doc/Third-Party-Notices.txt"
+          grep -q 'io.qt.qtwebengine.BaseApp' "$doc/SOURCES.txt"
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: amberfader-${{ github.ref_name }}

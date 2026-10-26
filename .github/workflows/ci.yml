@@ -414,6 +414,20 @@ jobs:
           grep -q '^sockets=.*pulseaudio' permissions.txt
           grep -q '^filesystems=.*xdg-run/amberfader:create' permissions.txt
 
+      # Amberfader's packages and the BaseApps' PySide6, Qt WebEngine and
+      # libraries keep their own licenses; their notices must be in the bundle.
+      - name: Check the bundled license notices
+        run: |
+          app="$(flatpak info --user --show-location ch.lkmc.amberfader)/files"
+          doc="$app/share/doc/amberfader"
+          for f in Third-Party-Notices.txt Rust-Licenses.html SOURCES.txt; do
+            test -s "$doc/$f" || { echo "::error::$f missing or empty"; exit 1; }
+          done
+          grep -q '^PySide6' "$doc/Third-Party-Notices.txt"
+          grep -q '^Qt WebEngine, Qt PDF and Qt WebView ' "$doc/Third-Party-Notices.txt"
+          grep -q '^rpds-py ' "$doc/Third-Party-Notices.txt"
+          grep -q 'io.qt.qtwebengine.BaseApp' "$doc/SOURCES.txt"
+
       # Chromium's renderers run in a sub-sandbox that the Flatpak portal
       # starts, which needs a session bus, as every desktop session has.
       - name: Self-test the installed Flatpak
