@@ -196,6 +196,26 @@ jobs:
       - name: Self-test the frozen app
         run: dist/macos/dist/Amberfader.app/Contents/MacOS/Amberfader --self-test
 
+      # Qt, Qt WebEngine, PySide6, the Python packages and CPython keep their
+      # own licenses; their notices must be inside both apps in the .dmg.
+      - name: Check the bundled license notices
+        run: |
+          check() {
+            local resources="$1/Contents/Resources"
+            for f in Third-Party-Notices.txt Rust-Licenses.html; do
+              test -s "$resources/$f" || { echo "::error::$1: $f missing or empty"; exit 1; }
+            done
+            grep -q '^PySide6_Essentials 6\.' "$resources/Third-Party-Notices.txt"
+            grep -q '^CPython 3\.' "$resources/Third-Party-Notices.txt"
+          }
+          mount="$RUNNER_TEMP/dmg"
+          mkdir -p "$mount"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" dist/Amberfader-*-macos-arm64.dmg
+          check "$mount/Amberfader.app"
+          check "$mount/Amberfader Face Editor.app"
+          grep -q '^PySide6_Addons 6\.' "$mount/Amberfader.app/Contents/Resources/Third-Party-Notices.txt"
+          hdiutil detach "$mount"
+
       - name: Upload .dmg
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
