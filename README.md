@@ -199,3 +199,37 @@ YouTube Music and playback. See the [editor guide](docs/face-editor.md).
 Choose **File → Import Audion Face…** to turn a converted Audion face folder or
 collection ZIP into an editable copy, retaining its artwork and original credits.
 **File → Import Audion Collection…** installs a whole collection at once.
+
+## License
+
+Amberfader's own code is released under the [Unlicense](LICENSE). The
+packages bundle third-party software that keeps its own licenses: Qt with
+Qt WebEngine (Chromium), PySide6 and shiboken6 (LGPL-3.0, with some Qt
+add-on modules and tools under GPL-3.0), FFmpeg (LGPL-2.1 or later), ICU,
+and the Python packages jsonschema, referencing, attrs, typing_extensions
+and rpds-py with the Rust code compiled into it (the Rust standard library
+and crates). The macOS apps also bundle CPython (PSF License) and the
+libraries it includes. The Flatpak adds what the Flathub BaseApps it is built
+on put in `/app` (Qt WebEngine, krb5, libpci, LLVM and others). Their notices
+ship inside each package:
+
+- deb: `/usr/share/doc/amberfader/` (`copyright`, `Third-Party-Notices.txt`,
+  `Rust-Licenses.html`, `SOURCES.txt`)
+- Flatpak: `/app/share/doc/amberfader/` (`Third-Party-Notices.txt`,
+  `Rust-Licenses.html`, `SOURCES.txt`)
+- macOS: `Contents/Resources/Third-Party-Notices.txt` and
+  `Rust-Licenses.html` in each app
+
+`Third-Party-Notices.txt` and `SOURCES.txt` name the exact sources of the
+LGPL and GPL components, such as
+[PySide6 6.11.2](https://download.qt.io/official_releases/QtForPython/pyside6/PySide6-6.11.2-src/pyside-setup-everywhere-src-6.11.2.tar.xz),
+[Qt 6.11.2](https://download.qt.io/archive/qt/6.11/6.11.2/single/qt-everywhere-src-6.11.2.tar.xz)
+and [FFmpeg 7.1.3](https://ffmpeg.org/releases/ffmpeg-7.1.3.tar.xz). Qt,
+PySide6 and FFmpeg ship as separate shared libraries, which you may replace
+with your own builds. Replacing a library in a macOS app breaks its ad-hoc
+signature; re-sign it with `codesign --force --deep --sign - <App>.app`.
+
+The texts in `packaging/licenses/` are these third-party licenses, not
+Amberfader's. uBlock Origin is credited for the ad-filtering technique; none
+of its code is included. The ad blocker's host and path list cites the
+EasyList and EasyPrivacy rule behind each entry.

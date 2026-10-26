@@ -82,6 +82,23 @@ Windows are out of scope.
 | Data folders | XDG base directories + `amberfader` (Linux); `~/Library/Application Support/Amberfader`, `~/Library/Caches/Amberfader` (macOS); see `native/amberfader/paths.py` |
 | Desktop entry | `ch.lkmc.amberfader.desktop` |
 
+## Licensing
+
+- Amberfader's own code is Unlicense (`LICENSE`). Keep the license
+  statements in `pyproject.toml`, `package.json`, the Flatpak metainfo, the
+  deb's DEP-5 spec (`packaging/licenses/deb-copyright.json`) and the README
+  consistent with it; CI checks the README and the metainfo.
+- Before adding a dependency, vendored file or bundled asset (fonts,
+  images, icons, data), confirm its license allows redistribution in the
+  deb, the Flatpak and the macOS apps. Never vendor third-party code without
+  its license file.
+- `scripts/python-notices.py` builds each package's `Third-Party-Notices.txt`
+  from what it really ships and fails on a component without license text
+  or with a version its overrides in `packaging/licenses/` were not checked
+  for. After a dependency or BaseApp bump, regenerate the texts as
+  `packaging/licenses/README.md` describes and update the pins; record gaps
+  as explicit, commented overrides. Keep the CI notice checks passing.
+
 ## Testing
 
 - `web/tests/unit` (vitest + jsdom): protocol vectors, dedup, the page bridge,
