@@ -34,6 +34,10 @@ build-options:
     BASEAPP_DISABLE_NUMPY: '1'
 cleanup-commands:
   - /app/cleanup-BaseApp.sh
+  # The QtWebEngine BaseApp's spell-check dictionaries, converted from the
+  # SDK's Hunspell dictionaries under many licenses; Amberfader never turns
+  # spell checking on (build-flatpak.sh fails if any remain).
+  - rm -rf /app/qtwebengine_dictionaries /app/share/locale/*/qtwebengine_dictionaries
 modules:
   - name: amberfader
     buildsystem: simple
