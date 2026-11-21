@@ -414,7 +414,7 @@ acceptance matrix passed on Linux and macOS.
 | `deb` | ubuntu-24.04 | deb installs and self-tests with the sandbox on and the AppArmor restriction set |
 | `flatpak` | ubuntu-24.04 | Flatpak builds from the wheel, installs, self-tests and hands a second launch over |
 | `macos` | macos-15 | Unit and e2e tests, frozen `.app` self-tests, `.dmg` uploaded |
-| `face-editor-macos` | macos-14 | Kept as is, or folded into `macos` |
+| `face-editor-macos` | macos-15 | Kept as is, or folded into `macos` |
 | Release | same jobs | Publishes `.deb`, `.flatpak`, `.dmg`, wheel and checksums |
 
 Dependency updates: Dependabot (or Renovate) watches `uv.lock` for PySide6.
